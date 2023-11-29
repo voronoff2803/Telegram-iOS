@@ -49,6 +49,7 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/OpenAI:OpenAI",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",
         "//submodules/AsyncDisplayKit:AsyncDisplayKit",

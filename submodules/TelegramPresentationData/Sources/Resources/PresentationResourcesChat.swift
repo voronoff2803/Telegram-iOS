@@ -495,6 +495,12 @@ public struct PresentationResourcesChat {
         })
     }
     
+    public static func chatInputPanelAIActiveButtonImage(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.chatInputPanelVideoActiveButtonImage.rawValue, { theme in
+            return generateGradientTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/IconAI"), colors: [theme.chat.inputPanel.mediaRecordingControl.buttonColor, theme.chat.inputPanel.mediaRecordingControl.buttonColor.withMultiplied(hue: 0.9, saturation: 1.0, brightness: 1.0)])
+        })
+    }
+    
     public static func chatInputPanelAttachmentButtonImage(_ theme: PresentationTheme) -> UIImage? {
         return theme.image(PresentationResourceKey.chatInputPanelAttachmentButtonImage.rawValue, { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Text/IconAttachment"), color: theme.chat.inputPanel.panelControlColor)

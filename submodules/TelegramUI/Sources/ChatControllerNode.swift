@@ -258,6 +258,7 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
     var requestUpdateInterfaceState: (ContainedViewLayoutTransition, Bool, (ChatPresentationInterfaceState) -> ChatPresentationInterfaceState) -> Void = { _, _, _ in }
     var sendMessages: ([EnqueueMessage], Bool?, Int32?, Bool) -> Void = { _, _, _, _ in }
     var displayAttachmentMenu: () -> Void = { }
+    var aiGenerateMessage: () -> Void = { }
     var paste: (ChatTextInputPanelPasteData) -> Void = { _ in }
     var updateTypingActivity: (Bool) -> Void = { _ in }
     var dismissUrlPreview: () -> Void = { }
@@ -842,6 +843,9 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
         }
         self.textInputPanelNode?.displayAttachmentMenu = { [weak self] in
             self?.displayAttachmentMenu()
+        }
+        self.textInputPanelNode?.aiGenerateMessage = { [weak self] in
+            self?.aiGenerateMessage()
         }
         self.textInputPanelNode?.updateActivity = { [weak self] in
             self?.updateTypingActivity(true)

@@ -115,6 +115,7 @@ import ChatMessageAnimatedStickerItemNode
 import ChatMessageBubbleItemNode
 import ChatNavigationButton
 import WebsiteType
+import OpenAI
 
 public enum ChatControllerPeekActions {
     case standard
@@ -8375,6 +8376,19 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.chatDisplayNode.requestUpdateInterfaceState = { [weak self] transition, interactive, f in
             self?.updateChatPresentationInterfaceState(transition: transition, interactive: interactive, f)
         }
+        
+        self.chatDisplayNode.aiGenerateMessage = { [weak self] in
+            guard let strongSelf = self else {
+                return
+            }
+            
+            let source = strongSelf.chatDisplayNode.historyNode.cachedPeerDataAndMessages.
+            
+            
+            strongSelf.updateTextInputState(.init(inputText: convertMarkdownToAttributes(NSAttributedString(string: "I just love **bold text**."))))
+            print("start generation", strongSelf)
+        }
+        
         
         self.chatDisplayNode.displayAttachmentMenu = { [weak self] in
             guard let strongSelf = self else {

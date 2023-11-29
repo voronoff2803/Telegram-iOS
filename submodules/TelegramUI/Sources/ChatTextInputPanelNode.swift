@@ -550,6 +550,8 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
     let sendAsAvatarContainerNode: ContextControllerSourceNode
     private let sendAsAvatarNode: AvatarNode
     
+    private let aiButton: HighlightableButtonNode
+    
     let attachmentButton: HighlightableButtonNode
     let attachmentButtonDisabledNode: HighlightableButtonNode
     let searchLayoutClearButton: HighlightableButton
@@ -567,6 +569,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
     private var validLayout: (CGFloat, CGFloat, CGFloat, CGFloat, UIEdgeInsets, CGFloat, LayoutMetrics, Bool, Bool)?
     private var leftMenuInset: CGFloat = 0.0
     
+    var aiGenerateMessage: () -> Void = { }
     var displayAttachmentMenu: () -> Void = { }
     var sendMessage: () -> Void = { }
     var paste: (ChatTextInputPanelPasteData) -> Void = { _ in }
@@ -831,6 +834,9 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         self.sendAsAvatarContainerNode.animateScale = false
         self.sendAsAvatarNode = AvatarNode(font: avatarPlaceholderFont(size: 16.0))
         
+        //self.aiButton = HighlightableButtonNode(pointerStyle: .circle(36.0))
+        self.aiButton = HighlightableButtonNode()
+        
         self.attachmentButton = HighlightableButtonNode(pointerStyle: .circle(36.0))
         self.attachmentButton.accessibilityLabel = presentationInterfaceState.strings.VoiceOver_AttachMedia
         self.attachmentButton.accessibilityTraits = [.button]
@@ -890,6 +896,21 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
                 } else {
                     let transition: ContainedViewLayoutTransition = .animated(duration: 0.5, curve: .spring)
                     transition.updateTransformScale(node: strongSelf.sendAsAvatarButtonNode, scale: 1.0)
+                }
+            }
+        }
+        
+        self.aiButton.addTarget(self, action: #selector(self.aiButtonPressed), forControlEvents: .touchUpInside)
+        self.aiButton.highligthedChanged = { [weak self] highlighted in
+            if let strongSelf = self {
+                if highlighted {
+                    strongSelf.aiButton.layer.removeAnimation(forKey: "opacity")
+                    strongSelf.aiButton.alpha = 0.4
+                    strongSelf.aiButton.layer.allowsGroupOpacity = true
+                } else {
+                    strongSelf.aiButton.alpha = 1.0
+                    strongSelf.aiButton.layer.animateAlpha(from: 0.4, to: 1.0, duration: 0.2)
+                    strongSelf.aiButton.layer.allowsGroupOpacity = false
                 }
             }
         }
@@ -1021,6 +1042,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         self.clippingNode.addSubnode(self.sendAsAvatarButtonNode)
         
         self.clippingNode.addSubnode(self.menuButton)
+        self.clippingNode.addSubnode(self.aiButton)
         self.clippingNode.addSubnode(self.attachmentButton)
         self.clippingNode.addSubnode(self.attachmentButtonDisabledNode)
         
@@ -1248,7 +1270,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
     }
     
     private func textFieldInsets(metrics: LayoutMetrics) -> UIEdgeInsets {
-        var insets = UIEdgeInsets(top: 6.0, left: 42.0, bottom: 6.0, right: 42.0)
+        var insets = UIEdgeInsets(top: 6.0, left: 42.0, bottom: 6.0, right: 72.0)
         if case .regular = metrics.widthClass, case .regular = metrics.heightClass {
             insets.top += 1.0
             insets.bottom += 1.0
@@ -1688,6 +1710,8 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
                 self.theme = interfaceState.theme
                 
                 self.menuButtonBackgroundNode.backgroundColor = interfaceState.theme.chat.inputPanel.actionControlFillColor
+                
+                self.aiButton.setImage(PresentationResourcesChat.chatInputPanelAIActiveButtonImage(interfaceState.theme), for: [])
                 
                 if isEditingMedia {
                     self.attachmentButton.setImage(PresentationResourcesChat.chatInputPanelEditAttachmentButtonImage(interfaceState.theme), for: [])
@@ -2257,6 +2281,10 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         if let (rect, containerSize) = self.absoluteRect {
             self.actionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + actionButtonsFrame.origin.x, y: rect.origin.y + actionButtonsFrame.origin.y, width: actionButtonsFrame.width, height: actionButtonsFrame.height), within: containerSize, transition: transition)
         }
+        
+        let aiButtonsFrame = CGRect(origin: CGPoint(x: hideOffset.x + width - rightInset - 76.0 - UIScreenPixel + composeButtonsOffset, y: hideOffset.y + panelHeight - minimalHeight), size: CGSize(width: 44.0, height: minimalHeight))
+        
+        transition.updateFrame(node: self.aiButton, frame: aiButtonsFrame)
         
         if let presentationInterfaceState = self.presentationInterfaceState {
             self.actionButtons.updateLayout(size: CGSize(width: 44.0, height: minimalHeight), isMediaInputExpanded: isMediaInputExpanded, transition: transition, interfaceState: presentationInterfaceState)
@@ -4076,6 +4104,69 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         self.sendMessage()
     }
     
+    final class ExtractedContentSourceImpl: ContextExtractedContentSource {
+        var keepInPlace: Bool
+        let ignoreContentTouches: Bool = true
+        let blurBackground: Bool
+        
+        private let controller: ViewController
+        private let sourceNode: ContextExtractedContentContainingNode
+        
+        init(controller: ViewController, sourceNode: ContextExtractedContentContainingNode, keepInPlace: Bool, blurBackground: Bool) {
+            self.controller = controller
+            self.sourceNode = sourceNode
+            self.keepInPlace = keepInPlace
+            self.blurBackground = blurBackground
+        }
+        
+        func takeView() -> ContextControllerTakeViewInfo? {
+            return ContextControllerTakeViewInfo(containingItem: .node(self.sourceNode), contentAreaInScreenSpace: UIScreen.main.bounds)
+        }
+        
+        func putBack() -> ContextControllerPutBackViewInfo? {
+            return ContextControllerPutBackViewInfo(contentAreaInScreenSpace: UIScreen.main.bounds)
+        }
+    }
+    
+    
+    @objc func aiButtonPressed() {
+        print("hhhahahahh")
+        
+        guard let context = self.context else { return }
+        
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        
+        guard let controller = self.interfaceInteraction?.chatController() as? ChatControllerImpl else {
+            return
+        }
+        
+        //QuoteSelected
+        
+        let items: [ContextMenuItem] = [
+            .action(ContextMenuActionItem(text: "Generate a summary", icon: { theme in
+                generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/QuoteSelected"), color: theme.contextMenu.primaryColor)
+            }, action: { _, _ in
+                self.aiGenerateMessage()
+                print("Generate Answer")
+            })),
+            .action(ContextMenuActionItem(text: "Generate a message", icon: { theme in
+                generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
+            }, action: { _, _ in
+                print("Generate Answer")
+            }))
+            ]
+        
+        let source: ContextContentSource = .reference(AIButtonReferenceContentSource(controller: controller, sourceView: aiButton.view))
+        
+        let contextController = ContextController(presentationData: presentationData,
+                                                  source: source,
+                                                  items: .single(ContextController.Items(content: .list(items))))
+        
+        controller.present(contextController, in: .current)
+        print("sendAsAvatarButtonPressed")
+    }
+
+    
     @objc func sendAsAvatarButtonPressed() {
         self.interfaceInteraction?.openSendAsPeer(self.sendAsAvatarReferenceNode, nil)
     }
@@ -4346,6 +4437,22 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         return AttachmentController.InputPanelTransition(inputNode: self, accessoryPanelNode: accessoryPanelNode, menuButtonNode: self.menuButton, menuButtonBackgroundNode: self.menuButtonBackgroundNode, menuIconNode: self.menuButtonIconNode, menuTextNode: self.menuButtonTextNode, prepareForDismiss: { self.menuButtonIconNode.enqueueState(.app, animated: false) })
     }
 }
+
+
+private final class AIButtonReferenceContentSource: ContextReferenceContentSource {
+    private let controller: ViewController
+    private let sourceView: UIView
+
+    init(controller: ViewController, sourceView: UIView) {
+        self.controller = controller
+        self.sourceView = sourceView
+    }
+
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds, actionsPosition: .top)
+    }
+}
+
 
 private enum MenuIconNodeState: Equatable {
     case menu
