@@ -117,6 +117,7 @@ import ChatNavigationButton
 import WebsiteType
 import ChatQrCodeScreen
 import PeerInfoScreen
+import OpenAI
 
 public enum ChatControllerPeekActions {
     case standard
