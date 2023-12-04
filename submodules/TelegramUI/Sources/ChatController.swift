@@ -7305,6 +7305,67 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
     }
     
+    func startGenerationAnimation() {
+        self.chatDisplayNode.textInputPanelNode?.gloss = true
+    }
+    
+    func stopGenerationAnimation() {
+        self.chatDisplayNode.textInputPanelNode?.gloss = false
+    }
+    
+    func aiGenerateMessage() {
+        guard let source = self.chatDisplayNode.historyNode.historyView else { return }
+        
+        var messages: [Chat] = []
+
+        for entry in source.filteredEntries.suffix(10) {
+            switch entry {
+            case .MessageEntry(let message, _, let myMessage, _, _, _):
+                let chatQuery = Chat(role: myMessage ? .assistant : .user, content : message.text)
+                messages.append(chatQuery)
+            default:
+                break
+            }
+        }
+        
+        let configuration = OpenAI.Configuration(token: "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", host: "34.140.109.140", timeoutInterval: 60.0)
+        let openAI = OpenAI(configuration: configuration)
+        
+        let query = ChatQuery(model: .gpt3_5Turbo, messages: messages)
+        
+        var message = ""
+        
+        self.startGenerationAnimation()
+        
+        DispatchQueue.global().async {
+            
+            openAI.chatsStream(query: query) { partialResult in
+                switch partialResult {
+                case .success(let result):
+                    if let delta = result.choices.first?.delta.content {
+                        message += delta
+                        let text = convertMarkdownToAttributes(NSAttributedString(string: message))
+                        DispatchQueue.main.async {
+                            let startTime = CFAbsoluteTimeGetCurrent()
+                            self.updateTextInputState(ChatTextInputState(inputText: text))
+                            if let textView = self.chatDisplayNode.textInputPanelNode?.textInputNode?.textView {
+                                let range = NSMakeRange(textView.text.count - 1, 0)
+                                textView.scrollRangeToVisible(range)
+                            }
+                            let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
+                            print("Time elapsed for: \(timeElapsed) s.")
+                        }
+                    }
+                case .failure(let error):
+                    print(error.localizedDescription)
+                }
+            } completion: { error in
+                self.stopGenerationAnimation()
+                print(error?.localizedDescription as Any)
+            }
+        }
+    }
+    
     override public func loadDisplayNode() {
         self.displayNode = ChatControllerNode(context: self.context, chatLocation: self.chatLocation, chatLocationContextHolder: self.chatLocationContextHolder, subject: self.subject, controllerInteraction: self.controllerInteraction!, chatPresentationInterfaceState: self.presentationInterfaceState, automaticMediaDownloadSettings: self.automaticMediaDownloadSettings, navigationBar: self.navigationBar, statusBar: self.statusBar, backgroundNode: self.chatBackgroundNode, controller: self)
         
@@ -8382,11 +8443,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return
             }
             
-            let source = strongSelf.chatDisplayNode.historyNode.cachedPeerDataAndMessages.
-            
-            
-            strongSelf.updateTextInputState(.init(inputText: convertMarkdownToAttributes(NSAttributedString(string: "I just love **bold text**."))))
-            print("start generation", strongSelf)
+            strongSelf.aiGenerateMessage()
         }
         
         

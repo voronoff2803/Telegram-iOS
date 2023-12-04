@@ -40,6 +40,7 @@ import ChatTextInputMediaRecordingButton
 import ChatContextQuery
 import ChatInputTextNode
 import ChatInputPanelNode
+import ShimmerEffect
 
 private let accessoryButtonFont = Font.medium(14.0)
 private let counterFont = Font.with(size: 14.0, design: .regular, traits: [.monospacedNumbers])
@@ -777,6 +778,21 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
     
     private var tooltipController: TooltipScreen?
     
+    private var shimmerView: ShimmerEffectForegroundView?
+    private var borderView: UIView?
+    private var borderMaskView: UIView?
+    private var borderShimmerView: ShimmerEffectForegroundView?
+    
+    var gloss: Bool = false {
+        didSet {
+            guard gloss != oldValue else { return }
+            
+            DispatchQueue.main.async {
+                self.setupGloss()
+            }
+        }
+    }
+    
     init(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, presentationContext: ChatPresentationContext?, presentController: @escaping (ViewController) -> Void) {
         self.presentationInterfaceState = presentationInterfaceState
         self.presentationContext = presentationContext
@@ -1053,7 +1069,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         
         self.clippingNode.view.addSubview(self.searchLayoutClearButton)
         
-        self.textInputBackgroundNode.clipsToBounds = true
+        self.textInputBackgroundNode.clipsToBounds = false
         let recognizer = TouchDownGestureRecognizer(target: self, action: #selector(self.textInputBackgroundViewTap(_:)))
         recognizer.touchDown = { [weak self] in
             if let strongSelf = self {
@@ -1102,6 +1118,77 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         self.startingBotDisposable.dispose()
         self.tooltipController?.dismiss()
         self.currentEmojiSuggestion?.disposable.dispose()
+    }
+    
+    private func setupGloss() {
+        if self.gloss {
+            if self.shimmerView == nil {
+                let shimmerView = ShimmerEffectForegroundView()
+                self.shimmerView = shimmerView
+                
+                let borderView = UIView()
+                borderView.isUserInteractionEnabled = false
+                self.borderView = borderView
+                
+                let borderMaskView = UIView()
+                borderMaskView.layer.borderWidth = 1.0 + UIScreenPixel
+                borderMaskView.layer.borderColor = UIColor.white.cgColor
+                borderView.mask = borderMaskView
+                self.borderMaskView = borderMaskView
+                
+                let borderShimmerView = ShimmerEffectForegroundView()
+                self.borderShimmerView = borderShimmerView
+                borderView.addSubview(borderShimmerView)
+                
+                self.textInputContainer.view.insertSubview(shimmerView, aboveSubview: self.textInputContainerBackgroundNode.view)
+                self.textInputContainer.view.insertSubview(borderView, aboveSubview: self.textInputContainerBackgroundNode.view)
+                
+                self.updateShimmerParameters()
+            }
+        } else if self.shimmerView != nil {
+//            self.shimmerView?.removeFromSuperview()
+//            self.borderView?.removeFromSuperview()
+//            self.borderMaskView?.removeFromSuperview()
+//            self.borderShimmerView?.removeFromSuperview()
+//            
+//            self.shimmerView = nil
+//            self.borderView = nil
+//            self.borderMaskView = nil
+//            self.borderShimmerView = nil
+        }
+        
+        if let presentationInterfaceState = self.presentationInterfaceState {
+            if let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, metrics, isSecondary, isMediaInputExpanded) = self.validLayout {
+                let _ = self.updateLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, additionalSideInsets: additionalSideInsets, maxHeight: maxHeight, isSecondary: isSecondary, transition: .immediate, interfaceState: presentationInterfaceState, metrics: metrics, isMediaInputExpanded: isMediaInputExpanded)
+            }
+        }
+    }
+    
+    
+    func updateShimmerParameters() {
+        guard let shimmerView = self.shimmerView, let borderShimmerView = self.borderShimmerView else {
+            return
+        }
+        
+        guard let color = self.theme?.chat.inputPanel.actionControlForegroundColor else { return }
+        let alpha: CGFloat
+        let borderAlpha: CGFloat
+        let compositingFilter: String?
+        if color.lightness > 0.5 {
+            alpha = 0.5
+            borderAlpha = 0.75
+            compositingFilter = "overlayBlendMode"
+        } else {
+            alpha = 0.2
+            borderAlpha = 0.3
+            compositingFilter = nil
+        }
+        
+        shimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(alpha), gradientSize: nil, globalTimeOffset: false, duration: 1.0, horizontal: true)
+        borderShimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(borderAlpha), gradientSize: nil, globalTimeOffset: false, duration: 1.0, horizontal: true)
+        
+        //shimmerView.layer.compositingFilter = compositingFilter
+        borderShimmerView.layer.compositingFilter = compositingFilter
     }
     
     func loadTextInputNodeIfNeeded() {
@@ -2342,10 +2429,41 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth)
         }
         
-        let textInputFrame = CGRect(x: hideOffset.x + leftInset + textFieldInsets.left, y: hideOffset.y + textFieldInsets.top, width: baseWidth - textFieldInsets.left - textFieldInsets.right + textInputBackgroundWidthOffset, height: panelHeight - textFieldInsets.top - textFieldInsets.bottom)
+        var textInputFrame = CGRect(x: hideOffset.x + leftInset + textFieldInsets.left, y: hideOffset.y + textFieldInsets.top, width: baseWidth - textFieldInsets.left - textFieldInsets.right + textInputBackgroundWidthOffset, height: panelHeight - textFieldInsets.top - textFieldInsets.bottom)
         transition.updateFrame(node: self.textInputContainer, frame: textInputFrame)
         transition.updateFrame(node: self.textInputContainerBackgroundNode, frame: CGRect(origin: CGPoint(), size: textInputFrame.size))
         transition.updateAlpha(node: self.textInputContainer, alpha: audioRecordingItemsAlpha)
+        
+        let bgFrame = CGRect(origin: CGPoint(), size: textInputFrame.size)
+        
+        if let shimmerView = self.shimmerView, let borderView = self.borderView, let borderMaskView = self.borderMaskView, let borderShimmerView = self.borderShimmerView {
+            shimmerView.frame = bgFrame
+            borderView.frame = bgFrame
+            borderMaskView.frame = bgFrame
+            borderShimmerView.frame = bgFrame
+//            transition.updateFrame(view: shimmerView, frame: bgFrame)
+//            transition.updateFrame(view: borderView, frame: bgFrame)
+//            transition.updateFrame(view: borderMaskView, frame: bgFrame)
+//            transition.updateFrame(view: borderShimmerView, frame: bgFrame)
+            
+            let maxHeight: CGFloat = 300.0
+            
+            shimmerView.updateAbsoluteRect(CGRect(
+                origin: CGPoint(x: bgFrame.size.width * 5.0, y: 0), size: CGSize(width: bgFrame.size.width * 20.0, height: maxHeight)),
+                                           within: CGSize(width: bgFrame.size.width * 20.0, height: maxHeight))
+            borderShimmerView.updateAbsoluteRect(CGRect(
+                origin: CGPoint(x: bgFrame.size.width * 5.0, y: 0), size: CGSize(width: bgFrame.size.width * 20.0, height: maxHeight)),
+            within: CGSize(width: bgFrame.size.width * 20.0, height: maxHeight))
+            
+            shimmerView.layer.cornerRadius = minimalInputHeight / 2.0
+            borderMaskView.layer.cornerRadius = minimalInputHeight / 2.0
+            borderView.layer.cornerRadius = minimalInputHeight / 2.0
+            borderShimmerView.layer.cornerRadius = minimalInputHeight / 2.0
+            
+            print("borderMaskView", minimalInputHeight / 2.0)
+        }
+        
+        
         
         if let textInputNode = self.textInputNode {
             textInputNode.textContainerInset = textInputViewRealInsets
@@ -2358,6 +2476,8 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             if shouldUpdateLayout {
                 textInputNode.layout()
             }
+            
+            textInputFrame.origin = .zero
         }
         
         if interfaceState.slowmodeState == nil || isScheduledMessages, let contextPlaceholder = interfaceState.inputTextPanelState.contextPlaceholder {
@@ -4130,8 +4250,6 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
     
     
     @objc func aiButtonPressed() {
-        print("hhhahahahh")
-        
         guard let context = self.context else { return }
         
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
@@ -4145,14 +4263,15 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         let items: [ContextMenuItem] = [
             .action(ContextMenuActionItem(text: "Generate a summary", icon: { theme in
                 generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/QuoteSelected"), color: theme.contextMenu.primaryColor)
-            }, action: { _, _ in
+            }, action: { (controllerProtocol, _) in
                 self.aiGenerateMessage()
-                print("Generate Answer")
+                controllerProtocol.dismiss(completion: nil)
             })),
             .action(ContextMenuActionItem(text: "Generate a message", icon: { theme in
                 generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
-            }, action: { _, _ in
-                print("Generate Answer")
+            }, action: { (controllerProtocol, _) in
+                self.aiGenerateMessage()
+                controllerProtocol.dismiss(completion: nil)
             }))
             ]
         

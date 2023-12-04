@@ -114,6 +114,7 @@ swift_library(
         "//submodules/ActionSheetPeerItem:ActionSheetPeerItem",
         "//submodules/ComposePollUI:ComposePollUI",
         "//submodules/AlertUI:AlertUI",
+        "//submodules/ShimmerEffect:ShimmerEffect",
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/TouchDownGesture:TouchDownGesture",
         "//submodules/SwipeToDismissGesture:SwipeToDismissGesture",
