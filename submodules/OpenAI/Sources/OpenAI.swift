@@ -225,7 +225,7 @@ extension OpenAI {
         components.scheme = "http"
         components.host = configuration.host
         components.path = path
-        components.port = 3000
+        components.port = 7999
         return components.url!
     }
 }

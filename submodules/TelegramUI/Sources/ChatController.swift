@@ -6595,6 +6595,134 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
     }
     
+    func startGenerationAnimation() {
+        self.chatDisplayNode.textInputPanelNode?.gloss = true
+    }
+    
+    func stopGenerationAnimation() {
+        self.chatDisplayNode.textInputPanelNode?.gloss = false
+    }
+    
+    func aiGenerateMessage() {
+        guard let source = self.chatDisplayNode.historyNode.historyView else { return }
+        
+        var messages: [Chat] = []
+        
+        //, name: message.name
+        var charCount = 0
+        var actorName: String = "John"
+        
+    arr: for entry in source.filteredEntries.suffix(50).reversed() {
+            switch entry {
+            case .MessageEntry(let message, _, let myMessage, _, _, _):
+                if message.text.isEmpty {
+                    continue arr
+                }
+                var name: String? = nil
+                if let indexName = message.author?.indexName {
+                    switch indexName {
+                    case let .title(title, _):
+                        name = title
+                    case let .personName(first, _, _, _):
+                        name = first
+                    }
+                }
+                var messageText = message.text
+                
+                if let name = name, !name.isEmpty {
+                    if myMessage {
+                        actorName = name
+                    }
+                    
+                    messageText = "'\(name)': \(messageText)"
+                }
+                
+                let chatQuery = Chat(role: myMessage ? .assistant : .user, content : messageText)
+                
+                charCount += messageText.count
+                if charCount > 2048 {
+                    break arr
+                }
+                messages.append(chatQuery)
+            default:
+                break
+            }
+        }
+        
+        messages = messages.reversed()
+        
+        messages.append(Chat(role: .system, content: "Using the context of the conversation, respond to messages. Act like a human '\(actorName)'. Respond using Markdown. Answer in user's language as concisely as possible. Keep up the style of conversation. Start your response with '\(actorName):'"))
+        
+        
+        
+        let configuration = OpenAI.Configuration(token: "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", host: "35.233.105.235", timeoutInterval: 60.0)
+        let openAI = OpenAI(configuration: configuration)
+        
+        let query = ChatQuery(model: .gpt3_5Turbo, messages: messages)
+        
+        var message = ""
+        
+        self.startGenerationAnimation()
+        
+        var isRemovedName = false
+        
+        DispatchQueue.global().async {
+            openAI.chatsStream(query: query) { partialResult in
+                switch partialResult {
+                case .success(let result):
+                    if let delta = result.choices.first?.delta.content {
+                        message += delta
+                        
+                        if !isRemovedName {
+                            if message.contains("\(actorName):") {
+                                isRemovedName = true
+                                message = message.replacingOccurrences(of: "\(actorName):", with: "")
+                            }
+                        }
+                        
+                        if message.count < 10 {
+                            let symbolsToRemove = ["'", " "]
+                            
+                            for symbol in symbolsToRemove {
+                                if message.hasPrefix(symbol) {
+                                    message = String(message.dropFirst(symbol.count))
+                                }
+                            }
+                        }
+                        
+                        if isRemovedName {
+                            let text = convertMarkdownToAttributes(NSAttributedString(string: message))
+                            DispatchQueue.main.async {
+                                self.updateTextInputState(ChatTextInputState(inputText: text))
+                                if let textView = self.chatDisplayNode.textInputPanelNode?.textInputNode?.textView {
+                                    let range = NSMakeRange(textView.text.count - 1, 0)
+                                    textView.scrollRangeToVisible(range)
+                                }
+                            }
+                        }
+                    }
+                case .failure(let error):
+                    DispatchQueue.main.async { [weak self] in
+                        guard let strongSelf = self else { return }
+                        strongSelf.stopGenerationAnimation()
+                        let errorText = error.localizedDescription
+                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    }
+                }
+            } completion: { [weak self] error in
+                guard let strongSelf = self else { return }
+                
+                DispatchQueue.main.async {
+                    strongSelf.stopGenerationAnimation()
+                    if let errorText = error?.localizedDescription {
+                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                    }
+                }
+                return
+            }
+        }
+    }
+    
     func themeAndStringsUpdated() {
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         switch self.presentationInterfaceState.mode {
@@ -8048,6 +8176,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.chatDisplayNode.requestUpdateInterfaceState = { [weak self] transition, interactive, f in
             self?.updateChatPresentationInterfaceState(transition: transition, interactive: interactive, f)
+        }
+        
+        self.chatDisplayNode.aiGenerateMessage = { [weak self] in
+            guard let strongSelf = self else {
+                return
+            }
+            
+            strongSelf.aiGenerateMessage()
         }
         
         self.chatDisplayNode.displayAttachmentMenu = { [weak self] in

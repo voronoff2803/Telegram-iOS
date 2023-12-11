@@ -1146,17 +1146,21 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
                 self.textInputContainer.view.insertSubview(borderView, aboveSubview: self.textInputContainerBackgroundNode.view)
                 
                 self.updateShimmerParameters()
+                
+                self.shimmerView?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.5)
             }
         } else if self.shimmerView != nil {
-//            self.shimmerView?.removeFromSuperview()
-//            self.borderView?.removeFromSuperview()
-//            self.borderMaskView?.removeFromSuperview()
-//            self.borderShimmerView?.removeFromSuperview()
-//            
-//            self.shimmerView = nil
-//            self.borderView = nil
-//            self.borderMaskView = nil
-//            self.borderShimmerView = nil
+            self.shimmerView?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.5) { _ in
+                self.shimmerView?.removeFromSuperview()
+                self.borderView?.removeFromSuperview()
+                self.borderMaskView?.removeFromSuperview()
+                self.borderShimmerView?.removeFromSuperview()
+                
+                self.shimmerView = nil
+                self.borderView = nil
+                self.borderMaskView = nil
+                self.borderShimmerView = nil
+            }
         }
         
         if let presentationInterfaceState = self.presentationInterfaceState {
@@ -2434,14 +2438,14 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         let bgFrame = CGRect(origin: CGPoint(), size: textInputFrame.size)
         
         if let shimmerView = self.shimmerView, let borderView = self.borderView, let borderMaskView = self.borderMaskView, let borderShimmerView = self.borderShimmerView {
-            shimmerView.frame = bgFrame
-            borderView.frame = bgFrame
-            borderMaskView.frame = bgFrame
-            borderShimmerView.frame = bgFrame
-//            transition.updateFrame(view: shimmerView, frame: bgFrame)
-//            transition.updateFrame(view: borderView, frame: bgFrame)
-//            transition.updateFrame(view: borderMaskView, frame: bgFrame)
-//            transition.updateFrame(view: borderShimmerView, frame: bgFrame)
+//            shimmerView.frame = bgFrame
+//            borderView.frame = bgFrame
+//            borderMaskView.frame = bgFrame
+//            borderShimmerView.frame = bgFrame
+            transition.updateFrame(view: shimmerView, frame: bgFrame)
+            transition.updateFrame(view: borderView, frame: bgFrame)
+            transition.updateFrame(view: borderMaskView, frame: bgFrame)
+            transition.updateFrame(view: borderShimmerView, frame: bgFrame)
             
             let maxHeight: CGFloat = 300.0
             
