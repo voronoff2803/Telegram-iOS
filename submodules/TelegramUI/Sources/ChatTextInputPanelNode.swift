@@ -1150,7 +1150,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
                 self.shimmerView?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.5)
             }
         } else if self.shimmerView != nil {
-            self.shimmerView?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.5) { _ in
+            self.shimmerView?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.5) { _ in
                 self.shimmerView?.removeFromSuperview()
                 self.borderView?.removeFromSuperview()
                 self.borderMaskView?.removeFromSuperview()
@@ -1190,8 +1190,10 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             compositingFilter = nil
         }
         
-        shimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(alpha), gradientSize: nil, globalTimeOffset: false, duration: 1.0, horizontal: true)
-        borderShimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(borderAlpha), gradientSize: nil, globalTimeOffset: false, duration: 1.0, horizontal: true)
+        shimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(alpha), gradientSize: 50.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        borderShimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(borderAlpha), gradientSize: 60.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        
+        
         
         //shimmerView.layer.compositingFilter = compositingFilter
         borderShimmerView.layer.compositingFilter = compositingFilter
@@ -2435,26 +2437,22 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         transition.updateFrame(node: self.textInputContainerBackgroundNode, frame: CGRect(origin: CGPoint(), size: textInputFrame.size))
         transition.updateAlpha(node: self.textInputContainer, alpha: audioRecordingItemsAlpha)
         
-        let bgFrame = CGRect(origin: CGPoint(), size: textInputFrame.size)
+        let textInputBounds = CGRect(origin: CGPoint(), size: textInputFrame.size)
         
         if let shimmerView = self.shimmerView, let borderView = self.borderView, let borderMaskView = self.borderMaskView, let borderShimmerView = self.borderShimmerView {
 //            shimmerView.frame = bgFrame
 //            borderView.frame = bgFrame
 //            borderMaskView.frame = bgFrame
 //            borderShimmerView.frame = bgFrame
-            transition.updateFrame(view: shimmerView, frame: bgFrame)
-            transition.updateFrame(view: borderView, frame: bgFrame)
-            transition.updateFrame(view: borderMaskView, frame: bgFrame)
-            transition.updateFrame(view: borderShimmerView, frame: bgFrame)
+            transition.updateFrame(view: shimmerView, frame: textInputBounds)
+            transition.updateFrame(view: borderView, frame: textInputBounds)
+            transition.updateFrame(view: borderMaskView, frame: textInputBounds)
+            transition.updateFrame(view: borderShimmerView, frame: textInputBounds)
             
-            let maxHeight: CGFloat = 300.0
+            let size = CGSize(width: textInputFrame.width, height: maxHeight)
             
-            shimmerView.updateAbsoluteRect(CGRect(
-                origin: CGPoint(x: bgFrame.size.width * 5.0, y: 0), size: CGSize(width: bgFrame.size.width * 20.0, height: maxHeight)),
-                                           within: CGSize(width: bgFrame.size.width * 20.0, height: maxHeight))
-            borderShimmerView.updateAbsoluteRect(CGRect(
-                origin: CGPoint(x: bgFrame.size.width * 5.0, y: 0), size: CGSize(width: bgFrame.size.width * 20.0, height: maxHeight)),
-            within: CGSize(width: bgFrame.size.width * 20.0, height: maxHeight))
+            self.shimmerView?.updateAbsoluteRect(CGRect(origin: CGPoint(x: size.width * 4.0, y: 0.0), size: size), within: CGSize(width: size.width * 9.0, height: size.height))
+            self.borderShimmerView?.updateAbsoluteRect(CGRect(origin: CGPoint(x: size.width * 4.0, y: 0.0), size: size), within: CGSize(width: size.width * 9.0, height: size.height))
             
             shimmerView.layer.cornerRadius = minimalInputHeight / 2.0
             borderMaskView.layer.cornerRadius = minimalInputHeight / 2.0
