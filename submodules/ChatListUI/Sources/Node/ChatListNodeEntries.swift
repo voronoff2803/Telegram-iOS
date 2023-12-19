@@ -6,7 +6,24 @@ import TelegramPresentationData
 import MergeLists
 import AccountContext
 
+
+public struct AIPinnedChat: Equatable {
+    let title = "Test"
+    let desc = "Desc"
+    
+    func select() {
+        print("select")
+    }
+    
+    func unpin() {
+        print("unpin")
+    }
+}
+
 enum ChatListNodeEntryId: Hashable {
+    // MARK: AI PinnedChats
+    case aiPinnedChat
+    //
     case Header
     case Hole(Int64)
     case PeerId(Int64)
@@ -90,6 +107,9 @@ enum ChatListNotice: Equatable {
 
 enum ChatListNodeEntry: Comparable, Identifiable {
     struct PeerEntryData: Equatable {
+        // MARK: AI PinnedChats
+        var aiItem: AIPinnedChat?
+        //
         var index: EngineChatList.Item.Index
         var presentationData: ChatListPresentationData
         var messages: [EngineMessage]
@@ -115,6 +135,9 @@ enum ChatListNodeEntry: Comparable, Identifiable {
         var storyState: ChatListNodeState.StoryState?
         
         init(
+            // MARK: AI PinnedChats
+            aiItem: AIPinnedChat? = nil,
+            //
             index: EngineChatList.Item.Index,
             presentationData: ChatListPresentationData,
             messages: [EngineMessage],
@@ -139,6 +162,9 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             revealed: Bool,
             storyState: ChatListNodeState.StoryState?
         ) {
+            // MARK: AI PinnedChats
+            self.aiItem = aiItem
+            //
             self.index = index
             self.presentationData = presentationData
             self.messages = messages
@@ -416,6 +442,13 @@ enum ChatListNodeEntry: Comparable, Identifiable {
         case .HeaderEntry:
             return .Header
         case let .PeerEntry(peerEntry):
+            // MARK: Nicegram PinnedChats
+            if let aiItem = peerEntry.aiItem {
+                print(aiItem)
+                return .aiPinnedChat
+            }
+            //
+            
             switch peerEntry.index {
             case let .chatList(index):
                 return .PeerId(index.messageIndex.id.peerId.toInt64())
@@ -569,7 +602,8 @@ struct ChatListContactPeer {
     }
 }
 
-func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, displayArchiveIntro: Bool, notice: ChatListNotice?, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool) -> (entries: [ChatListNodeEntry], loading: Bool) {
+// MARK: AI PinnedChats, aiItems added
+func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, savedMessagesPeer: EnginePeer?, foundPeers: [(EnginePeer, EnginePeer?)], hideArchivedFolderByDefault: Bool, displayArchiveIntro: Bool, notice: ChatListNotice?, mode: ChatListNodeMode, chatListLocation: ChatListControllerLocation, contacts: [ChatListContactPeer], accountPeerId: EnginePeer.Id, isMainTab: Bool, aiItems: [AIPinnedChat]) -> (entries: [ChatListNodeEntry], loading: Bool) {
     var groupItems = view.groupItems
     if isMainTab && state.archiveStoryState != nil && groupItems.isEmpty {
         groupItems.append(EngineChatList.GroupItem(
@@ -608,6 +642,8 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
     let filteredAdditionalItemEntries = view.additionalItems.filter { item -> Bool in
         return item.item.renderedPeer.peerId != state.hiddenPsaPeerId
     }
+    
+    print(filteredAdditionalItemEntries)
     
     var foundPeerIds = Set<EnginePeer.Id>()
     for peer in foundPeers {
@@ -716,6 +752,10 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
     
     if !view.hasLater {
         var pinningIndex: UInt16 = UInt16(pinnedIndexOffset == 0 ? 0 : (pinnedIndexOffset - 1))
+        
+        // MARK: Nicegram PinnedChats
+        pinningIndex += UInt16(aiItems.count)
+        //
         
         if let savedMessagesPeer = savedMessagesPeer {
             if !foundPeers.isEmpty {
@@ -840,6 +880,54 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                 }
             }
         }
+        
+        // MARK: AI PinnedChats
+        for aiItem in aiItems {
+            let peerId = PeerId(0)
+            result.append(.PeerEntry(ChatListNodeEntry.PeerEntryData(
+                aiItem: aiItem,
+                index: .chatList(
+                    ChatListIndex(
+                        pinningIndex: pinningIndex,
+                        messageIndex: MessageIndex(
+                            id: MessageId(
+                                peerId: peerId,
+                                namespace: 0,
+                                id: 0
+                            ),
+                            timestamp: 0
+                        )
+                    )
+                ),
+                presentationData: state.presentationData,
+                messages: [],
+                readState: nil,
+                isRemovedFromTotalUnreadCount: false,
+                draftState: nil,
+                peer: EngineRenderedPeer(peerId: peerId, peers: [:], associatedMedia: [:]),
+                threadInfo: nil,
+                presence: nil,
+                hasUnseenMentions: false,
+                hasUnseenReactions: false,
+                editing: state.editing,
+                hasActiveRevealControls: false,
+                selected: false,
+                inputActivities: nil,
+                promoInfo: nil,
+                hasFailedMessages: false,
+                isContact: false,
+                autoremoveTimeout: nil,
+                forumTopicData: nil,
+                topForumTopicItems: [],
+                revealed: false,
+                storyState: nil
+            )))
+            
+            if pinningIndex != 0 {
+                pinningIndex -= 1
+            }
+        }
+        //
         
         if !view.hasLater, case .chatList = mode {
             for groupReference in groupItems {

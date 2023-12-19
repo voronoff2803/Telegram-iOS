@@ -391,6 +391,9 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
                 switch mode {
                     case .chatList:
                         return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListItem(
+                            // MARK: AI PinnedChats
+                            aiItem: peerEntry.aiItem,
+                            //
                             presentationData: presentationData,
                             context: context,
                             chatListLocation: location,
@@ -757,6 +760,9 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
                 switch mode {
                     case .chatList:
                         return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatListItem(
+                            // MARK: AI PinnedChats
+                            aiItem: peerEntry.aiItem,
+                            //
                             presentationData: presentationData,
                             context: context,
                             chatListLocation: location,
@@ -1130,6 +1136,9 @@ public final class ChatListNode: ListView {
     public var contentsReady: Signal<Bool, NoError> {
         return _contentsReady.get()
     }
+    
+    // MARK: AI PinnedChats
+    private var aiItemsCancellable: Any?
     
     public var peerSelected: ((EnginePeer, Int64?, Bool, Bool, ChatListNodeEntryPromoInfo?) -> Void)?
     public var disabledPeerSelected: ((EnginePeer, Int64?) -> Void)?
@@ -2015,6 +2024,28 @@ public final class ChatListNode: ListView {
             contacts = .single([])
         }
         
+        // MARK: AI PinnedChats
+        let aiItemsPromise = ValuePromise<[AIPinnedChat]>([])
+        aiItemsPromise.set([AIPinnedChat()])
+//        if #available(iOS 13.0, *) {
+//            self.aiItemsCancellable = AIPinnedChats
+//                .publisher(
+//                    push: { [weak self] controller in
+//                        guard let self else { return }
+//                        self.push?(
+//                            NativeControllerWrapper(
+//                                controller: controller,
+//                                accountContext: self.context
+//                            )
+//                        )
+//                    }
+//                )
+//                .sink { items in
+//                    nicegramItemsPromise.set(items)
+//                }
+//        }
+        //
+        
         let accountPeerId = context.account.peerId
         
         let chatListNodeViewTransition = combineLatest(
@@ -2026,9 +2057,12 @@ public final class ChatListNode: ListView {
             savedMessagesPeer,
             chatListViewUpdate,
             self.statePromise.get(),
-            contacts
+            contacts,
+            // MARK: AI PinnedChats
+            aiItemsPromise.get()
+            //
         )
-        |> mapToQueue { (hideArchivedFolderByDefault, displayArchiveIntro, storageInfo, suggestedChatListNotice, savedMessagesPeer, updateAndFilter, state, contacts) -> Signal<ChatListNodeListViewTransition, NoError> in
+        |> mapToQueue { (hideArchivedFolderByDefault, displayArchiveIntro, storageInfo, suggestedChatListNotice, savedMessagesPeer, updateAndFilter, state, contacts, aiItems) -> Signal<ChatListNodeListViewTransition, NoError> in
             let (update, filter) = updateAndFilter
             
             let previousHideArchivedFolderByDefaultValue = previousHideArchivedFolderByDefault.swap(hideArchivedFolderByDefault)
@@ -2042,10 +2076,24 @@ public final class ChatListNode: ListView {
                 notice = nil
             }
             
+            // MARK: AI PinnedChats
+            var aiItems = aiItems
+            if filter != nil {
+                aiItems = []
+            }
+            if case .forum(_) = location {
+                aiItems = []
+            }
+            //
+            
             let innerIsMainTab = location == .chatList(groupId: .root) && chatListFilter == nil
             
-            let (rawEntries, isLoading) = chatListNodeEntriesForView(view: update.list, state: state, savedMessagesPeer: savedMessagesPeer, foundPeers: state.foundPeers, hideArchivedFolderByDefault: hideArchivedFolderByDefault, displayArchiveIntro: displayArchiveIntro, notice: notice, mode: mode, chatListLocation: location, contacts: contacts, accountPeerId: accountPeerId, isMainTab: innerIsMainTab)
+            // MARK: AI PinnedChats, aiItems added
+            let (rawEntries, isLoading) = chatListNodeEntriesForView(view: update.list, state: state, savedMessagesPeer: savedMessagesPeer, foundPeers: state.foundPeers, hideArchivedFolderByDefault: hideArchivedFolderByDefault, displayArchiveIntro: displayArchiveIntro, notice: notice, mode: mode, chatListLocation: location, contacts: contacts, accountPeerId: accountPeerId, isMainTab: innerIsMainTab, aiItems: aiItems)
             var isEmpty = true
+            
+            print(rawEntries)
+            
             var entries = rawEntries.filter { entry in
                 switch entry {
                 case let .PeerEntry(peerEntry):

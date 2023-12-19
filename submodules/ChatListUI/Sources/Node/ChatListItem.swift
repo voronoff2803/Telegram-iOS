@@ -177,6 +177,9 @@ public enum ChatListItemContent {
 }
 
 public class ChatListItem: ListViewItem, ChatListSearchItemNeighbour {
+    // MARK: Nicegram PinnedChats
+    let aiItem: AIPinnedChat?
+    //
     let presentationData: ChatListPresentationData
     let context: AccountContext
     let chatListLocation: ChatListControllerLocation
@@ -211,7 +214,9 @@ public class ChatListItem: ListViewItem, ChatListSearchItemNeighbour {
         }
     }
     
-    public init(presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enableContextActions: Bool, hiddenOffset: Bool, interaction: ChatListNodeInteraction) {
+    // MARK: AI PinnedChats, aiItem added
+    public init(aiItem: AIPinnedChat? = nil, presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enableContextActions: Bool, hiddenOffset: Bool, interaction: ChatListNodeInteraction) {
+        self.aiItem = aiItem
         self.presentationData = presentationData
         self.chatListLocation = chatListLocation
         self.filterData = filterData
@@ -277,6 +282,16 @@ public class ChatListItem: ListViewItem, ChatListSearchItemNeighbour {
     public func selected(listView: ListView) {
         switch self.content {
         case let .peer(peerData):
+            // MARK: AI PinnedChats
+            if let aiItem {
+                if #available(iOS 13.0, *) {
+                    Task { @MainActor in
+                        aiItem.select()
+                    }
+                }
+                return
+            }
+            //
             if let message = peerData.messages.last, let peer = peerData.peer.peer {
                 var threadId: Int64?
                 if case let .forum(_, _, threadIdValue, _, _) = self.index {
@@ -1302,6 +1317,13 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             guard let strongSelf = self, let item = strongSelf.item else {
                 return
             }
+            
+            // MARK: AI PinnedChats
+            if item.isAiItem {
+                return
+            }
+            //
+            
             var threadId: Int64?
             if let value = strongSelf.hitTest(location, with: nil), value === strongSelf.compoundTextButtonNode?.view {
                 if case let .peer(peerData) = item.content, let topicItem = peerData.topForumTopicItems.first {
@@ -1472,6 +1494,12 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                 self.hierarchyTrackingLayer = nil
             }
         }
+        
+        // MARK: AI PinnedChats
+//        if let aiItem = item.aiItem {
+//            self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: nil, nicegramImage: nicegramItem.image?.roundedImage)
+//        }
+        //
         
         self.contextContainer.isGestureEnabled = enablePreview && !item.editing
     }
@@ -1791,6 +1819,12 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
                 editingOffset = 0.0
             }
             
+            // MARK: AI PinnedChats
+            if item.isAiItem {
+                reorderControlSizeAndApply = nil
+            }
+            //
+            
             let enableChatListPhotos = true
             
             let avatarDiameter = min(60.0, floor(item.presentationData.fontSize.baseDisplaySize * 60.0 / 17.0))
@@ -1887,6 +1921,22 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             
             switch contentData {
                 case let .chat(itemPeer, _, _, _, text, spoilers, customEmojiRanges):
+                    // MARK: AI PinnedChats
+                    if let aiItem = item.aiItem {
+                        titleAttributedString = NSAttributedString(
+                            string: aiItem.title,
+                            font: titleFont,
+                            textColor: theme.titleColor
+                        )
+                        attributedText = NSAttributedString(
+                            string: aiItem.desc,
+                            font: textFont,
+                            textColor: theme.messageTextColor
+                        )
+                        break
+                    }
+                    //
+                
                     var isUser = false
                     if case .user = itemPeer.chatMainPeer {
                         isUser = true
@@ -2649,6 +2699,18 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             var peerLeftRevealOptions: [ItemListRevealOption]
             switch item.content {
                 case let .peer(peerData):
+                    // MARK: Nicegram PinnedChats
+                    if item.isAiItem {
+                        let presentationData = item.presentationData
+                        let unpin = ItemListRevealOption(key: RevealOptionKey.unpin.rawValue, title: presentationData.strings.DialogList_Unpin, icon: unpinIcon, color: presentationData.theme.list.itemDisclosureActions.constructive.fillColor, textColor: presentationData.theme.list.itemDisclosureActions.constructive.foregroundColor)
+                        
+                        peerRevealOptions = [unpin]
+                        peerLeftRevealOptions = []
+                        
+                        break
+                    }
+                    //
+                
                     let renderedPeer = peerData.peer
                     let presence = peerData.presence
                     let displayAsMessage = peerData.displayAsMessage
@@ -3757,6 +3819,19 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             return
         }
         
+        // MARK: Nicegram PinnedChats
+        if let aiItem = item.aiItem {
+            switch option.key {
+            case RevealOptionKey.unpin.rawValue:
+                self.setRevealOptionsOpened(false, animated: true)
+                aiItem.unpin()
+            default:
+                break
+            }
+            return
+        }
+        //
+        
         var close = true
         if case let .chatList(index) = item.index {
             switch option.key {
@@ -3973,3 +4048,26 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
         }
     }
 }
+
+
+// MARK: AI PinnedChats
+private extension ChatListItem {
+    var isAiItem: Bool {
+        aiItem != nil
+    }
+}
+
+private extension UIImage {
+    var roundedImage: UIImage? {
+        let rect = CGRect(origin: .zero, size: size)
+        UIGraphicsBeginImageContextWithOptions(size, false, 0)
+        UIBezierPath(roundedRect: rect, cornerRadius: size.height / 2).addClip()
+        draw(in: rect)
+        
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return image
+    }
+}
+
+//
