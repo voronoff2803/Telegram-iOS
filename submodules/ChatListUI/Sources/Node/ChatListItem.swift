@@ -177,7 +177,7 @@ public enum ChatListItemContent {
 }
 
 public class ChatListItem: ListViewItem, ChatListSearchItemNeighbour {
-    // MARK: Nicegram PinnedChats
+    // MARK: AI PinnedChats
     let aiItem: AIPinnedChat?
     //
     let presentationData: ChatListPresentationData
@@ -2699,7 +2699,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             var peerLeftRevealOptions: [ItemListRevealOption]
             switch item.content {
                 case let .peer(peerData):
-                    // MARK: Nicegram PinnedChats
+                    // MARK: AI PinnedChats
                     if item.isAiItem {
                         let presentationData = item.presentationData
                         let unpin = ItemListRevealOption(key: RevealOptionKey.unpin.rawValue, title: presentationData.strings.DialogList_Unpin, icon: unpinIcon, color: presentationData.theme.list.itemDisclosureActions.constructive.fillColor, textColor: presentationData.theme.list.itemDisclosureActions.constructive.foregroundColor)
@@ -3819,7 +3819,7 @@ class ChatListItemNode: ItemListRevealOptionsItemNode {
             return
         }
         
-        // MARK: Nicegram PinnedChats
+        // MARK: AI PinnedChats
         if let aiItem = item.aiItem {
             switch option.key {
             case RevealOptionKey.unpin.rawValue:

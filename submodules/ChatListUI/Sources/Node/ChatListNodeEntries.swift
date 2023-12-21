@@ -6,7 +6,7 @@ import TelegramPresentationData
 import MergeLists
 import AccountContext
 
-
+// MARK: AI PinnedChats
 public struct AIPinnedChat: Equatable {
     let title = "Test"
     let desc = "Desc"
@@ -19,6 +19,7 @@ public struct AIPinnedChat: Equatable {
         print("unpin")
     }
 }
+//
 
 enum ChatListNodeEntryId: Hashable {
     // MARK: AI PinnedChats
@@ -442,7 +443,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
         case .HeaderEntry:
             return .Header
         case let .PeerEntry(peerEntry):
-            // MARK: Nicegram PinnedChats
+            // MARK: AI PinnedChats
             if let aiItem = peerEntry.aiItem {
                 print(aiItem)
                 return .aiPinnedChat
@@ -643,8 +644,6 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         return item.item.renderedPeer.peerId != state.hiddenPsaPeerId
     }
     
-    print(filteredAdditionalItemEntries)
-    
     var foundPeerIds = Set<EnginePeer.Id>()
     for peer in foundPeers {
         foundPeerIds.insert(peer.0.id)
@@ -753,7 +752,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
     if !view.hasLater {
         var pinningIndex: UInt16 = UInt16(pinnedIndexOffset == 0 ? 0 : (pinnedIndexOffset - 1))
         
-        // MARK: Nicegram PinnedChats
+        // MARK: AI PinnedChats
         pinningIndex += UInt16(aiItems.count)
         //
         

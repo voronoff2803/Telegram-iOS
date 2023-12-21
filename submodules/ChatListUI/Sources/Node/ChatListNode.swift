@@ -1707,8 +1707,10 @@ public final class ChatListNode: ListView {
         let chatListViewUpdate = self.chatListLocation.get()
         |> distinctUntilChanged
         |> mapToSignal { listLocation -> Signal<(ChatListNodeViewUpdate, ChatListFilter?), NoError> in
+            print("chatListViewUpdate location", listLocation)
             return chatListViewForLocation(chatListLocation: location, location: listLocation, account: context.account)
             |> map { update in
+                print("chatListViewUpdate view")
                 return (update, listLocation.filter)
             }
         }
@@ -2027,6 +2029,7 @@ public final class ChatListNode: ListView {
         // MARK: AI PinnedChats
         let aiItemsPromise = ValuePromise<[AIPinnedChat]>([])
         aiItemsPromise.set([AIPinnedChat()])
+        
 //        if #available(iOS 13.0, *) {
 //            self.aiItemsCancellable = AIPinnedChats
 //                .publisher(
@@ -2091,8 +2094,6 @@ public final class ChatListNode: ListView {
             // MARK: AI PinnedChats, aiItems added
             let (rawEntries, isLoading) = chatListNodeEntriesForView(view: update.list, state: state, savedMessagesPeer: savedMessagesPeer, foundPeers: state.foundPeers, hideArchivedFolderByDefault: hideArchivedFolderByDefault, displayArchiveIntro: displayArchiveIntro, notice: notice, mode: mode, chatListLocation: location, contacts: contacts, accountPeerId: accountPeerId, isMainTab: innerIsMainTab, aiItems: aiItems)
             var isEmpty = true
-            
-            print(rawEntries)
             
             var entries = rawEntries.filter { entry in
                 switch entry {

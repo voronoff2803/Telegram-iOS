@@ -5,6 +5,21 @@ import MergeLists
 import TemporaryCachedPeerDataManager
 import AccountContext
 
+// MARK: AI SummaryChat
+public struct AISummaryChatMessage: Equatable {
+    let title = "Test"
+    let desc = "Desc"
+    
+    func select() {
+        print("select")
+    }
+    
+    func unpin() {
+        print("unpin")
+    }
+}
+//
+
 public enum ChatMessageEntryContentType {
     case generic
     case largeEmoji
@@ -42,6 +57,9 @@ public struct ChatMessageEntryAttributes: Equatable {
 }
 
 public enum ChatHistoryEntry: Identifiable, Comparable {
+    // MARK: AI SummaryChat
+    case ChatSummaryEntry(UInt32, String, MessageIndex, ChatPresentationData)
+    //
     case MessageEntry(Message, ChatPresentationData, Bool, MessageHistoryEntryLocation?, ChatHistoryMessageSelection, ChatMessageEntryAttributes)
     case MessageGroupEntry(MessageGroupInfo, [(Message, Bool, ChatHistoryMessageSelection, ChatMessageEntryAttributes, MessageHistoryEntryLocation?)], ChatPresentationData)
     case UnreadEntry(MessageIndex, ChatPresentationData)
@@ -72,6 +90,10 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
                 return UInt64(6) << 40
             case .SearchEntry:
                 return UInt64(7) << 40
+            // MARK: AI SummaryChat
+            case let .ChatSummaryEntry(stableSummaryId, _, _, _):
+                return UInt64(stableSummaryId) | ((UInt64(3) << 40))
+            //
         }
     }
     
@@ -89,6 +111,10 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
                 return MessageIndex.absoluteLowerBound()
             case .SearchEntry:
                 return MessageIndex.absoluteLowerBound()
+            // MARK: AI SummaryChat
+            case let .ChatSummaryEntry(_, _, index, _):
+                return index
+            //
         }
     }
     
@@ -106,6 +132,10 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
                 return MessageIndex.absoluteLowerBound()
             case .SearchEntry:
                 return MessageIndex.absoluteLowerBound()
+            // MARK: AI SummaryChat
+            case let .ChatSummaryEntry(_, _, index, _):
+                return index
+            //
         }
     }
     
@@ -281,6 +311,13 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
             case let .SearchEntry(lhsTheme, lhsStrings):
                 if case let .SearchEntry(rhsTheme, rhsStrings) = rhs, lhsTheme === rhsTheme, lhsStrings === rhsStrings {
                     return true
+                } else {
+                    return false
+                }
+            
+            case let .ChatSummaryEntry(lhsId, lhsString, lhsIndex, lhsData):
+                if case let .ChatSummaryEntry(rhsId, rhsString, rhsIndex, rhsData) = rhs {
+                    return lhsId == rhsId && lhsString == rhsString && lhsIndex == rhsIndex && lhsData === rhsData
                 } else {
                     return false
                 }

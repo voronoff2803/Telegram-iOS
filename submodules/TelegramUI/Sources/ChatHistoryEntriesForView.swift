@@ -265,6 +265,7 @@ func chatHistoryEntriesForView(
             }
         }
     }
+    
         
     if let maxReadIndex = view.maxReadIndex, includeUnreadEntry {
         var i = 0
@@ -279,6 +280,16 @@ func chatHistoryEntriesForView(
             i += 1
         }
     }
+    
+    // MARK: Add summary messages
+    
+//    if let laterId = view.laterId {
+//        entries.append(.ReplyCountEntry(laterId, true, 10, presentationData))
+//    }
+//    
+//    if let earlierId = view.earlierId {
+//        entries.append(.ReplyCountEntry(earlierId, true, 10, presentationData))
+//    }
     
     var addedThreadHead = false
     if case let .replyThread(replyThreadMessage) = location, !replyThreadMessage.isForumPost, view.earlierId == nil, !view.holeEarlier, !view.isLoading {
