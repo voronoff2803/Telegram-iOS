@@ -58,7 +58,7 @@ public struct ChatMessageEntryAttributes: Equatable {
 
 public enum ChatHistoryEntry: Identifiable, Comparable {
     // MARK: AI SummaryChat
-    case ChatSummaryEntry(UInt32, String, MessageIndex, ChatPresentationData)
+    case ChatSummaryEntry(UInt32, String, ChatPresentationData)
     //
     case MessageEntry(Message, ChatPresentationData, Bool, MessageHistoryEntryLocation?, ChatHistoryMessageSelection, ChatMessageEntryAttributes)
     case MessageGroupEntry(MessageGroupInfo, [(Message, Bool, ChatHistoryMessageSelection, ChatMessageEntryAttributes, MessageHistoryEntryLocation?)], ChatPresentationData)
@@ -91,7 +91,7 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
             case .SearchEntry:
                 return UInt64(7) << 40
             // MARK: AI SummaryChat
-            case let .ChatSummaryEntry(stableSummaryId, _, _, _):
+            case let .ChatSummaryEntry(stableSummaryId, _, _):
                 return UInt64(stableSummaryId) | ((UInt64(3) << 40))
             //
         }
@@ -112,8 +112,8 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
             case .SearchEntry:
                 return MessageIndex.absoluteLowerBound()
             // MARK: AI SummaryChat
-            case let .ChatSummaryEntry(_, _, index, _):
-                return index
+            case .ChatSummaryEntry:
+                return MessageIndex.absoluteLowerBound()
             //
         }
     }
@@ -133,8 +133,8 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
             case .SearchEntry:
                 return MessageIndex.absoluteLowerBound()
             // MARK: AI SummaryChat
-            case let .ChatSummaryEntry(_, _, index, _):
-                return index
+            case .ChatSummaryEntry(_, _, _):
+                return MessageIndex.absoluteLowerBound()
             //
         }
     }
@@ -315,9 +315,9 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
                     return false
                 }
             
-            case let .ChatSummaryEntry(lhsId, lhsString, lhsIndex, lhsData):
-                if case let .ChatSummaryEntry(rhsId, rhsString, rhsIndex, rhsData) = rhs {
-                    return lhsId == rhsId && lhsString == rhsString && lhsIndex == rhsIndex && lhsData === rhsData
+            case let .ChatSummaryEntry(lhsId, lhsString, lhsData):
+                if case let .ChatSummaryEntry(rhsId, rhsString, rhsData) = rhs {
+                    return lhsId == rhsId && lhsString == rhsString && lhsData === rhsData
                 } else {
                     return false
                 }

@@ -212,6 +212,8 @@ struct ScrolledToMessageId: Equatable {
 }
 
 public final class ChatControllerImpl: TelegramBaseController, ChatController, GalleryHiddenMediaTarget, UIDropInteractionDelegate {
+    lazy var aiManager = AIManager()
+    
     var validLayout: ContainerViewLayout?
     
     public weak var parentController: ViewController?
@@ -6606,18 +6608,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     func aiGenerateMessage() {
         guard let source = self.chatDisplayNode.historyNode.historyView else { return }
         
-        var messages: [Chat] = []
-        
-        //, name: message.name
-        var charCount = 0
-        var actorName: String = "John"
-        
-    arr: for entry in source.filteredEntries.suffix(50).reversed() {
+        let messages: [AIManager.MessageEntry] = source.filteredEntries.compactMap { entry in
             switch entry {
-            case .MessageEntry(let message, _, let myMessage, _, _, _):
-                if message.text.isEmpty {
-                    continue arr
-                }
+            case let .MessageEntry(message, _, myMessage, _, _, _):
                 var name: String? = nil
                 if let indexName = message.author?.indexName {
                     switch indexName {
@@ -6627,103 +6620,50 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         name = first
                     }
                 }
-                var messageText = message.text
+                let text = message.text
                 
-                if let name = name, !name.isEmpty {
-                    if myMessage {
-                        actorName = name
-                    }
-                    
-                    messageText = "'\(name)': \(messageText)"
+                if text.isEmpty {
+                    return nil
                 }
                 
-                let chatQuery = Chat(role: myMessage ? .assistant : .user, content : messageText)
-                
-                charCount += messageText.count
-                if charCount > 2048 {
-                    break arr
-                }
-                messages.append(chatQuery)
+                return AIManager.MessageEntry(myMessage: myMessage, name: name, text: text)
             default:
-                break
+                return nil
             }
         }
         
-        messages = messages.reversed()
-        
-        messages.append(Chat(role: .system, content: "Using the context of the conversation, respond to messages. Act like a human '\(actorName)'. Respond using Markdown. Answer in user's language as concisely as possible. Keep up the style of conversation. Start your short response with '\(actorName)':"))
-        
-        
-        
-        let configuration = OpenAI.Configuration(token: "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", host: "35.233.105.235", timeoutInterval: 60.0)
-        let openAI = OpenAI(configuration: configuration)
-        
-        let query = ChatQuery(model: .gpt3_5Turbo, messages: messages)
-        
-        var message = ""
+        guard !messages.isEmpty else { return }
         
         self.startGenerationAnimation()
         
-        var isRemovedName = false
-        
         DispatchQueue.global().async {
-            openAI.chatsStream(query: query) { partialResult in
-                switch partialResult {
-                case .success(let result):
-                    if let delta = result.choices.first?.delta.content {
-                        message += delta
-                        
-                        if !isRemovedName {
-                            if message.contains("\(actorName)") {
-                                isRemovedName = true
-                                message = message.replacingOccurrences(of: "\(actorName)", with: "")
-                            }
-                        }
-                        
-                        if message.count < 20 {
-                            let symbolsToRemove = ["'", " ", ":"]
-                            
-                            for symbol in symbolsToRemove {
-                                if message.hasPrefix(symbol) {
-                                    message = String(message.dropFirst(symbol.count))
-                                }
-                            }
-                        }
-                        
-                        if message.count > 20 && !isRemovedName {
-                            isRemovedName = true
-                        }
-                        
-                        if isRemovedName {
-                            let text = convertMarkdownToAttributes(NSAttributedString(string: message))
-                            DispatchQueue.main.async {
-                                self.updateTextInputState(ChatTextInputState(inputText: text))
-                                if let textView = self.chatDisplayNode.textInputPanelNode?.textInputNode?.textView {
-                                    let range = NSMakeRange(textView.text.count - 1, 0)
-                                    textView.scrollRangeToVisible(range)
-                                }
-                            }
+            self.aiManager.generateAnswer(
+                messages: messages,
+                resultUpdate: {  [weak self] result in
+                    guard let strongSelf = self else { return }
+                    
+                    let text = convertMarkdownToAttributes(NSAttributedString(string: result))
+                    
+                    DispatchQueue.main.async {
+                        strongSelf.updateTextInputState(ChatTextInputState(inputText: text))
+                        if let textView = strongSelf.chatDisplayNode.textInputPanelNode?.textInputNode?.textView {
+                            let range = NSMakeRange(textView.text.count - 1, 0)
+                            textView.scrollRangeToVisible(range)
                         }
                     }
-                case .failure(let error):
-                    DispatchQueue.main.async { [weak self] in
-                        guard let strongSelf = self else { return }
+                },
+                completion: { [weak self] error in
+                    guard let strongSelf = self else { return }
+                    
+                    DispatchQueue.main.async {
                         strongSelf.stopGenerationAnimation()
-                        let errorText = error.localizedDescription
-                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        if let errorText = error?.localizedDescription {
+                            strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        }
                     }
+                    return
                 }
-            } completion: { [weak self] error in
-                guard let strongSelf = self else { return }
-                
-                DispatchQueue.main.async {
-                    strongSelf.stopGenerationAnimation()
-                    if let errorText = error?.localizedDescription {
-                        strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-                    }
-                }
-                return
-            }
+            )
         }
     }
     

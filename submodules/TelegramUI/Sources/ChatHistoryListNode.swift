@@ -212,7 +212,8 @@ private func mappedInsertEntries(context: AccountContext, chatLocation: ChatLoca
     return entries.map { entry -> ListViewInsertItem in
         switch entry.entry {
             // MARK: AI SummaryChat
-            case let .ChatSummaryEntry(_, _, _, presentationData):
+            case let .ChatSummaryEntry(_, _, presentationData):
+            print("entry index: ", entry.index)
                 return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatBotInfoItem(title: "title", text: "text", photo: nil, video: nil, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context), directionHint: entry.directionHint)
             //
             case let .MessageEntry(message, presentationData, read, location, selection, attributes):
@@ -262,7 +263,7 @@ private func mappedUpdateEntries(context: AccountContext, chatLocation: ChatLoca
     return entries.map { entry -> ListViewUpdateItem in
         switch entry.entry {
             // MARK: AI SummaryChat
-            case let .ChatSummaryEntry(_, _, _, presentationData):
+            case let .ChatSummaryEntry(_, _, presentationData):
                 return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatBotInfoItem(title: "title", text: "text", photo: nil, video: nil, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context), directionHint: entry.directionHint)
             //
             case let .MessageEntry(message, presentationData, read, location, selection, attributes):

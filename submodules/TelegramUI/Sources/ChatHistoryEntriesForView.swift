@@ -283,12 +283,15 @@ func chatHistoryEntriesForView(
     
     // MARK: Add summary messages
     
+    entries.insert(.ChatSummaryEntry(0, "test", presentationData), at: entries.count - 1)
+    entries.insert(.ChatInfoEntry("Opa", "test", nil, nil, presentationData), at: entries.count)
+    
 //    if let laterId = view.laterId {
-//        entries.append(.ReplyCountEntry(laterId, true, 10, presentationData))
+//        entries.insert(.ChatSummaryEntry(2, "test", laterId, presentationData), at: 1)
 //    }
 //    
 //    if let earlierId = view.earlierId {
-//        entries.append(.ReplyCountEntry(earlierId, true, 10, presentationData))
+//        entries.insert(.ChatSummaryEntry(2, "test", earlierId, presentationData), at: 1)
 //    }
     
     var addedThreadHead = false

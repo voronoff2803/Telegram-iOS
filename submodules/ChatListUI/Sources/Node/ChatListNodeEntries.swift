@@ -444,8 +444,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             return .Header
         case let .PeerEntry(peerEntry):
             // MARK: AI PinnedChats
-            if let aiItem = peerEntry.aiItem {
-                print(aiItem)
+            if let _ = peerEntry.aiItem {
                 return .aiPinnedChat
             }
             //
