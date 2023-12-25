@@ -110,4 +110,58 @@ final public class AIManager {
             completion(error)
         }
     }
+    
+    
+    public func generateSummary(
+        messages: [MessageEntry],
+        resultUpdate: @escaping (String) -> (),
+        completion: @escaping (Error?) -> ()
+    ) {
+        var charCount = 0
+        
+        var chatMessages: [Chat] = []
+        
+        for message in messages.reversed() {
+            if message.text.isEmpty {
+                continue
+            }
+            var messageText = message.text
+            
+            if let name = message.name, !name.isEmpty {
+                messageText = "'\(name)': \(messageText)"
+            }
+            
+            let chatQuery = Chat(role: message.myMessage ? .assistant : .user, content : messageText)
+            
+            charCount += messageText.count
+            if charCount > 1024 {
+                break
+            }
+            chatMessages.append(chatQuery)
+        }
+        
+        chatMessages = chatMessages.reversed()
+        
+        chatMessages.append(Chat(role: .system, content: "Using the context of the conversation, write a short summary of the dialog. Respond using Markdown. The summary should be in the same language as most of the dialog messages. Respond using the same language as most of the dialog messages content!"))
+        
+
+        let query = ChatQuery(model: .gpt3_5Turbo, messages: chatMessages)
+        
+        var message = ""
+                
+        self.openAI.chatsStream(query: query) { partialResult in
+            switch partialResult {
+            case .success(let result):
+                if let delta = result.choices.first?.delta.content {
+                    message += delta
+                    
+                    resultUpdate(message)
+                }
+            case .failure(let error):
+                completion(error)
+            }
+        } completion: { error in
+            completion(error)
+        }
+    }
 }

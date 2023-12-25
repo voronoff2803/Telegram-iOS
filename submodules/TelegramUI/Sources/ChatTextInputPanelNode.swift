@@ -571,6 +571,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
     private var leftMenuInset: CGFloat = 0.0
     
     var aiGenerateMessage: () -> Void = { }
+    var aiGenerateSummary: () -> Void = { }
     var displayAttachmentMenu: () -> Void = { }
     var sendMessage: () -> Void = { }
     var paste: (ChatTextInputPanelPasteData) -> Void = { _ in }
@@ -4282,7 +4283,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             .action(ContextMenuActionItem(text: "Generate a summary", icon: { theme in
                 generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/QuoteSelected"), color: theme.contextMenu.primaryColor)
             }, action: { (controllerProtocol, _) in
-                self.aiGenerateMessage()
+                self.aiGenerateSummary()
                 controllerProtocol.dismiss(completion: nil)
             })),
             .action(ContextMenuActionItem(text: "Generate a message", icon: { theme in

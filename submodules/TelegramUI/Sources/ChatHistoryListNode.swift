@@ -32,6 +32,9 @@ import ChatMessageItemView
 import ChatMessageTransitionNode
 import ChatControllerInteraction
 import DustEffect
+// MARK: AI SummaryChat
+import ChatSummaryItem
+//
 
 struct ChatTopVisibleMessageRange: Equatable {
     var lowerBound: MessageIndex
@@ -212,9 +215,8 @@ private func mappedInsertEntries(context: AccountContext, chatLocation: ChatLoca
     return entries.map { entry -> ListViewInsertItem in
         switch entry.entry {
             // MARK: AI SummaryChat
-            case let .ChatSummaryEntry(_, _, presentationData):
-            print("entry index: ", entry.index)
-                return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatBotInfoItem(title: "title", text: "text", photo: nil, video: nil, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context), directionHint: entry.directionHint)
+            case let .ChatSummaryEntry(item, _, presentationData):
+            return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatSummaryItem(title: "", text: item.content, photo: nil, video: nil, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context), directionHint: entry.directionHint)
             //
             case let .MessageEntry(message, presentationData, read, location, selection, attributes):
                 let item: ListViewItem
@@ -263,8 +265,8 @@ private func mappedUpdateEntries(context: AccountContext, chatLocation: ChatLoca
     return entries.map { entry -> ListViewUpdateItem in
         switch entry.entry {
             // MARK: AI SummaryChat
-            case let .ChatSummaryEntry(_, _, presentationData):
-                return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatBotInfoItem(title: "title", text: "text", photo: nil, video: nil, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context), directionHint: entry.directionHint)
+            case let .ChatSummaryEntry(item, _, presentationData):
+            return ListViewUpdateItem(index: entry.index, previousIndex: entry.previousIndex, item: ChatSummaryItem(title: "", text: item.content, photo: nil, video: nil, controllerInteraction: controllerInteraction, presentationData: presentationData, context: context), directionHint: entry.directionHint)
             //
             case let .MessageEntry(message, presentationData, read, location, selection, attributes):
                 let item: ListViewItem
@@ -437,6 +439,8 @@ private struct ChatHistoryAnimatedEmojiConfiguration {
 private var nextClientId: Int32 = 1
 
 public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHistoryListNode {
+    let aiSummaryItemsPromise = ValuePromise<[AISummaryChatMessage]>([])
+    
     static let fixedAdMessageStableId: UInt32 = UInt32.max - 5000
     
     private let context: AccountContext
@@ -1295,6 +1299,9 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         }
         
         let promises = combineLatest(
+            // MARK: AI SummaryChat
+            self.aiSummaryItemsPromise.get(),
+            //
             self.historyAppearsClearedPromise.get(),
             self.pendingUnpinnedAllMessagesPromise.get(),
             self.pendingRemovedMessagesPromise.get(),
@@ -1331,16 +1338,10 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         
         let audioTranscriptionTrial = self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.AudioTranscriptionTrial())
         
-        // MARK: AI SummaryChat
-        //let aiItemsPromise = ValuePromise<[AISummaryChatMessage]>([])
-        //aiItemsPromise.set([AISummaryChatMessage()])
-        //
+        
         
         let messageViewQueue = Queue.mainQueue()
         let historyViewTransitionDisposable = combineLatest(queue: messageViewQueue,
-            // MARK: AI SummaryChat
-            //aiItemsPromise,
-            //
             historyViewUpdate,
             self.chatPresentationDataPromise.get(),
             selectedMessages,
@@ -1361,7 +1362,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
             recommendedChannels,
             audioTranscriptionTrial
         ).startStrict(next: { [weak self] update, chatPresentationData, selectedMessages, updatingMedia, networkType, animatedEmojiStickers, additionalAnimatedEmojiStickers, customChannelDiscussionReadState, customThreadOutgoingReadState, availableReactions, defaultReaction, accountPeer, suggestAudioTranscription, promises, topicAuthorId, translationState, maxReadStoryId, recommendedChannels, audioTranscriptionTrial in
-            let (historyAppearsCleared, pendingUnpinnedAllMessages, pendingRemovedMessages, currentlyPlayingMessageIdAndType, scrollToMessageId, chatHasBots, allAdMessages) = promises
+            let (aiItems, historyAppearsCleared, pendingUnpinnedAllMessages, pendingRemovedMessages, currentlyPlayingMessageIdAndType, scrollToMessageId, chatHasBots, allAdMessages) = promises
             
             func applyHole() {
                 Queue.mainQueue().async {
@@ -1539,7 +1540,8 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
                     customThreadOutgoingReadState: customThreadOutgoingReadState,
                     cachedData: data.cachedData,
                     adMessage: allAdMessages.fixed,
-                    dynamicAdMessages: allAdMessages.opportunistic
+                    dynamicAdMessages: allAdMessages.opportunistic,
+                    aiItems: aiItems
                 )
                 
                 let lastHeaderId = filteredEntries.last.flatMap { listMessageDateHeaderId(timestamp: $0.index.timestamp) } ?? 0

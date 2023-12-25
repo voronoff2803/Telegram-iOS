@@ -29,7 +29,10 @@ func chatHistoryEntriesForView(
     customThreadOutgoingReadState: MessageId?,
     cachedData: CachedPeerData?,
     adMessage: Message?,
-    dynamicAdMessages: [Message]
+    dynamicAdMessages: [Message],
+    // MARK: AI SummaryChat
+    aiItems: [AISummaryChatMessage]
+    //
 ) -> [ChatHistoryEntry] {
     if historyAppearsCleared {
         return []
@@ -283,16 +286,20 @@ func chatHistoryEntriesForView(
     
     // MARK: Add summary messages
     
-    entries.insert(.ChatSummaryEntry(0, "test", presentationData), at: entries.count - 1)
-    entries.insert(.ChatInfoEntry("Opa", "test", nil, nil, presentationData), at: entries.count)
-    
-//    if let laterId = view.laterId {
-//        entries.insert(.ChatSummaryEntry(2, "test", laterId, presentationData), at: 1)
-//    }
-//    
-//    if let earlierId = view.earlierId {
-//        entries.insert(.ChatSummaryEntry(2, "test", earlierId, presentationData), at: 1)
-//    }
+    if let summaryItem = aiItems.first {
+        let summaryEntry: ChatHistoryEntry = .ChatSummaryEntry(summaryItem, true, presentationData)
+        print("summaryItem summary \(summaryItem.timestamp)")
+        var i = 0
+        for entry in entries {
+            print("summaryItem \(entry.timestamp!)")
+            if entry < summaryEntry {
+                i += 1
+            } else {
+                break
+            }
+        }
+        entries.insert(summaryEntry, at: i)
+    }
     
     var addedThreadHead = false
     if case let .replyThread(replyThreadMessage) = location, !replyThreadMessage.isForumPost, view.earlierId == nil, !view.holeEarlier, !view.isLoading {

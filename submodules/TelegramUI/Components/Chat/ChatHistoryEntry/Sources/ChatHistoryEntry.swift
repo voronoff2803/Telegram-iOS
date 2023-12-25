@@ -7,8 +7,19 @@ import AccountContext
 
 // MARK: AI SummaryChat
 public struct AISummaryChatMessage: Equatable {
-    let title = "Test"
-    let desc = "Desc"
+    public let id: MessageId
+    public let timestamp: Int32
+    public let content: String
+    
+    public init(id: MessageId, timestamp: Int32, content: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.content = content
+    }
+    
+    public var index: MessageIndex {
+        return MessageIndex(id: self.id, timestamp: self.timestamp)
+    }
     
     func select() {
         print("select")
@@ -58,7 +69,7 @@ public struct ChatMessageEntryAttributes: Equatable {
 
 public enum ChatHistoryEntry: Identifiable, Comparable {
     // MARK: AI SummaryChat
-    case ChatSummaryEntry(UInt32, String, ChatPresentationData)
+    case ChatSummaryEntry(AISummaryChatMessage, Bool, ChatPresentationData)
     //
     case MessageEntry(Message, ChatPresentationData, Bool, MessageHistoryEntryLocation?, ChatHistoryMessageSelection, ChatMessageEntryAttributes)
     case MessageGroupEntry(MessageGroupInfo, [(Message, Bool, ChatHistoryMessageSelection, ChatMessageEntryAttributes, MessageHistoryEntryLocation?)], ChatPresentationData)
@@ -91,8 +102,8 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
             case .SearchEntry:
                 return UInt64(7) << 40
             // MARK: AI SummaryChat
-            case let .ChatSummaryEntry(stableSummaryId, _, _):
-                return UInt64(stableSummaryId) | ((UInt64(3) << 40))
+            case .ChatSummaryEntry:
+                return UInt64(8) << 40
             //
         }
     }
@@ -112,8 +123,8 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
             case .SearchEntry:
                 return MessageIndex.absoluteLowerBound()
             // MARK: AI SummaryChat
-            case .ChatSummaryEntry:
-                return MessageIndex.absoluteLowerBound()
+            case let .ChatSummaryEntry(item, _, _):
+                return item.index
             //
         }
     }
@@ -143,6 +154,8 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
         switch self {
         case let .MessageEntry(message, _, _, _, _, _):
             return message.timestamp
+        case let .ChatSummaryEntry(item, _, _):
+            return item.timestamp
         case let .MessageGroupEntry(_, messages, _):
             return messages[0].0.timestamp
         default:
@@ -315,9 +328,9 @@ public enum ChatHistoryEntry: Identifiable, Comparable {
                     return false
                 }
             
-            case let .ChatSummaryEntry(lhsId, lhsString, lhsData):
-                if case let .ChatSummaryEntry(rhsId, rhsString, rhsData) = rhs {
-                    return lhsId == rhsId && lhsString == rhsString && lhsData === rhsData
+            case let .ChatSummaryEntry(lhsItem, _, _):
+                if case let .ChatSummaryEntry(rhsItem, _, _) = rhs {
+                    return lhsItem == rhsItem
                 } else {
                     return false
                 }

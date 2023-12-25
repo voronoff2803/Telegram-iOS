@@ -118,6 +118,9 @@ import WebsiteType
 import ChatQrCodeScreen
 import PeerInfoScreen
 import OpenAI
+// MARK: AI SummaryChat
+import ChatHistoryEntry
+//
 
 public enum ChatControllerPeekActions {
     case standard
@@ -6605,6 +6608,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.chatDisplayNode.textInputPanelNode?.gloss = false
     }
     
+    // MARK: AI Generate Feature
     func aiGenerateMessage() {
         guard let source = self.chatDisplayNode.historyNode.historyView else { return }
         
@@ -6664,6 +6668,65 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     return
                 }
             )
+        }
+    }
+    
+    // MARK: AI Generate Feature
+    
+    func aiGenerateSummary() {
+        guard let source = self.chatDisplayNode.historyNode.historyView else { return }
+        
+        let messages: [AIManager.MessageEntry] = source.filteredEntries.compactMap { entry in
+            switch entry {
+            case let .MessageEntry(message, _, myMessage, _, _, _):
+                var name: String? = nil
+                if let indexName = message.author?.indexName {
+                    switch indexName {
+                    case let .title(title, _):
+                        name = title
+                    case let .personName(first, _, _, _):
+                        name = first
+                    }
+                }
+                let text = message.text
+                
+                if text.isEmpty {
+                    return nil
+                }
+                
+                return AIManager.MessageEntry(myMessage: myMessage, name: name, text: text)
+            default:
+                return nil
+            }
+        }
+        
+        guard !messages.isEmpty else { return }
+        
+        self.startGenerationAnimation()
+        
+        if let lastMessageIndex = source.filteredEntries.last?.index {
+            DispatchQueue.global().async {
+                self.aiManager.generateSummary(
+                    messages: messages,
+                    resultUpdate: {  [weak self] result in
+                        guard let strongSelf = self else { return }
+                        strongSelf.chatDisplayNode.historyNode.aiSummaryItemsPromise.set([
+                            AISummaryChatMessage(id: lastMessageIndex.id, timestamp: lastMessageIndex.timestamp + 1, content: result)
+                        ])
+                    },
+                    completion: { [weak self] error in
+                        guard let strongSelf = self else { return }
+                        
+                        DispatchQueue.main.async {
+                            strongSelf.stopGenerationAnimation()
+                            if let errorText = error?.localizedDescription {
+                                strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            }
+                        }
+                        return
+                    }
+                )
+            }
         }
     }
     
@@ -8120,6 +8183,16 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.chatDisplayNode.requestUpdateInterfaceState = { [weak self] transition, interactive, f in
             self?.updateChatPresentationInterfaceState(transition: transition, interactive: interactive, f)
+        }
+        
+        // MARK: AI Generate Feature
+        
+        self.chatDisplayNode.aiGenerateSummary = { [weak self] in
+            guard let strongSelf = self else {
+                return
+            }
+            
+            strongSelf.aiGenerateSummary()
         }
         
         self.chatDisplayNode.aiGenerateMessage = { [weak self] in
