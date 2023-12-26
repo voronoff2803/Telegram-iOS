@@ -10,7 +10,7 @@ import Foundation
 import AppBundle
 
 private func gd(locale: String) -> [String : String] {
-    return NSDictionary(contentsOf: URL(fileURLWithPath: getAppBundle().path(forResource: "NiceLocalizable", ofType: "strings", inDirectory: nil, forLocalization: locale)!)) as! [String : String]
+    return NSDictionary(contentsOf: URL(fileURLWithPath: getAppBundle().path(forResource: "AILocalizable", ofType: "strings", inDirectory: nil, forLocalization: locale)!)) as! [String : String]
 }
 
 let niceLocales: [String : [String : String]] = [
@@ -121,7 +121,8 @@ public func l(_ key: String, _ locale: String = "en", with args: CVarArg...) -> 
 }
 
 public func getStringsUrl(_ lang: String) -> String {
-    return "https://raw.githubusercontent.com/nicegram/translations/master/Telegram-iOS/" + lang + ".lproj/NiceLocalizable.strings"
+    //https://github.com/voronoff2803/Telegram-iOS/tree/aiFeatures/translations
+    return "https://raw.githubusercontent.com/voronoff2803/Telegram-iOS/tree/aiFeatures/translations/" + lang + ".lproj/AILocalizable.strings"
 }
 
 

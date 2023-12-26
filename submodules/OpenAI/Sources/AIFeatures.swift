@@ -24,7 +24,7 @@ final public class AIManager {
     public init() {}
     
     lazy var openAI: OpenAI = {
-        let configuration = OpenAI.Configuration(token: "", host: "35.233.105.235", timeoutInterval: 60.0)
+        let configuration = OpenAI.Configuration(token: "sk-", host: "35.233.105.235", timeoutInterval: 60.0)
         let openAI = OpenAI(configuration: configuration)
         
         return openAI
