@@ -1,0 +1,14 @@
+load("//Config:buck_rule_macros.bzl", "static_library")
+
+static_library(
+    name = "AIStrings",
+    srcs = glob([
+        "Sources/**/*.swift",
+    ]),
+    deps = [
+        "//submodules/AppBundle:AppBundle"
+    ],
+    frameworks = [
+        "$SDKROOT/System/Library/Frameworks/Foundation.framework",
+    ],
+)

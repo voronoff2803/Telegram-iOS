@@ -6702,10 +6702,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         guard !messages.isEmpty else { return }
         
-        self.startGenerationAnimation()
+        //self.startGenerationAnimation()
         
         if let lastMessageIndex = source.filteredEntries.last?.index {
             DispatchQueue.global().async {
+                self.chatDisplayNode.historyNode.scrollToMessage(index: lastMessageIndex)
                 self.aiManager.generateSummary(
                     messages: messages,
                     resultUpdate: {  [weak self] result in
@@ -6718,7 +6719,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         guard let strongSelf = self else { return }
                         
                         DispatchQueue.main.async {
-                            strongSelf.stopGenerationAnimation()
+                            //strongSelf.stopGenerationAnimation()
                             if let errorText = error?.localizedDescription {
                                 strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                             }

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AIStrings
 
 final public class AIManager {
     public struct MessageEntry {
@@ -56,7 +57,7 @@ final public class AIManager {
             let chatQuery = Chat(role: message.myMessage ? .assistant : .user, content : messageText)
             
             charCount += messageText.count
-            if charCount > 1024 {
+            if charCount > 2048 {
                 break
             }
             chatMessages.append(chatQuery)
@@ -142,8 +143,7 @@ final public class AIManager {
         
         chatMessages = chatMessages.reversed()
         
-        chatMessages.append(Chat(role: .system, content: "Using the context of the conversation, write a short summary of the dialog. Respond using Markdown. The summary should be in the same language as most of the dialog messages. Respond using the same language as most of the dialog messages content!"))
-        
+        chatMessages.append(Chat(role: .system, content: "Prompt.Summary".localized))
 
         let query = ChatQuery(model: .gpt3_5Turbo, messages: chatMessages)
         
