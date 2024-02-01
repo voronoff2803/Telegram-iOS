@@ -232,11 +232,11 @@ vertex BlobVertexOut callBlobVertex(
 fragment half4 callBlobFragment(
     BlobVertexOut in [[stage_in]]
 ) {
-    half alpha = 0.15;
+    half alpha = 0.35;
     return half4(1.0 * alpha, 1.0 * alpha, 1.0 * alpha, alpha);
 }
 
-kernel void videoYUVToRGBA(
+kernel void videoBiPlanarToRGBA(
     texture2d<half, access::read> inTextureY [[ texture(0) ]],
     texture2d<half, access::read> inTextureUV [[ texture(1) ]],
     texture2d<half, access::write> outTexture [[ texture(2) ]],
@@ -249,8 +249,25 @@ kernel void videoYUVToRGBA(
     outTexture.write(color, threadPosition);
 }
 
+kernel void videoTriPlanarToRGBA(
+    texture2d<half, access::read> inTextureY [[ texture(0) ]],
+    texture2d<half, access::read> inTextureU [[ texture(1) ]],
+    texture2d<half, access::read> inTextureV [[ texture(2) ]],
+    texture2d<half, access::write> outTexture [[ texture(3) ]],
+    uint2 threadPosition [[ thread_position_in_grid ]]
+) {
+    half y = inTextureY.read(threadPosition).r;
+    uint2 uvPosition = uint2(threadPosition.x / 2, threadPosition.y / 2);
+    half2 inUV = (inTextureU.read(uvPosition).r, inTextureV.read(uvPosition).r);
+    half2 uv = inUV - half2(0.5, 0.5);
+    
+    half4 color(y + 1.403 * uv.y, y - 0.344 * uv.x - 0.714 * uv.y, y + 1.770 * uv.x, 1.0);
+    outTexture.write(color, threadPosition);
+}
+
 vertex QuadVertexOut mainVideoVertex(
     const device Rectangle &rect [[ buffer(0) ]],
+    const device uint2 &mirror [[ buffer(1) ]],
     unsigned int vid [[ vertex_id ]]
 ) {
     float2 quadVertex = quadVertices[vid];
@@ -262,6 +279,12 @@ vertex QuadVertexOut mainVideoVertex(
     out.position.y = -1.0 + out.position.y * 2.0;
     
     out.uv = float2(quadVertex.x, 1.0 - quadVertex.y);
+    if (mirror.x == 1) {
+        out.uv.x = 1.0 - out.uv.x;
+    }
+    if (mirror.y == 1) {
+        out.uv.y = 1.0 - out.uv.y;
+    }
     
     return out;
 }
@@ -344,4 +367,29 @@ kernel void gaussianBlurVertical(
     uint2 gid [[ thread_position_in_grid ]]
 ) {
     gaussianBlur(inTexture, outTexture, float2(0, 1), gid);
+}
+
+vertex QuadVertexOut edgeTestVertex(
+    const device Rectangle &rect [[ buffer(0) ]],
+    unsigned int vid [[ vertex_id ]]
+) {
+    float2 quadVertex = quadVertices[vid];
+    
+    QuadVertexOut out;
+    
+    out.position = float4(rect.origin.x + quadVertex.x * rect.size.x, rect.origin.y + quadVertex.y * rect.size.y, 0.0, 1.0);
+    out.position.x = -1.0 + out.position.x * 2.0;
+    out.position.y = -1.0 + out.position.y * 2.0;
+    
+    out.uv = quadVertex;
+    
+    return out;
+}
+
+fragment half4 edgeTestFragment(
+    QuadVertexOut in [[stage_in]],
+    const device float4 &colorIn
+) {
+    half4 color = half4(colorIn);
+    return color;
 }

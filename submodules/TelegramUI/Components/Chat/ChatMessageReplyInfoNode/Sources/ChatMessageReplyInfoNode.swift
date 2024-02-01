@@ -203,7 +203,15 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
             var dashSecondaryColor: UIColor?
             var dashTertiaryColor: UIColor?
             
-            let author = arguments.message?.effectiveAuthor
+            var author = arguments.message?.effectiveAuthor
+            
+            if let forwardInfo = arguments.message?.forwardInfo {
+                if let peer = forwardInfo.author {
+                    author = peer
+                } else if let authorSignature = forwardInfo.authorSignature {
+                    author = TelegramUser(id: PeerId(namespace: Namespaces.Peer.Empty, id: PeerId.Id._internalFromInt64Value(Int64(authorSignature.persistentHashValue % 32))), accessHash: nil, firstName: authorSignature, lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil)
+                }
+            }
             
             let colors = author?.nameColor.flatMap { arguments.context.peerNameColors.get($0, dark: arguments.presentationData.theme.theme.overallDarkAppearance) }
             authorNameColor = colors?.main
@@ -652,16 +660,19 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                 
                 node.previousMediaReference = updatedMediaReference
                 
-                node.titleNode?.displaysAsynchronously = !arguments.presentationData.isPreview
                 //node.textNode?.textNode.displaysAsynchronously = !arguments.presentationData.isPreview
                 
                 let titleNode = titleApply()
+                titleNode.displaysAsynchronously = !arguments.presentationData.isPreview
+                
                 var textArguments: TextNodeWithEntities.Arguments?
                 if let cache = arguments.animationCache, let renderer = arguments.animationRenderer {
                     textArguments = TextNodeWithEntities.Arguments(context: arguments.context, cache: cache, renderer: renderer, placeholderColor: placeholderColor, attemptSynchronous: attemptSynchronous)
                 }
                 let previousTextContents = node.textNode?.textNode.layer.contents
                 let textNode = textApply(textArguments)
+                textNode.textNode.displaysAsynchronously = !arguments.presentationData.isPreview
+                
                 textNode.visibilityRect = node.visibility ? CGRect.infinite : nil
                 
                 if node.titleNode == nil {
@@ -768,7 +779,7 @@ public class ChatMessageReplyInfoNode: ASDisplayNode {
                     if let current = node.dustNode {
                         dustNode = current
                     } else {
-                        dustNode = InvisibleInkDustNode(textNode: nil, enableAnimations: arguments.context.sharedContext.energyUsageSettings.fullTranslucency)
+                        dustNode = InvisibleInkDustNode(textNode: nil, enableAnimations: arguments.context.sharedContext.energyUsageSettings.fullTranslucency && !arguments.presentationData.isPreview)
                         dustNode.isUserInteractionEnabled = false
                         node.dustNode = dustNode
                         node.contentNode.insertSubnode(dustNode, aboveSubnode: textNode.textNode)

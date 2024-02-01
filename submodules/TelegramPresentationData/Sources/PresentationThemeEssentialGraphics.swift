@@ -185,6 +185,8 @@ public final class PrincipalThemeEssentialGraphics {
     public let radialIndicatorFileIconIncoming: UIImage
     public let radialIndicatorFileIconOutgoing: UIImage
     
+    public let radialIndicatorViewOnceIcon: UIImage
+    
     public let incomingBubbleGradientImage: UIImage?
     public let outgoingBubbleGradientImage: UIImage?
     
@@ -341,8 +343,8 @@ public final class PrincipalThemeEssentialGraphics {
             self.clockMediaMinImage = emptyImage
             self.clockFreeFrameImage = emptyImage
             self.clockFreeMinImage = emptyImage
-            self.dateAndStatusMediaBackground = emptyImage
-            self.dateAndStatusFreeBackground = emptyImage
+            self.dateAndStatusMediaBackground = generateStretchableFilledCircleImage(diameter: 18.0, color: theme.message.mediaDateAndStatusFillColor)!
+            self.dateAndStatusFreeBackground = generateStretchableFilledCircleImage(diameter: 18.0, color: serviceColor.dateFillStatic)!
                 
             let impressionCountImage = UIImage(bundleImageName: "Chat/Message/ImpressionCount")!
             self.incomingDateAndStatusImpressionIcon = generateTintedImage(image: impressionCountImage, color: theme.message.incoming.secondaryTextColor)!
@@ -368,8 +370,10 @@ public final class PrincipalThemeEssentialGraphics {
             self.mediaSelfExpiringIcon = generateTintedImage(image: selfExpiringImage, color: .white)!
             self.freeSelfExpiringIcon = generateTintedImage(image: selfExpiringImage, color: serviceColor.primaryText)!
             
-            self.radialIndicatorFileIconIncoming = emptyImage
-            self.radialIndicatorFileIconOutgoing = emptyImage
+            self.radialIndicatorFileIconIncoming = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/RadialProgressIconDocument"), color: .black)!
+            self.radialIndicatorFileIconOutgoing = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/RadialProgressIconDocument"), color: .black)!
+            
+            self.radialIndicatorViewOnceIcon = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/ViewOnce"), color: .black)!
         } else {
             self.chatMessageBackgroundIncomingMaskImage = messageBubbleImage(maxCornerRadius: maxCornerRadius, minCornerRadius: minCornerRadius, incoming: true, fillColor: .black, strokeColor: .clear, neighbors: .none, theme: theme, wallpaper: .color(0xffffff), knockout: true, mask: true, extendedEdges: true)
             self.chatMessageBackgroundIncomingExtractedMaskImage = messageBubbleImage(maxCornerRadius: maxCornerRadius, minCornerRadius: minCornerRadius, incoming: true, fillColor: .black, strokeColor: .clear, neighbors: .extracted, theme: theme, wallpaper: .color(0xffffff), knockout: true, mask: true, extendedEdges: true)
@@ -489,6 +493,8 @@ public final class PrincipalThemeEssentialGraphics {
             
             self.radialIndicatorFileIconIncoming = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/RadialProgressIconDocument"), color: .black)!
             self.radialIndicatorFileIconOutgoing = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/RadialProgressIconDocument"), color: .black)!
+            
+            self.radialIndicatorViewOnceIcon = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/ViewOnce"), color: .black)!
         }
         
         let chatDateSize: CGFloat = 20.0

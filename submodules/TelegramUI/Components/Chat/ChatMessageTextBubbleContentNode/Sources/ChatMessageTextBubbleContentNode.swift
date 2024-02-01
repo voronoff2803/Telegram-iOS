@@ -224,7 +224,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 }
                 var viewCount: Int?
                 var dateReplies = 0
-                var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeer: item.associatedData.accountPeer, message: item.topMessage)
+                var dateReactionsAndPeers = mergedMessageReactionsAndPeers(accountPeerId: item.context.account.peerId, accountPeer: item.associatedData.accountPeer, message: item.topMessage)
                 if item.message.isRestricted(platform: "ios", contentSettings: item.context.currentContentSettings.with { $0 }) {
                     dateReactionsAndPeers = ([], [])
                 }
@@ -242,7 +242,9 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 }
                 
                 let dateFormat: MessageTimestampStatusFormat
-                if let subject = item.associatedData.subject, case .messageOptions = subject {
+                if item.presentationData.isPreview {
+                    dateFormat = .full
+                } else if let subject = item.associatedData.subject, case .messageOptions = subject {
                     dateFormat = .minimal
                 } else {
                     dateFormat = .regular
@@ -501,20 +503,46 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     }
                     attributedText = updatedString
                 }
-                
-                let cutout: TextNodeCutout? = nil
+                                
+                var customTruncationToken: NSAttributedString?
+                var maximumNumberOfLines: Int = 0
+                if item.presentationData.isPreview {
+                    if item.message.groupingKey != nil {
+                        maximumNumberOfLines = 6
+                    } else if let image = item.message.media.first(where: { $0 is TelegramMediaImage }) as? TelegramMediaImage, let dimensions = image.representations.first?.dimensions {
+                        if dimensions.width > dimensions.height {
+                            maximumNumberOfLines = 9
+                        } else {
+                            maximumNumberOfLines = 6
+                        }
+                    } else if let file = item.message.media.first(where: { $0 is TelegramMediaFile }) as? TelegramMediaFile, file.isVideo || file.isAnimated, let dimensions = file.dimensions {
+                        if dimensions.width > dimensions.height {
+                            maximumNumberOfLines = 9
+                        } else {
+                            maximumNumberOfLines = 6
+                        }
+                    } else if let _ = item.message.media.first(where: { $0 is TelegramMediaWebpage }) as? TelegramMediaWebpage {
+                        maximumNumberOfLines = 9
+                    } else {
+                        maximumNumberOfLines = 12
+                    }
+                    
+                    let truncationToken = NSMutableAttributedString()
+                    truncationToken.append(NSAttributedString(string: "\u{2026} ", font: textFont, textColor: messageTheme.primaryTextColor))
+                    truncationToken.append(NSAttributedString(string: item.presentationData.strings.Conversation_ReadMore, font: textFont, textColor: messageTheme.accentTextColor))
+                    customTruncationToken = truncationToken
+                }
                 
                 let textInsets = UIEdgeInsets(top: 2.0, left: 2.0, bottom: 5.0, right: 2.0)
-                
-                let (textLayout, textApply) = textLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .natural, cutout: cutout, insets: textInsets, lineColor: messageTheme.accentControlColor))
+                let (textLayout, textApply) = textLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: maximumNumberOfLines, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .natural, cutout: nil, insets: textInsets, lineColor: messageTheme.accentControlColor, customTruncationToken: customTruncationToken))
                 
                 let spoilerTextLayoutAndApply: (TextNodeLayout, (TextNodeWithEntities.Arguments?) -> TextNodeWithEntities)?
                 if !textLayout.spoilers.isEmpty {
-                    spoilerTextLayoutAndApply = spoilerTextLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .natural, cutout: cutout, insets: textInsets, lineColor: messageTheme.accentControlColor, displaySpoilers: true, displayEmbeddedItemsUnderSpoilers: true))
+                    spoilerTextLayoutAndApply = spoilerTextLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: maximumNumberOfLines, truncationType: .end, constrainedSize: textConstrainedSize, alignment: .natural, cutout: nil, insets: textInsets, lineColor: messageTheme.accentControlColor, displaySpoilers: true, displayEmbeddedItemsUnderSpoilers: true))
                 } else {
                     spoilerTextLayoutAndApply = nil
                 }
-                
+            
                 var statusSuggestedWidthAndContinue: (CGFloat, (CGFloat) -> (CGSize, (ListViewItemUpdateAnimation) -> ChatMessageDateAndStatusNode))?
                 if let statusType = statusType {
                     var isReplyThread = false
@@ -530,25 +558,27 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                     }
                     
                     let dateLayoutInput: ChatMessageDateAndStatusNode.LayoutInput
-                    dateLayoutInput = .trailingContent(contentWidth: trailingWidthToMeasure, reactionSettings: ChatMessageDateAndStatusNode.TrailingReactionSettings(displayInline: shouldDisplayInlineDateReactions(message: item.message, isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions), preferAdditionalInset: false))
+                    dateLayoutInput = .trailingContent(contentWidth: trailingWidthToMeasure, reactionSettings: item.presentationData.isPreview ? nil : ChatMessageDateAndStatusNode.TrailingReactionSettings(displayInline: shouldDisplayInlineDateReactions(message: item.message, isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions), preferAdditionalInset: false))
                     
                     statusSuggestedWidthAndContinue = statusLayout(ChatMessageDateAndStatusNode.Arguments(
                         context: item.context,
                         presentationData: item.presentationData,
-                        edited: edited,
-                        impressionCount: viewCount,
+                        edited: edited && !item.presentationData.isPreview,
+                        impressionCount: !item.presentationData.isPreview ? viewCount : nil,
                         dateText: dateText,
                         type: statusType,
                         layoutInput: dateLayoutInput,
                         constrainedSize: textConstrainedSize,
                         availableReactions: item.associatedData.availableReactions,
+                        savedMessageTags: item.associatedData.savedMessageTags,
                         reactions: dateReactionsAndPeers.reactions,
                         reactionPeers: dateReactionsAndPeers.peers,
                         displayAllReactionPeers: item.message.id.peerId.namespace == Namespaces.Peer.CloudUser,
+                        areReactionsTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId),
                         replyCount: dateReplies,
                         isPinned: item.message.tags.contains(.pinned) && (!item.associatedData.isInPinnedListMode || isReplyThread),
                         hasAutoremove: item.message.isSelfExpiring,
-                        canViewReactionList: canViewMessageReactionList(message: item.message),
+                        canViewReactionList: canViewMessageReactionList(message: item.message, isInline: item.associatedData.isInline),
                         animationCache: item.controllerInteraction.presentationContext.animationCache,
                         animationRenderer: item.controllerInteraction.presentationContext.animationRenderer
                     ))
@@ -559,7 +589,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                 
                 textFrame = textFrame.offsetBy(dx: layoutConstants.text.bubbleInsets.left, dy: topInset)
                 textFrameWithoutInsets = textFrameWithoutInsets.offsetBy(dx: layoutConstants.text.bubbleInsets.left, dy: topInset)
-
+                
                 var suggestedBoundingWidth: CGFloat = textFrameWithoutInsets.width
                 if let statusSuggestedWidthAndContinue = statusSuggestedWidthAndContinue {
                     suggestedBoundingWidth = max(suggestedBoundingWidth, statusSuggestedWidthAndContinue.0)
@@ -588,6 +618,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                                 strongSelf.cachedChatMessageText = updatedCachedChatMessageText
                             }
                             
+                            strongSelf.textNode.textNode.displaysAsynchronously = !item.presentationData.isPreview
                             strongSelf.containerNode.frame = CGRect(origin: CGPoint(), size: boundingSize)
                             
                             let cachedLayout = strongSelf.textNode.textNode.cachedLayout
@@ -633,7 +664,7 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                                 if let current = strongSelf.dustNode {
                                     dustNode = current
                                 } else {
-                                    dustNode = InvisibleInkDustNode(textNode: spoilerTextNode.textNode, enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency)
+                                    dustNode = InvisibleInkDustNode(textNode: spoilerTextNode.textNode, enableAnimations: item.context.sharedContext.energyUsageSettings.fullTranslucency && !item.presentationData.isPreview)
                                     strongSelf.dustNode = dustNode
                                     strongSelf.containerNode.insertSubnode(dustNode, aboveSubnode: spoilerTextNode.textNode)
                                 }
@@ -684,11 +715,11 @@ public class ChatMessageTextBubbleContentNode: ChatMessageBubbleContentNode {
                                     
                                     strongSelf.addSubnode(statusNode)
                                     
-                                    statusNode.reactionSelected = { [weak strongSelf] value in
+                                    statusNode.reactionSelected = { [weak strongSelf] _, value in
                                         guard let strongSelf, let item = strongSelf.item else {
                                             return
                                         }
-                                        item.controllerInteraction.updateMessageReaction(item.message, .reaction(value))
+                                        item.controllerInteraction.updateMessageReaction(item.message, .reaction(value), false)
                                     }
                                     statusNode.openReactionPreview = { [weak strongSelf] gesture, sourceNode, value in
                                         guard let strongSelf, let item = strongSelf.item else {

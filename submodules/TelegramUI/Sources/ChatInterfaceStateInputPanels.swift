@@ -38,15 +38,19 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
             }
         }
         
-        if let currentPanel = (currentPanel as? ChatSearchInputPanelNode) ?? (currentSecondaryPanel as? ChatSearchInputPanelNode) {
+        if let currentPanel = (currentPanel as? ChatTagSearchInputPanelNode) ?? (currentSecondaryPanel as? ChatTagSearchInputPanelNode) {
             currentPanel.interfaceInteraction = interfaceInteraction
             return (currentPanel, selectionPanel)
         } else {
-            let panel = ChatSearchInputPanelNode(theme: chatPresentationInterfaceState.theme)
+            let panel = ChatTagSearchInputPanelNode(theme: chatPresentationInterfaceState.theme)
             panel.context = context
             panel.interfaceInteraction = interfaceInteraction
             return (panel, selectionPanel)
         }
+    }
+    
+    if case .standard(.embedded) = chatPresentationInterfaceState.mode {
+        return (nil, nil)
     }
     
     if let selectionState = chatPresentationInterfaceState.interfaceState.selectionState {
@@ -90,6 +94,18 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
         }
     }
     
+    if chatPresentationInterfaceState.isPremiumRequiredForMessaging {
+        if let currentPanel = (currentPanel as? ChatPremiumRequiredInputPanelNode) ?? (currentSecondaryPanel as? ChatPremiumRequiredInputPanelNode) {
+            currentPanel.interfaceInteraction = interfaceInteraction
+            return (currentPanel, nil)
+        } else {
+            let panel = ChatPremiumRequiredInputPanelNode(theme: chatPresentationInterfaceState.theme)
+            panel.context = context
+            panel.interfaceInteraction = interfaceInteraction
+            return (panel, nil)
+        }
+    }
+    
     if chatPresentationInterfaceState.peerIsBlocked, let peer = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, peer.botInfo == nil {
         if let currentPanel = (currentPanel as? ChatUnblockInputPanelNode) ?? (currentSecondaryPanel as? ChatUnblockInputPanelNode) {
             currentPanel.interfaceInteraction = interfaceInteraction
@@ -114,6 +130,31 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 panel.interfaceInteraction = interfaceInteraction
                 panel.context = context
                 return (panel, nil)
+            }
+        }
+        
+        if case let .replyThread(message) = chatPresentationInterfaceState.chatLocation, message.peerId == context.account.peerId {
+            if EnginePeer.Id(message.threadId).isAnonymousSavedMessages {
+                if let currentPanel = (currentPanel as? ChatRestrictedInputPanelNode) ?? (currentSecondaryPanel as? ChatRestrictedInputPanelNode) {
+                    return (currentPanel, nil)
+                } else {
+                    let panel = ChatRestrictedInputPanelNode()
+                    panel.context = context
+                    panel.interfaceInteraction = interfaceInteraction
+                    return (panel, nil)
+                }
+            } else {
+                if message.threadId == context.account.peerId.toInt64() {
+                } else {
+                    if let currentPanel = (currentPanel as? ChatChannelSubscriberInputPanelNode) ?? (currentSecondaryPanel as? ChatChannelSubscriberInputPanelNode) {
+                        return (currentPanel, nil)
+                    } else {
+                        let panel = ChatChannelSubscriberInputPanelNode()
+                        panel.interfaceInteraction = interfaceInteraction
+                        panel.context = context
+                        return (panel, nil)
+                    }
+                }
             }
         }
         

@@ -2,17 +2,82 @@ import AVFoundation
 import Metal
 import CoreVideo
 import Display
+import SwiftSignalKit
 
 public final class VideoSourceOutput {
-    public let y: MTLTexture
-    public let uv: MTLTexture
+    public struct MirrorDirection: OptionSet {
+        public var rawValue: Int32
+        
+        public init(rawValue: Int32) {
+            self.rawValue = rawValue
+        }
+        
+        public static let horizontal = MirrorDirection(rawValue: 1 << 0)
+        public static let vertical = MirrorDirection(rawValue: 1 << 1)
+    }
+    
+    open class DataBuffer {
+        open var pixelBuffer: CVPixelBuffer? {
+            return nil
+        }
+        
+        public init() {
+        }
+    }
+    
+    public final class BiPlanarTextureLayout {
+        public let y: MTLTexture
+        public let uv: MTLTexture
+        
+        public init(y: MTLTexture, uv: MTLTexture) {
+            self.y = y
+            self.uv = uv
+        }
+    }
+    
+    public final class TriPlanarTextureLayout {
+        public let y: MTLTexture
+        public let u: MTLTexture
+        public let v: MTLTexture
+        
+        public init(y: MTLTexture, u: MTLTexture, v: MTLTexture) {
+            self.y = y
+            self.u = u
+            self.v = v
+        }
+    }
+    
+    public enum TextureLayout {
+        case biPlanar(BiPlanarTextureLayout)
+        case triPlanar(TriPlanarTextureLayout)
+    }
+    
+    public final class NativeDataBuffer: DataBuffer {
+        private let pixelBufferValue: CVPixelBuffer
+        override public var pixelBuffer: CVPixelBuffer? {
+            return self.pixelBufferValue
+        }
+        
+        public init(pixelBuffer: CVPixelBuffer) {
+            self.pixelBufferValue = pixelBuffer
+        }
+    }
+    
+    public let resolution: CGSize
+    public let textureLayout: TextureLayout
+    public let dataBuffer: DataBuffer
     public let rotationAngle: Float
+    public let followsDeviceOrientation: Bool
+    public let mirrorDirection: MirrorDirection
     public let sourceId: Int
     
-    public init(y: MTLTexture, uv: MTLTexture, rotationAngle: Float, sourceId: Int) {
-        self.y = y
-        self.uv = uv
+    public init(resolution: CGSize, textureLayout: TextureLayout, dataBuffer: DataBuffer, rotationAngle: Float, followsDeviceOrientation: Bool, mirrorDirection: MirrorDirection, sourceId: Int) {
+        self.resolution = resolution
+        self.textureLayout = textureLayout
+        self.dataBuffer = dataBuffer
         self.rotationAngle = rotationAngle
+        self.followsDeviceOrientation = followsDeviceOrientation
+        self.mirrorDirection = mirrorDirection
         self.sourceId = sourceId
     }
 }
@@ -20,8 +85,9 @@ public final class VideoSourceOutput {
 public protocol VideoSource: AnyObject {
     typealias Output = VideoSourceOutput
     
-    var updated: (() -> Void)? { get set }
     var currentOutput: Output? { get }
+    
+    func addOnUpdated(_ f: @escaping () -> Void) -> Disposable
 }
 
 public final class FileVideoSource: VideoSource {
@@ -35,13 +101,17 @@ public final class FileVideoSource: VideoSource {
     private var targetItem: AVPlayerItem?
     
     public private(set) var currentOutput: Output?
-    public var updated: (() -> Void)?
+    private var onUpdatedListeners = Bag<() -> Void>()
     
     private var displayLink: SharedDisplayLinkDriver.Link?
     
     public var sourceId: Int = 0
+    public var fixedRotationAngle: Float?
+    public var sizeMultiplicator: CGPoint = CGPoint(x: 1.0, y: 1.0)
     
-    public init?(device: MTLDevice, url: URL) {
+    public init?(device: MTLDevice, url: URL, fixedRotationAngle: Float? = nil) {
+        self.fixedRotationAngle = fixedRotationAngle
+        
         self.device = device
         CVMetalTextureCacheCreate(nil, nil, device, nil, &self.textureCache)
         
@@ -62,9 +132,24 @@ public final class FileVideoSource: VideoSource {
                 return
             }
             if self.updateOutput() {
-                self.updated?()
+                for onUpdated in self.onUpdatedListeners.copyItems() {
+                    onUpdated()
+                }
             }
         })
+    }
+    
+    public func addOnUpdated(_ f: @escaping () -> Void) -> Disposable {
+        let index = self.onUpdatedListeners.add(f)
+        
+        return ActionDisposable { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else {
+                    return
+                }
+                self.onUpdatedListeners.remove(index)
+            }
+        }
     }
     
     private func updateOutput() -> Bool {
@@ -117,9 +202,26 @@ public final class FileVideoSource: VideoSource {
             return false
         }
         
-        rotationAngle = Float.pi * 0.5
+        if let fixedRotationAngle = self.fixedRotationAngle {
+            rotationAngle = fixedRotationAngle
+        }
         
-        self.currentOutput = Output(y: yTexture, uv: uvTexture, rotationAngle: rotationAngle, sourceId: self.sourceId)
+        var resolution = CGSize(width: CGFloat(yTexture.width), height: CGFloat(yTexture.height))
+        resolution.width = floor(resolution.width * self.sizeMultiplicator.x)
+        resolution.height = floor(resolution.height * self.sizeMultiplicator.y)
+        
+        self.currentOutput = Output(
+            resolution: resolution,
+            textureLayout: .biPlanar(Output.BiPlanarTextureLayout(
+                y: yTexture,
+                uv: uvTexture
+            )),
+            dataBuffer: Output.NativeDataBuffer(pixelBuffer: buffer),
+            rotationAngle: rotationAngle,
+            followsDeviceOrientation: false,
+            mirrorDirection: [],
+            sourceId: self.sourceId
+        )
         return true
     }
 }

@@ -440,7 +440,6 @@ extension InAppPurchaseManager: SKPaymentTransactionObserver {
                 }
                 |> take(1)
                 
-
                 let product: Signal<InAppPurchaseManager.Product?, NoError> = products
                 |> map { products in
                     if let product = products.first(where: { $0.id == productIdentifier }) {
@@ -469,19 +468,12 @@ extension InAppPurchaseManager: SKPaymentTransactionObserver {
                         }
                     }
                 }
+                
                 completion = updatePendingInAppPurchaseState(engine: self.engine, productId: productIdentifier, content: nil)
                 
                 let receiptData = getReceiptData() ?? Data()
-                
 #if DEBUG
-                let id = Int64.random(in: Int64.min ... Int64.max)
-                let fileResource = LocalFileMediaResource(fileId: id, size: Int64(receiptData.count), isSecretRelated: false)
-                self.engine.account.postbox.mediaBox.storeResourceData(fileResource.id, data: receiptData)
-
-                let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(receiptData.count), attributes: [.FileName(fileName: "Receipt.dat")])
-                let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
-
-                let _ = enqueueMessages(account: self.engine.account, peerId: self.engine.account.peerId, messages: [message]).start()
+                self.debugSaveReceipt(receiptData: receiptData)
 #endif
                 
                 self.disposableSet.set(
@@ -553,6 +545,17 @@ extension InAppPurchaseManager: SKPaymentTransactionObserver {
             }
         }
     }
+    
+    private func debugSaveReceipt(receiptData: Data) {
+        let id = Int64.random(in: Int64.min ... Int64.max)
+        let fileResource = LocalFileMediaResource(fileId: id, size: Int64(receiptData.count), isSecretRelated: false)
+        self.engine.account.postbox.mediaBox.storeResourceData(fileResource.id, data: receiptData)
+
+        let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(receiptData.count), attributes: [.FileName(fileName: "Receipt.dat")])
+        let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+
+        let _ = enqueueMessages(account: self.engine.account, peerId: self.engine.account.peerId, messages: [message]).start()
+    }
 }
 
 private final class PendingInAppPurchaseState: Codable {
@@ -575,6 +578,8 @@ private final class PendingInAppPurchaseState: Codable {
             case additionalPeerIds
             case countries
             case onlyNewSubscribers
+            case showWinners
+            case prizeDescription
             case randomId
             case untilDate
         }
@@ -593,7 +598,7 @@ private final class PendingInAppPurchaseState: Codable {
         case restore
         case gift(peerId: EnginePeer.Id)
         case giftCode(peerIds: [EnginePeer.Id], boostPeer: EnginePeer.Id?)
-        case giveaway(boostPeer: EnginePeer.Id, additionalPeerIds: [EnginePeer.Id], countries: [String], onlyNewSubscribers: Bool, randomId: Int64, untilDate: Int32)
+        case giveaway(boostPeer: EnginePeer.Id, additionalPeerIds: [EnginePeer.Id], countries: [String], onlyNewSubscribers: Bool, showWinners: Bool, prizeDescription: String?, randomId: Int64, untilDate: Int32)
         
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -621,6 +626,8 @@ private final class PendingInAppPurchaseState: Codable {
                     additionalPeerIds: try container.decode([Int64].self, forKey: .randomId).map { EnginePeer.Id($0) },
                     countries: try container.decodeIfPresent([String].self, forKey: .countries) ?? [],
                     onlyNewSubscribers: try container.decode(Bool.self, forKey: .onlyNewSubscribers),
+                    showWinners: try container.decodeIfPresent(Bool.self, forKey: .showWinners) ?? false,
+                    prizeDescription: try container.decodeIfPresent(String.self, forKey: .prizeDescription),
                     randomId: try container.decode(Int64.self, forKey: .randomId),
                     untilDate: try container.decode(Int32.self, forKey: .untilDate)
                 )
@@ -646,12 +653,14 @@ private final class PendingInAppPurchaseState: Codable {
                 try container.encode(PurposeType.giftCode.rawValue, forKey: .type)
                 try container.encode(peerIds.map { $0.toInt64() }, forKey: .peers)
                 try container.encodeIfPresent(boostPeer?.toInt64(), forKey: .boostPeer)
-            case let .giveaway(boostPeer, additionalPeerIds, countries, onlyNewSubscribers, randomId, untilDate):
+            case let .giveaway(boostPeer, additionalPeerIds, countries, onlyNewSubscribers, showWinners, prizeDescription, randomId, untilDate):
                 try container.encode(PurposeType.giveaway.rawValue, forKey: .type)
                 try container.encode(boostPeer.toInt64(), forKey: .boostPeer)
                 try container.encode(additionalPeerIds.map { $0.toInt64() }, forKey: .additionalPeerIds)
                 try container.encode(countries, forKey: .countries)
                 try container.encode(onlyNewSubscribers, forKey: .onlyNewSubscribers)
+                try container.encode(showWinners, forKey: .showWinners)
+                try container.encodeIfPresent(prizeDescription, forKey: .prizeDescription)
                 try container.encode(randomId, forKey: .randomId)
                 try container.encode(untilDate, forKey: .untilDate)
             }
@@ -669,8 +678,8 @@ private final class PendingInAppPurchaseState: Codable {
                 self = .gift(peerId: peerId)
             case let .giftCode(peerIds, boostPeer, _, _):
                 self = .giftCode(peerIds: peerIds, boostPeer: boostPeer)
-            case let .giveaway(boostPeer, additionalPeerIds, countries, onlyNewSubscribers, randomId, untilDate, _, _):
-                self = .giveaway(boostPeer: boostPeer, additionalPeerIds: additionalPeerIds, countries: countries, onlyNewSubscribers: onlyNewSubscribers, randomId: randomId, untilDate: untilDate)
+            case let .giveaway(boostPeer, additionalPeerIds, countries, onlyNewSubscribers, showWinners, prizeDescription, randomId, untilDate, _, _):
+                self = .giveaway(boostPeer: boostPeer, additionalPeerIds: additionalPeerIds, countries: countries, onlyNewSubscribers: onlyNewSubscribers, showWinners: showWinners, prizeDescription: prizeDescription, randomId: randomId, untilDate: untilDate)
             }
         }
         
@@ -687,8 +696,8 @@ private final class PendingInAppPurchaseState: Codable {
                 return .gift(peerId: peerId, currency: currency, amount: amount)
             case let .giftCode(peerIds, boostPeer):
                 return .giftCode(peerIds: peerIds, boostPeer: boostPeer, currency: currency, amount: amount)
-            case let .giveaway(boostPeer, additionalPeerIds, countries, onlyNewSubscribers, randomId, untilDate):
-                return .giveaway(boostPeer: boostPeer, additionalPeerIds: additionalPeerIds, countries: countries, onlyNewSubscribers: onlyNewSubscribers, randomId: randomId, untilDate: untilDate, currency: currency, amount: amount)
+            case let .giveaway(boostPeer, additionalPeerIds, countries, onlyNewSubscribers, showWinners, prizeDescription, randomId, untilDate):
+                return .giveaway(boostPeer: boostPeer, additionalPeerIds: additionalPeerIds, countries: countries, onlyNewSubscribers: onlyNewSubscribers, showWinners: showWinners, prizeDescription: prizeDescription, randomId: randomId, untilDate: untilDate, currency: currency, amount: amount)
             }
         }
     }

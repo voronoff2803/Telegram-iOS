@@ -18,6 +18,7 @@ import ChatControllerInteraction
 import MultilineTextComponent
 import Markdown
 import SolidRoundedButtonNode
+import PeerInfoPaneNode
 
 private struct RecommendedChannelsListTransaction {
     let deletions: [ListViewDeleteItem]
@@ -170,6 +171,12 @@ final class PeerInfoRecommendedChannelsPaneNode: ASDisplayNode, PeerInfoPaneNode
             }
             return nil
         })
+        
+        self.listNode.visibleBottomContentOffsetChanged = { [weak self] offset in
+            if let self {
+                self.layoutUnlockPanel(transition: .animated(duration: 0.4, curve: .spring))
+            }
+        }
     }
     
     deinit {
@@ -188,7 +195,7 @@ final class PeerInfoRecommendedChannelsPaneNode: ASDisplayNode, PeerInfoPaneNode
         }
     }
     
-    func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition) {
+    func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, navigationHeight: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition) {
         let isFirstLayout = self.currentParams == nil
         self.currentParams = (size, sideInset, bottomInset, isScrollingLockedAtTop, presentationData)
         self.presentationDataPromise.set(.single(presentationData))
@@ -233,18 +240,18 @@ final class PeerInfoRecommendedChannelsPaneNode: ASDisplayNode, PeerInfoPaneNode
         }, openPeerContextAction: { [weak self] peer, node, gesture in
             self?.openPeerContextAction(true, peer, node, gesture)
         })
+        
         self.currentEntries = entries
         self.enqueuedTransactions.append(transaction)
         self.dequeueTransaction()
-        
-        self.layoutUnlockPanel()
     }
     
-    private func layoutUnlockPanel() {
+    private func layoutUnlockPanel(transition: ContainedViewLayoutTransition) {
         guard let (_, isPremium) = self.currentState, let currentParams = self.currentParams else {
             return
         }
         if !isPremium {
+            var transition = transition
             let size = currentParams.size
             let sideInset = currentParams.sideInset
             let bottomInset = currentParams.bottomInset
@@ -261,6 +268,7 @@ final class PeerInfoRecommendedChannelsPaneNode: ASDisplayNode, PeerInfoPaneNode
             } else {
                 unlockText = ComponentView<Empty>()
                 self.unlockText = unlockText
+                transition = .immediate
             }
             
             if let current = self.unlockBackground {
@@ -327,14 +335,14 @@ final class PeerInfoRecommendedChannelsPaneNode: ASDisplayNode, PeerInfoPaneNode
                     view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.unlockPressed)))
                     self.view.addSubview(view)
                 }
-                view.frame = CGRect(origin: CGPoint(x: floor((size.width - unlockSize.width) / 2.0), y: size.height - bottomInset - unlockSize.height - 13.0 + scrollOffset), size: unlockSize)
+                transition.updateFrame(view: view, frame: CGRect(origin: CGPoint(x: floor((size.width - unlockSize.width) / 2.0), y: size.height - bottomInset - unlockSize.height - 13.0 + scrollOffset), size: unlockSize))
             }
             
-            unlockBackground.frame = CGRect(x: 0.0, y: size.height - bottomInset - 170.0 + scrollOffset, width: size.width, height: bottomInset + 170.0)
+            transition.updateFrame(view: unlockBackground, frame: CGRect(x: 0.0, y: size.height - bottomInset - 170.0 + scrollOffset, width: size.width, height: bottomInset + 170.0))
             
             let buttonSideInset = sideInset + 16.0
             let buttonSize = CGSize(width: size.width - buttonSideInset * 2.0, height: 50.0)
-            unlockButton.frame = CGRect(origin: CGPoint(x: buttonSideInset, y: size.height - bottomInset - unlockSize.height - buttonSize.height - 26.0 + scrollOffset), size: buttonSize)
+            transition.updateFrame(node: unlockButton, frame: CGRect(origin: CGPoint(x: buttonSideInset, y: size.height - bottomInset - unlockSize.height - buttonSize.height - 26.0 + scrollOffset), size: buttonSize))
             let _ = unlockButton.updateLayout(width: buttonSize.width, transition: .immediate)
         } else {
             self.unlockBackground?.removeFromSuperview()

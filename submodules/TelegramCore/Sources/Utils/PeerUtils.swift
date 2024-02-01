@@ -1,6 +1,8 @@
 import Foundation
 import Postbox
 
+public let anonymousSavedMessagesId: Int64 = 2666000
+
 public extension Peer {
     var debugDisplayTitle: String {
         switch self {
@@ -255,6 +257,17 @@ public extension Peer {
         return false
     }
     
+    var emojiStatus: PeerEmojiStatus? {
+        switch self {
+        case let user as TelegramUser:
+            return user.emojiStatus
+        case let channel as TelegramChannel:
+            return channel.emojiStatus
+        default:
+            return nil
+        }
+    }
+    
     var backgroundEmojiId: Int64? {
         switch self {
         case let user as TelegramUser:
@@ -412,5 +425,17 @@ public extension PeerId {
             }
         }
         return false
+    }
+    
+    var isAnonymousSavedMessages: Bool {
+        if self.namespace == Namespaces.Peer.CloudUser {
+            if self.id._internalGetInt64Value() == anonymousSavedMessagesId {
+                return true
+            }
+        }
+        return false
+    }
+    var isSecretChat: Bool {
+        return self.namespace == Namespaces.Peer.SecretChat
     }
 }

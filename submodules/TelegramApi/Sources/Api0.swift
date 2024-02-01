@@ -104,16 +104,18 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[531458253] = { return Api.ChannelAdminLogEvent.parse_channelAdminLogEvent($0) }
     dict[1427671598] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeAbout($0) }
     dict[-1102180616] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeAvailableReactions($0) }
-    dict[1147126836] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeBackgroundEmoji($0) }
-    dict[1009460347] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeColor($0) }
+    dict[1051328177] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeEmojiStatus($0) }
     dict[1855199800] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeHistoryTTL($0) }
     dict[84703944] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeLinkedChat($0) }
     dict[241923758] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeLocation($0) }
+    dict[1469507456] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangePeerColor($0) }
     dict[1129042607] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangePhoto($0) }
+    dict[1581742885] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeProfilePeerColor($0) }
     dict[-1312568665] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeStickerSet($0) }
     dict[-421545947] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeTitle($0) }
     dict[1783299128] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeUsername($0) }
     dict[-263212119] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeUsernames($0) }
+    dict[834362706] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionChangeWallpaper($0) }
     dict[1483767080] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionCreateTopic($0) }
     dict[771095562] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionDefaultBannedRights($0) }
     dict[1121994683] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionDeleteMessage($0) }
@@ -166,7 +168,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-531931925] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsMentions($0) }
     dict[-566281095] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsRecent($0) }
     dict[106343499] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsSearch($0) }
-    dict[-1903702824] = { return Api.Chat.parse_channel($0) }
+    dict[179174543] = { return Api.Chat.parse_channel($0) }
     dict[399807445] = { return Api.Chat.parse_channelForbidden($0) }
     dict[1103884886] = { return Api.Chat.parse_chat($0) }
     dict[693512293] = { return Api.Chat.parse_chatEmpty($0) }
@@ -174,7 +176,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1605510357] = { return Api.ChatAdminRights.parse_chatAdminRights($0) }
     dict[-219353309] = { return Api.ChatAdminWithInvites.parse_chatAdminWithInvites($0) }
     dict[-1626209256] = { return Api.ChatBannedRights.parse_chatBannedRights($0) }
-    dict[1915758525] = { return Api.ChatFull.parse_channelFull($0) }
+    dict[254528367] = { return Api.ChatFull.parse_channelFull($0) }
     dict[-908914376] = { return Api.ChatFull.parse_chatFull($0) }
     dict[-840897472] = { return Api.ChatInvite.parse_chatInvite($0) }
     dict[1516793212] = { return Api.ChatInvite.parse_chatInviteAlready($0) }
@@ -402,6 +404,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[42402760] = { return Api.InputStickerSet.parse_inputStickerSetAnimatedEmoji($0) }
     dict[215889721] = { return Api.InputStickerSet.parse_inputStickerSetAnimatedEmojiAnimations($0) }
     dict[-427863538] = { return Api.InputStickerSet.parse_inputStickerSetDice($0) }
+    dict[1232373075] = { return Api.InputStickerSet.parse_inputStickerSetEmojiChannelDefaultStatuses($0) }
     dict[701560302] = { return Api.InputStickerSet.parse_inputStickerSetEmojiDefaultStatuses($0) }
     dict[1153562857] = { return Api.InputStickerSet.parse_inputStickerSetEmojiDefaultTopicIcons($0) }
     dict[80008398] = { return Api.InputStickerSet.parse_inputStickerSetEmojiGenericAnimations($0) }
@@ -414,7 +417,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1251549527] = { return Api.InputStickeredMedia.parse_inputStickeredMediaPhoto($0) }
     dict[1634697192] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentGiftPremium($0) }
     dict[-1551868097] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentPremiumGiftCode($0) }
-    dict[2090038758] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentPremiumGiveaway($0) }
+    dict[369444042] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentPremiumGiveaway($0) }
     dict[-1502273946] = { return Api.InputStorePaymentPurpose.parse_inputStorePaymentPremiumSubscription($0) }
     dict[1012306921] = { return Api.InputTheme.parse_inputTheme($0) }
     dict[-175567375] = { return Api.InputTheme.parse_inputThemeSlug($0) }
@@ -445,7 +448,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[901503851] = { return Api.KeyboardButton.parse_keyboardButtonCallback($0) }
     dict[1358175439] = { return Api.KeyboardButton.parse_keyboardButtonGame($0) }
     dict[-59151553] = { return Api.KeyboardButton.parse_keyboardButtonRequestGeoLocation($0) }
-    dict[218842764] = { return Api.KeyboardButton.parse_keyboardButtonRequestPeer($0) }
+    dict[1406648280] = { return Api.KeyboardButton.parse_keyboardButtonRequestPeer($0) }
     dict[-1318425559] = { return Api.KeyboardButton.parse_keyboardButtonRequestPhone($0) }
     dict[-1144565411] = { return Api.KeyboardButton.parse_keyboardButtonRequestPoll($0) }
     dict[-1598009252] = { return Api.KeyboardButton.parse_keyboardButtonSimpleWebView($0) }
@@ -462,12 +465,14 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[695856818] = { return Api.LangPackString.parse_langPackStringDeleted($0) }
     dict[1816636575] = { return Api.LangPackString.parse_langPackStringPluralized($0) }
     dict[-1361650766] = { return Api.MaskCoords.parse_maskCoords($0) }
+    dict[577893055] = { return Api.MediaArea.parse_inputMediaAreaChannelPost($0) }
     dict[-1300094593] = { return Api.MediaArea.parse_inputMediaAreaVenue($0) }
+    dict[1996756655] = { return Api.MediaArea.parse_mediaAreaChannelPost($0) }
     dict[-544523486] = { return Api.MediaArea.parse_mediaAreaGeoPoint($0) }
     dict[340088945] = { return Api.MediaArea.parse_mediaAreaSuggestedReaction($0) }
     dict[-1098720356] = { return Api.MediaArea.parse_mediaAreaVenue($0) }
     dict[64088654] = { return Api.MediaAreaCoordinates.parse_mediaAreaCoordinates($0) }
-    dict[940666592] = { return Api.Message.parse_message($0) }
+    dict[1992213009] = { return Api.Message.parse_message($0) }
     dict[-1868117372] = { return Api.Message.parse_messageEmpty($0) }
     dict[721967202] = { return Api.Message.parse_messageService($0) }
     dict[-988359047] = { return Api.MessageAction.parse_messageActionBotAllowed($0) }
@@ -487,7 +492,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1230047312] = { return Api.MessageAction.parse_messageActionEmpty($0) }
     dict[-1834538890] = { return Api.MessageAction.parse_messageActionGameScore($0) }
     dict[-1730095465] = { return Api.MessageAction.parse_messageActionGeoProximityReached($0) }
-    dict[-758129906] = { return Api.MessageAction.parse_messageActionGiftCode($0) }
+    dict[1737240073] = { return Api.MessageAction.parse_messageActionGiftCode($0) }
     dict[-935499028] = { return Api.MessageAction.parse_messageActionGiftPremium($0) }
     dict[858499565] = { return Api.MessageAction.parse_messageActionGiveawayLaunch($0) }
     dict[715107781] = { return Api.MessageAction.parse_messageActionGiveawayResults($0) }
@@ -499,7 +504,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1892568281] = { return Api.MessageAction.parse_messageActionPaymentSentMe($0) }
     dict[-2132731265] = { return Api.MessageAction.parse_messageActionPhoneCall($0) }
     dict[-1799538451] = { return Api.MessageAction.parse_messageActionPinMessage($0) }
-    dict[-25742243] = { return Api.MessageAction.parse_messageActionRequestedPeer($0) }
+    dict[827428507] = { return Api.MessageAction.parse_messageActionRequestedPeer($0) }
     dict[1200788123] = { return Api.MessageAction.parse_messageActionScreenshotTaken($0) }
     dict[-648257196] = { return Api.MessageAction.parse_messageActionSecureValuesSent($0) }
     dict[455635795] = { return Api.MessageAction.parse_messageActionSecureValuesSentMe($0) }
@@ -534,7 +539,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1859134776] = { return Api.MessageEntity.parse_messageEntityUrl($0) }
     dict[-297296796] = { return Api.MessageExtendedMedia.parse_messageExtendedMedia($0) }
     dict[-1386050360] = { return Api.MessageExtendedMedia.parse_messageExtendedMediaPreview($0) }
-    dict[1601666510] = { return Api.MessageFwdHeader.parse_messageFwdHeader($0) }
+    dict[1313731771] = { return Api.MessageFwdHeader.parse_messageFwdHeader($0) }
     dict[1882335561] = { return Api.MessageMedia.parse_messageMediaContact($0) }
     dict[1065280907] = { return Api.MessageMedia.parse_messageMediaDice($0) }
     dict[1291114285] = { return Api.MessageMedia.parse_messageMediaDocument($0) }
@@ -542,7 +547,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-38694904] = { return Api.MessageMedia.parse_messageMediaGame($0) }
     dict[1457575028] = { return Api.MessageMedia.parse_messageMediaGeo($0) }
     dict[-1186937242] = { return Api.MessageMedia.parse_messageMediaGeoLive($0) }
-    dict[1478887012] = { return Api.MessageMedia.parse_messageMediaGiveaway($0) }
+    dict[-626162256] = { return Api.MessageMedia.parse_messageMediaGiveaway($0) }
+    dict[-963047320] = { return Api.MessageMedia.parse_messageMediaGiveawayResults($0) }
     dict[-156940077] = { return Api.MessageMedia.parse_messageMediaInvoice($0) }
     dict[1766936791] = { return Api.MessageMedia.parse_messageMediaPhoto($0) }
     dict[1272375192] = { return Api.MessageMedia.parse_messageMediaPoll($0) }
@@ -588,6 +594,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[577659656] = { return Api.NotifyPeer.parse_notifyForumTopic($0) }
     dict[-1613493288] = { return Api.NotifyPeer.parse_notifyPeer($0) }
     dict[-1261946036] = { return Api.NotifyPeer.parse_notifyUsers($0) }
+    dict[1001931436] = { return Api.OutboxReadDate.parse_outboxReadDate($0) }
     dict[-1738178803] = { return Api.Page.parse_page($0) }
     dict[-837994576] = { return Api.PageBlock.parse_pageBlockAnchor($0) }
     dict[-2143067670] = { return Api.PageBlock.parse_pageBlockAudio($0) }
@@ -742,6 +749,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1054465340] = { return Api.RichText.parse_textUnderline($0) }
     dict[1009288385] = { return Api.RichText.parse_textUrl($0) }
     dict[289586518] = { return Api.SavedContact.parse_savedPhoneContact($0) }
+    dict[-1115174036] = { return Api.SavedDialog.parse_savedDialog($0) }
+    dict[-881854424] = { return Api.SavedReactionTag.parse_savedReactionTag($0) }
     dict[-911191137] = { return Api.SearchResultsCalendarPeriod.parse_searchResultsCalendarPeriod($0) }
     dict[2137295719] = { return Api.SearchResultsPosition.parse_searchResultPosition($0) }
     dict[871426631] = { return Api.SecureCredentialsEncrypted.parse_secureCredentialsEncrypted($0) }
@@ -825,7 +834,12 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1352440415] = { return Api.StoryItem.parse_storyItem($0) }
     dict[1374088783] = { return Api.StoryItem.parse_storyItemDeleted($0) }
     dict[-5388013] = { return Api.StoryItem.parse_storyItemSkipped($0) }
+    dict[1620104917] = { return Api.StoryReaction.parse_storyReaction($0) }
+    dict[-1146411453] = { return Api.StoryReaction.parse_storyReactionPublicForward($0) }
+    dict[-808644845] = { return Api.StoryReaction.parse_storyReactionPublicRepost($0) }
     dict[-1329730875] = { return Api.StoryView.parse_storyView($0) }
+    dict[-1870436597] = { return Api.StoryView.parse_storyViewPublicForward($0) }
+    dict[-1116418231] = { return Api.StoryView.parse_storyViewPublicRepost($0) }
     dict[-1923523370] = { return Api.StoryViews.parse_storyViews($0) }
     dict[1964978502] = { return Api.TextWithEntities.parse_textWithEntities($0) }
     dict[-1609668650] = { return Api.Theme.parse_theme($0) }
@@ -849,6 +863,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1232025500] = { return Api.Update.parse_updateBotInlineQuery($0) }
     dict[317794823] = { return Api.Update.parse_updateBotInlineSend($0) }
     dict[347625491] = { return Api.Update.parse_updateBotMenuButton($0) }
+    dict[-1407069234] = { return Api.Update.parse_updateBotMessageReaction($0) }
+    dict[164329305] = { return Api.Update.parse_updateBotMessageReactions($0) }
     dict[-1934976362] = { return Api.Update.parse_updateBotPrecheckoutQuery($0) }
     dict[-1246823043] = { return Api.Update.parse_updateBotShippingQuery($0) }
     dict[-997782967] = { return Api.Update.parse_updateBotStopped($0) }
@@ -926,6 +942,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1538885128] = { return Api.Update.parse_updatePinnedChannelMessages($0) }
     dict[-99664734] = { return Api.Update.parse_updatePinnedDialogs($0) }
     dict[-309990731] = { return Api.Update.parse_updatePinnedMessages($0) }
+    dict[1751942566] = { return Api.Update.parse_updatePinnedSavedDialogs($0) }
     dict[-298113238] = { return Api.Update.parse_updatePrivacy($0) }
     dict[861169551] = { return Api.Update.parse_updatePtsChanged($0) }
     dict[-693004986] = { return Api.Update.parse_updateReadChannelDiscussionInbox($0) }
@@ -941,7 +958,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[821314523] = { return Api.Update.parse_updateRecentEmojiStatuses($0) }
     dict[1870160884] = { return Api.Update.parse_updateRecentReactions($0) }
     dict[-1706939360] = { return Api.Update.parse_updateRecentStickers($0) }
+    dict[-1364222348] = { return Api.Update.parse_updateSavedDialogPinned($0) }
     dict[-1821035490] = { return Api.Update.parse_updateSavedGifs($0) }
+    dict[969307186] = { return Api.Update.parse_updateSavedReactionTags($0) }
     dict[1960361625] = { return Api.Update.parse_updateSavedRingtones($0) }
     dict[2103604867] = { return Api.Update.parse_updateSentStoryReaction($0) }
     dict[-337352679] = { return Api.Update.parse_updateServiceNotification($0) }
@@ -976,18 +995,18 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-2100168954] = { return Api.UserProfilePhoto.parse_userProfilePhoto($0) }
     dict[1326562017] = { return Api.UserProfilePhoto.parse_userProfilePhotoEmpty($0) }
     dict[164646985] = { return Api.UserStatus.parse_userStatusEmpty($0) }
-    dict[2011940674] = { return Api.UserStatus.parse_userStatusLastMonth($0) }
-    dict[129960444] = { return Api.UserStatus.parse_userStatusLastWeek($0) }
+    dict[1703516023] = { return Api.UserStatus.parse_userStatusLastMonth($0) }
+    dict[1410997530] = { return Api.UserStatus.parse_userStatusLastWeek($0) }
     dict[9203775] = { return Api.UserStatus.parse_userStatusOffline($0) }
     dict[-306628279] = { return Api.UserStatus.parse_userStatusOnline($0) }
-    dict[-496024847] = { return Api.UserStatus.parse_userStatusRecently($0) }
+    dict[2065268168] = { return Api.UserStatus.parse_userStatusRecently($0) }
     dict[-1274595769] = { return Api.Username.parse_username($0) }
     dict[-567037804] = { return Api.VideoSize.parse_videoSize($0) }
     dict[-128171716] = { return Api.VideoSize.parse_videoSizeEmojiMarkup($0) }
     dict[228623102] = { return Api.VideoSize.parse_videoSizeStickerMarkup($0) }
     dict[-1539849235] = { return Api.WallPaper.parse_wallPaper($0) }
     dict[-528465642] = { return Api.WallPaper.parse_wallPaperNoFile($0) }
-    dict[499236004] = { return Api.WallPaperSettings.parse_wallPaperSettings($0) }
+    dict[925826256] = { return Api.WallPaperSettings.parse_wallPaperSettings($0) }
     dict[-1493633966] = { return Api.WebAuthorization.parse_webAuthorization($0) }
     dict[475467473] = { return Api.WebDocument.parse_webDocument($0) }
     dict[-104284986] = { return Api.WebDocument.parse_webDocumentNoProxy($0) }
@@ -1085,7 +1104,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[415997816] = { return Api.help.InviteText.parse_inviteText($0) }
     dict[-1600596305] = { return Api.help.PassportConfig.parse_passportConfig($0) }
     dict[-1078332329] = { return Api.help.PassportConfig.parse_passportConfigNotModified($0) }
-    dict[324785199] = { return Api.help.PeerColorOption.parse_peerColorOption($0) }
+    dict[-276549461] = { return Api.help.PeerColorOption.parse_peerColorOption($0) }
     dict[1987928555] = { return Api.help.PeerColorSet.parse_peerColorProfileSet($0) }
     dict[639736408] = { return Api.help.PeerColorSet.parse_peerColorSet($0) }
     dict[16313608] = { return Api.help.PeerColors.parse_peerColors($0) }
@@ -1153,8 +1172,13 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1334846497] = { return Api.messages.Reactions.parse_reactionsNotModified($0) }
     dict[-1999405994] = { return Api.messages.RecentStickers.parse_recentStickers($0) }
     dict[186120336] = { return Api.messages.RecentStickers.parse_recentStickersNotModified($0) }
+    dict[-130358751] = { return Api.messages.SavedDialogs.parse_savedDialogs($0) }
+    dict[-1071681560] = { return Api.messages.SavedDialogs.parse_savedDialogsNotModified($0) }
+    dict[1153080793] = { return Api.messages.SavedDialogs.parse_savedDialogsSlice($0) }
     dict[-2069878259] = { return Api.messages.SavedGifs.parse_savedGifs($0) }
     dict[-402498398] = { return Api.messages.SavedGifs.parse_savedGifsNotModified($0) }
+    dict[844731658] = { return Api.messages.SavedReactionTags.parse_savedReactionTags($0) }
+    dict[-2003084817] = { return Api.messages.SavedReactionTags.parse_savedReactionTagsNotModified($0) }
     dict[-398136321] = { return Api.messages.SearchCounter.parse_searchCounter($0) }
     dict[343859772] = { return Api.messages.SearchResultsCalendar.parse_searchResultsCalendar($0) }
     dict[1404185519] = { return Api.messages.SearchResultsPositions.parse_searchResultsPositions($0) }
@@ -1173,7 +1197,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1218005070] = { return Api.messages.VotesList.parse_votesList($0) }
     dict[-44166467] = { return Api.messages.WebPage.parse_webPage($0) }
     dict[1042605427] = { return Api.payments.BankCardData.parse_bankCardData($0) }
-    dict[-1222446760] = { return Api.payments.CheckedGiftCode.parse_checkedGiftCode($0) }
+    dict[675942550] = { return Api.payments.CheckedGiftCode.parse_checkedGiftCode($0) }
     dict[-1362048039] = { return Api.payments.ExportedInvoice.parse_exportedInvoice($0) }
     dict[1130879648] = { return Api.payments.GiveawayInfo.parse_giveawayInfo($0) }
     dict[13456752] = { return Api.payments.GiveawayInfo.parse_giveawayInfoResults($0) }
@@ -1216,8 +1240,9 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[291044926] = { return Api.stories.AllStories.parse_allStoriesNotModified($0) }
     dict[-890861720] = { return Api.stories.PeerStories.parse_peerStories($0) }
     dict[1574486984] = { return Api.stories.Stories.parse_stories($0) }
+    dict[-1436583780] = { return Api.stories.StoryReactionsList.parse_storyReactionsList($0) }
     dict[-560009955] = { return Api.stories.StoryViews.parse_storyViews($0) }
-    dict[1189722604] = { return Api.stories.StoryViewsList.parse_storyViewsList($0) }
+    dict[1507299269] = { return Api.stories.StoryViewsList.parse_storyViewsList($0) }
     dict[543450958] = { return Api.updates.ChannelDifference.parse_channelDifference($0) }
     dict[1041346555] = { return Api.updates.ChannelDifference.parse_channelDifferenceEmpty($0) }
     dict[-1531132162] = { return Api.updates.ChannelDifference.parse_channelDifferenceTooLong($0) }
@@ -1249,7 +1274,7 @@ public extension Api {
                 return parser(reader)
             }
             else {
-                telegramApiLog("Type constructor \(String(signature, radix: 16, uppercase: false)) not found")
+                telegramApiLog("Type constructor \(String(UInt32(bitPattern: signature), radix: 16, uppercase: false)) not found")
                 return nil
             }
         }
@@ -1629,6 +1654,8 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.NotifyPeer:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.OutboxReadDate:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.Page:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.PageBlock:
@@ -1731,6 +1758,10 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.SavedContact:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.SavedDialog:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.SavedReactionTag:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.SearchResultsCalendarPeriod:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.SearchResultsPosition:
@@ -1798,6 +1829,8 @@ public extension Api {
             case let _1 as Api.StoryFwdHeader:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StoryItem:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.StoryReaction:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StoryView:
                 _1.serialize(buffer, boxed)
@@ -2045,7 +2078,11 @@ public extension Api {
                 _1.serialize(buffer, boxed)
             case let _1 as Api.messages.RecentStickers:
                 _1.serialize(buffer, boxed)
+            case let _1 as Api.messages.SavedDialogs:
+                _1.serialize(buffer, boxed)
             case let _1 as Api.messages.SavedGifs:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.messages.SavedReactionTags:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.messages.SearchCounter:
                 _1.serialize(buffer, boxed)
@@ -2132,6 +2169,8 @@ public extension Api {
             case let _1 as Api.stories.PeerStories:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.stories.Stories:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.stories.StoryReactionsList:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.stories.StoryViews:
                 _1.serialize(buffer, boxed)

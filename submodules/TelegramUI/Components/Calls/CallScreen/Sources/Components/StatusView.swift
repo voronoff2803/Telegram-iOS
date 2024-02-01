@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
+import TelegramPresentationData
 
 private func addRoundedRectPath(context: CGContext, rect: CGRect, radius: CGFloat) {
     context.saveGState()
@@ -154,19 +155,35 @@ private final class SignalStrengthView: UIView {
 
 final class StatusView: UIView {
     private struct LayoutState: Equatable {
+        var strings: PresentationStrings
         var state: State
         var size: CGSize
         
-        init(state: State, size: CGSize) {
+        init(strings: PresentationStrings, state: State, size: CGSize) {
+            self.strings = strings
             self.state = state
             self.size = size
+        }
+        
+        static func ==(lhs: LayoutState, rhs: LayoutState) -> Bool {
+            if lhs.strings !== rhs.strings {
+                return false
+            }
+            if lhs.state != rhs.state {
+                return false
+            }
+            if lhs.size != rhs.size {
+                return false
+            }
+            return true
         }
     }
     
     enum WaitingState {
         case requesting
         case ringing
-        case generatingKeys
+        case connecting
+        case reconnecting
     }
     
     struct ActiveState: Equatable {
@@ -240,12 +257,12 @@ final class StatusView: UIView {
         self.activeDurationTimer?.invalidate()
     }
     
-    func update(state: State, transition: Transition) -> CGSize {
-        if let layoutState = self.layoutState, layoutState.state == state {
+    func update(strings: PresentationStrings, state: State, transition: Transition) -> CGSize {
+        if let layoutState = self.layoutState, layoutState.strings === strings, layoutState.state == state {
             return layoutState.size
         }
-        let size = self.updateInternal(state: state, transition: transition)
-        self.layoutState = LayoutState(state: state, size: size)
+        let size = self.updateInternal(strings: strings, state: state, transition: transition)
+        self.layoutState = LayoutState(strings: strings, state: state, size: size)
         
         self.updateActiveDurationTimer()
         
@@ -267,7 +284,7 @@ final class StatusView: UIView {
                     self.activeDurationTimer = nil
                     
                     if let layoutState = self.layoutState {
-                        let size = self.updateInternal(state: layoutState.state, transition: .immediate)
+                        let size = self.updateInternal(strings: layoutState.strings, state: layoutState.state, transition: .immediate)
                         if layoutState.size != size {
                             self.layoutState = nil
                             self.requestLayout?()
@@ -285,7 +302,7 @@ final class StatusView: UIView {
         }
     }
      
-    private func updateInternal(state: State, transition: Transition) -> CGSize {
+    private func updateInternal(strings: PresentationStrings, state: State, transition: Transition) -> CGSize {
         let textString: String
         var needsDots = false
         var monospacedDigits = false
@@ -296,11 +313,13 @@ final class StatusView: UIView {
             
             switch waitingState {
             case .requesting:
-                textString = "Requesting"
+                textString = strings.Call_WaitingStatusRequesting
             case .ringing:
-                textString = "Ringing"
-            case .generatingKeys:
-                textString = "Exchanging encryption keys"
+                textString = strings.Call_WaitingStatusRinging
+            case .connecting:
+                textString = strings.Call_WaitingStatusConnecting
+            case .reconnecting:
+                textString = strings.Call_WaitingStatusReconnecting
             }
         case let .active(activeState):
             monospacedDigits = true
@@ -310,7 +329,11 @@ final class StatusView: UIView {
             textString = stringForDuration(Int(duration))
             signalStrength = activeState.signalStrength
         case let .terminated(terminatedState):
-            textString = stringForDuration(Int(terminatedState.duration))
+            if Int(terminatedState.duration) == 0 {
+                textString = " "
+            } else {
+                textString = stringForDuration(Int(terminatedState.duration))
+            }
         }
         
         var contentSize = CGSize()

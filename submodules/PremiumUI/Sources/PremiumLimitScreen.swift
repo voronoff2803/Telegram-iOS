@@ -914,11 +914,11 @@ private final class LimitSheetContent: CombinedComponent {
                 defaultValue = component.count > limit ? "\(limit)" : ""
                 premiumValue = component.count >= premiumLimit ? "" : "\(premiumLimit)"
                 if component.count >= premiumLimit {
-                    badgeGraphPosition = max(0.15, CGFloat(limit) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(limit) / CGFloat(premiumLimit))
                 } else {
-                    badgeGraphPosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
                 }
-                badgePosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                badgePosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
             
                 if !state.isPremium && badgePosition > 0.5 {
                     string = strings.Premium_MaxFoldersCountText("\(limit)", "\(premiumLimit)").string
@@ -952,11 +952,11 @@ private final class LimitSheetContent: CombinedComponent {
                 defaultValue = component.count > limit ? "\(limit)" : ""
                 premiumValue = component.count >= premiumLimit ? "" : "\(premiumLimit)"
                 if component.count >= premiumLimit {
-                    badgeGraphPosition = max(0.15, CGFloat(limit) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(limit) / CGFloat(premiumLimit))
                 } else {
-                    badgeGraphPosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
                 }
-                badgePosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                badgePosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
             
                 if isPremiumDisabled {
                     badgeText = "\(limit)"
@@ -977,11 +977,11 @@ private final class LimitSheetContent: CombinedComponent {
                 defaultValue = count > limit ? "\(limit)" : ""
                 premiumValue = count >= premiumLimit ? "" : "\(premiumLimit)"
                 if count >= premiumLimit {
-                    badgeGraphPosition = max(0.15, CGFloat(limit) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(limit) / CGFloat(premiumLimit))
                 } else {
-                    badgeGraphPosition = max(0.15, CGFloat(count) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(count) / CGFloat(premiumLimit))
                 }
-                badgePosition = max(0.15, CGFloat(count) / CGFloat(premiumLimit))
+                badgePosition = max(0.35, CGFloat(count) / CGFloat(premiumLimit))
             
                 if isPremiumDisabled {
                     badgeText = "\(limit)"
@@ -998,11 +998,11 @@ private final class LimitSheetContent: CombinedComponent {
                 defaultValue = component.count > limit ? "\(limit)" : ""
                 premiumValue = component.count >= premiumLimit ? "" : "\(premiumLimit)"
                 if component.count >= premiumLimit {
-                    badgeGraphPosition = max(0.15, CGFloat(limit) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(limit) / CGFloat(premiumLimit))
                 } else {
-                    badgeGraphPosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                    badgeGraphPosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
                 }
-                badgePosition = max(0.15, CGFloat(component.count) / CGFloat(premiumLimit))
+                badgePosition = max(0.35, CGFloat(component.count) / CGFloat(premiumLimit))
             
                 if isPremiumDisabled {
                     badgeText = "\(limit)"
@@ -1024,6 +1024,22 @@ private final class LimitSheetContent: CombinedComponent {
                 if isPremiumDisabled {
                     badgeText = "\(limit)"
                     string = strings.Premium_MaxPinsNoPremiumText("\(limit)").string
+                }
+            case .pinnedSavedPeers:
+                let limit = state.limits.maxPinnedSavedChatCount
+                let premiumLimit = state.premiumLimits.maxPinnedSavedChatCount
+                iconName = "Premium/Pin"
+                badgeText = "\(component.count)"
+                string = component.count >= premiumLimit ? strings.Premium_MaxSavedPinsFinalText("\(premiumLimit)").string : strings.Premium_MaxSavedPinsText("\(limit)", "\(premiumLimit)").string
+                defaultValue = component.count > limit ? "\(limit)" : ""
+                premiumValue = component.count >= premiumLimit ? "" : "\(premiumLimit)"
+                badgePosition = max(0.35, min(0.85, CGFloat(component.count) / CGFloat(premiumLimit)))
+                badgeGraphPosition = badgePosition
+                buttonAnimationName = nil
+            
+                if isPremiumDisabled {
+                    badgeText = "\(limit)"
+                    string = strings.Premium_MaxSavedPinsNoPremiumText("\(limit)").string
                 }
             case .files:
                 let limit = Int64(state.limits.maxUploadFileParts) * 512 * 1024 + 1024 * 1024 * 100
@@ -1180,6 +1196,7 @@ private final class LimitSheetContent: CombinedComponent {
                     if let remaining {
                         let storiesString = strings.ChannelBoost_StoriesPerDay(level + 1)
                         let valueString = strings.ChannelBoost_MoreBoosts(remaining)
+                        
                         switch boostSubject {
                         case .stories:
                             if level == 0 {
@@ -1189,9 +1206,12 @@ private final class LimitSheetContent: CombinedComponent {
                                 titleText = strings.ChannelBoost_IncreaseLimit
                                 string = strings.ChannelBoost_IncreaseLimitText(valueString, storiesString).string
                             }
-                        case .nameColors:
+                        case let .nameColors(colors):
                             titleText = strings.ChannelBoost_EnableColors
-                            string = strings.ChannelBoost_EnableColorsLevelText("\(premiumConfiguration.minChannelNameColorLevel)").string
+                            
+                            let colorLevel = requiredBoostSubjectLevel(subject: .nameColors(colors: colors), context: component.context, configuration: premiumConfiguration)
+                            
+                            string = strings.ChannelBoost_EnableColorsLevelText("\(colorLevel)").string
                         case let .channelReactions(reactionCount):
                             titleText = strings.ChannelBoost_CustomReactions
                             string = strings.ChannelBoost_CustomReactionsText("\(reactionCount)", "\(reactionCount)").string
@@ -1767,6 +1787,7 @@ public class PremiumLimitScreen: ViewControllerComponentContainer {
         case folders
         case chatsPerFolder
         case pins
+        case pinnedSavedPeers
         case files
         case accounts
         case linksPerSharedFolder
@@ -1778,7 +1799,7 @@ public class PremiumLimitScreen: ViewControllerComponentContainer {
         
         public enum BoostSubject: Equatable {
             case stories
-            case nameColors
+            case nameColors(colors: PeerNameColor)
             case channelReactions(reactionCount: Int)
         }
         

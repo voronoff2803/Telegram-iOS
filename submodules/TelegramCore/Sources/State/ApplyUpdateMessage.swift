@@ -96,7 +96,7 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
         var updatedTimestamp: Int32?
         if let apiMessage = apiMessage {
             switch apiMessage {
-                case let .message(_, _, _, _, _, _, _, date, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                case let .message(_, _, _, _, _, _, _, _, date, _, _, _, _, _, _, _, _, _, _, _, _, _):
                     updatedTimestamp = date
                 case .messageEmpty:
                     break
@@ -151,7 +151,7 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
             var attributes: [MessageAttribute]
             let text: String
             let forwardInfo: StoreMessageForwardInfo?
-            if let apiMessage = apiMessage, let apiMessagePeerId = apiMessage.peerId, let updatedMessage = StoreMessage(apiMessage: apiMessage, peerIsForum: transaction.getPeer(apiMessagePeerId)?.isForum ?? false) {
+            if let apiMessage = apiMessage, let apiMessagePeerId = apiMessage.peerId, let updatedMessage = StoreMessage(apiMessage: apiMessage, accountPeerId: accountPeerId, peerIsForum: transaction.getPeer(apiMessagePeerId)?.isForum ?? false) {
                 media = updatedMessage.media
                 attributes = updatedMessage.attributes
                 text = updatedMessage.text
@@ -287,9 +287,8 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
         if let updatedMessage = updatedMessage, case let .Id(updatedId) = updatedMessage.id {
             if message.id.namespace == Namespaces.Message.Local && updatedId.namespace == Namespaces.Message.Cloud && updatedId.peerId.namespace == Namespaces.Peer.CloudChannel {
                 if let threadId = updatedMessage.threadId {
-                    let messageThreadId = makeThreadIdMessageId(peerId: updatedMessage.id.peerId, threadId: threadId)
                     if let authorId = updatedMessage.authorId {
-                        updateMessageThreadStats(transaction: transaction, threadMessageId: messageThreadId, removedCount: 0, addedMessagePeers: [ReplyThreadUserMessage(id: authorId, messageId: updatedId, isOutgoing: true)])
+                        updateMessageThreadStats(transaction: transaction, threadKey: MessageThreadKey(peerId: updatedMessage.id.peerId, threadId: threadId), removedCount: 0, addedMessagePeers: [ReplyThreadUserMessage(id: authorId, messageId: updatedId, isOutgoing: true)])
                     }
                 }
             }
@@ -358,7 +357,7 @@ func applyUpdateGroupMessages(postbox: Postbox, stateManager: AccountStateManage
                 }
             }
             
-            if let resultMessage = StoreMessage(apiMessage: apiMessage, peerIsForum: peerIsForum, namespace: namespace), case let .Id(id) = resultMessage.id {
+            if let resultMessage = StoreMessage(apiMessage: apiMessage, accountPeerId: stateManager.accountPeerId, peerIsForum: peerIsForum, namespace: namespace), case let .Id(id) = resultMessage.id {
                 resultMessages[id] = resultMessage
             }
         }

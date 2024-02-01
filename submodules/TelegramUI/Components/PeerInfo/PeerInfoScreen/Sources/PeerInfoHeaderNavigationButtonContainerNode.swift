@@ -13,6 +13,8 @@ enum PeerInfoHeaderNavigationButtonKey {
     case select
     case selectionDone
     case search
+    case searchWithTags
+    case standaloneSearch
     case editPhoto
     case editVideo
     case more
@@ -36,22 +38,26 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
     
     private var backgroundContentColor: UIColor = .clear
     private var contentsColor: UIColor = .white
+    private var canBeExpanded: Bool = false
     
     var performAction: ((PeerInfoHeaderNavigationButtonKey, ContextReferenceContentNode?, ContextGesture?) -> Void)?
     
-    func updateContentsColor(backgroundContentColor: UIColor, contentsColor: UIColor, transition: ContainedViewLayoutTransition) {
+    func updateContentsColor(backgroundContentColor: UIColor, contentsColor: UIColor, canBeExpanded: Bool, transition: ContainedViewLayoutTransition) {
         self.backgroundContentColor = backgroundContentColor
         self.contentsColor = contentsColor
+        self.canBeExpanded = canBeExpanded
         
         for (_, button) in self.leftButtonNodes {
-            button.updateContentsColor(backgroundColor: self.backgroundContentColor, contentsColor: self.contentsColor, transition: transition)
+            button.updateContentsColor(backgroundColor: self.backgroundContentColor, contentsColor: self.contentsColor, canBeExpanded: canBeExpanded, transition: transition)
+            transition.updateSublayerTransformOffset(layer: button.layer, offset: CGPoint(x: canBeExpanded ? -8.0 : 0.0, y: 0.0))
         }
         for (_, button) in self.rightButtonNodes {
-            button.updateContentsColor(backgroundColor: self.backgroundContentColor, contentsColor: self.contentsColor, transition: transition)
+            button.updateContentsColor(backgroundColor: self.backgroundContentColor, contentsColor: self.contentsColor, canBeExpanded: canBeExpanded, transition: transition)
+            transition.updateSublayerTransformOffset(layer: button.layer, offset: CGPoint(x: canBeExpanded ? 16.0 : 0.0, y: 0.0))
         }
     }
     
-    func update(size: CGSize, presentationData: PresentationData, leftButtons: [PeerInfoHeaderNavigationButtonSpec], rightButtons: [PeerInfoHeaderNavigationButtonSpec], expandFraction: CGFloat, transition: ContainedViewLayoutTransition) {
+    func update(size: CGSize, presentationData: PresentationData, leftButtons: [PeerInfoHeaderNavigationButtonSpec], rightButtons: [PeerInfoHeaderNavigationButtonSpec], expandFraction: CGFloat, shouldAnimateIn: Bool, transition: ContainedViewLayoutTransition) {
         let sideInset: CGFloat = 24.0
         
         let maximumExpandOffset: CGFloat = 14.0
@@ -106,7 +112,9 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
                     buttonNode.frame = buttonFrame
                     buttonNode.alpha = 0.0
                     transition.updateAlpha(node: buttonNode, alpha: alphaFactor * alphaFactor)
-                    buttonNode.updateContentsColor(backgroundColor: self.backgroundContentColor, contentsColor: self.contentsColor, transition: .immediate)
+                    buttonNode.updateContentsColor(backgroundColor: self.backgroundContentColor, contentsColor: self.contentsColor, canBeExpanded: self.canBeExpanded, transition: .immediate)
+                    
+                    transition.updateSublayerTransformOffset(layer: buttonNode.layer, offset: CGPoint(x: canBeExpanded ? -8.0 : 0.0, y: 0.0))
                 } else {
                     transition.updateFrameAdditiveToCenter(node: buttonNode, frame: buttonFrame)
                     transition.updateAlpha(node: buttonNode, alpha: alphaFactor * alphaFactor)
@@ -194,7 +202,7 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
                 if case .postStory = spec.key {
                     buttonFrame.origin.x -= 12.0
                 }
-                nextButtonOrigin -= buttonSize.width + 4.0
+                nextButtonOrigin -= buttonSize.width + 15.0
                 if spec.isForExpandedView {
                     nextExpandedButtonOrigin = nextButtonOrigin
                 } else {
@@ -202,15 +210,19 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
                 }
                 let alphaFactor: CGFloat = spec.isForExpandedView ? expandFraction : (1.0 - expandFraction)
                 if wasAdded {
-                    buttonNode.updateContentsColor(backgroundColor: self.backgroundContentColor, contentsColor: self.contentsColor, transition: .immediate)
+                    buttonNode.updateContentsColor(backgroundColor: self.backgroundContentColor, contentsColor: self.contentsColor, canBeExpanded: self.canBeExpanded, transition: .immediate)
                     
-                    if key == .moreToSearch {
-                        buttonNode.layer.animateScale(from: 0.001, to: 1.0, duration: 0.2)
+                    if shouldAnimateIn {
+                        if key == .moreToSearch || key == .searchWithTags || key == .standaloneSearch {
+                            buttonNode.layer.animateScale(from: 0.001, to: 1.0, duration: 0.2)
+                        }
                     }
                     
                     buttonNode.frame = buttonFrame
                     buttonNode.alpha = 0.0
                     transition.updateAlpha(node: buttonNode, alpha: alphaFactor * alphaFactor)
+                    
+                    transition.updateSublayerTransformOffset(layer: buttonNode.layer, offset: CGPoint(x: canBeExpanded ? 16.0 : 0.0, y: 0.0))
                 } else {
                     transition.updateFrameAdditiveToCenter(node: buttonNode, frame: buttonFrame)
                     transition.updateAlpha(node: buttonNode, alpha: alphaFactor * alphaFactor)
@@ -228,7 +240,7 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
             }
             for key in removeKeys {
                 if let buttonNode = self.rightButtonNodes.removeValue(forKey: key) {
-                    if key == .moreToSearch {
+                    if key == .moreToSearch || key == .searchWithTags || key == .standaloneSearch {
                         buttonNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak buttonNode] _ in
                             buttonNode?.removeFromSupernode()
                         })
@@ -255,7 +267,7 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
                     if case .postStory = spec.key {
                         buttonFrame.origin.x -= 12.0
                     }
-                    nextButtonOrigin -= buttonSize.width + 4.0
+                    nextButtonOrigin -= buttonSize.width + 15.0
                     if spec.isForExpandedView {
                         nextExpandedButtonOrigin = nextButtonOrigin
                     } else {

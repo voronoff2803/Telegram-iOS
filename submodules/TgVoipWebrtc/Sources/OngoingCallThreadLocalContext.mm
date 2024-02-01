@@ -476,7 +476,7 @@ private:
 
 @implementation CallVideoFrameData
 
-- (instancetype)initWithBuffer:(id<CallVideoFrameBuffer>)buffer frame:(webrtc::VideoFrame const &)frame mirrorHorizontally:(bool)mirrorHorizontally mirrorVertically:(bool)mirrorVertically {
+- (instancetype)initWithBuffer:(id<CallVideoFrameBuffer>)buffer frame:(webrtc::VideoFrame const &)frame mirrorHorizontally:(bool)mirrorHorizontally mirrorVertically:(bool)mirrorVertically hasDeviceRelativeVideoRotation:(bool)hasDeviceRelativeVideoRotation deviceRelativeVideoRotation:(OngoingCallVideoOrientationWebrtc)deviceRelativeVideoRotation {
     self = [super init];
     if (self != nil) {
         _buffer = buffer;
@@ -506,6 +506,9 @@ private:
                 break;
             }
         }
+        
+        _hasDeviceRelativeOrientation = hasDeviceRelativeVideoRotation;
+        _deviceRelativeOrientation = deviceRelativeVideoRotation;
 
         _mirrorHorizontally = mirrorHorizontally;
         _mirrorVertically = mirrorVertically;
@@ -586,6 +589,9 @@ private:
 
             bool mirrorHorizontally = false;
             bool mirrorVertically = false;
+            
+            bool hasDeviceRelativeVideoRotation = false;
+            OngoingCallVideoOrientationWebrtc deviceRelativeVideoRotation = OngoingCallVideoOrientation0;
 
             if (videoFrame.video_frame_buffer()->type() == webrtc::VideoFrameBuffer::Type::kNative) {
                 id<RTC_OBJC_TYPE(RTCVideoFrameBuffer)> nativeBuffer = static_cast<webrtc::ObjCFrameBuffer *>(videoFrame.video_frame_buffer().get())->wrapped_frame_buffer();
@@ -594,7 +600,8 @@ private:
                     mappedBuffer = [[CallVideoFrameNativePixelBuffer alloc] initWithPixelBuffer:pixelBuffer.pixelBuffer];
                 }
                 if ([nativeBuffer isKindOfClass:[TGRTCCVPixelBuffer class]]) {
-                    if (((TGRTCCVPixelBuffer *)nativeBuffer).shouldBeMirrored) {
+                    TGRTCCVPixelBuffer *tgNativeBuffer = (TGRTCCVPixelBuffer *)nativeBuffer;
+                    if (tgNativeBuffer.shouldBeMirrored) {
                         switch (videoFrame.rotation()) {
                             case webrtc::kVideoRotation_0:
                             case webrtc::kVideoRotation_180:
@@ -608,6 +615,26 @@ private:
                                 break;
                         }
                     }
+                    if (tgNativeBuffer.deviceRelativeVideoRotation != -1) {
+                        hasDeviceRelativeVideoRotation = true;
+                        switch (tgNativeBuffer.deviceRelativeVideoRotation) {
+                            case webrtc::kVideoRotation_0:
+                                deviceRelativeVideoRotation = OngoingCallVideoOrientation0;
+                                break;
+                            case webrtc::kVideoRotation_90:
+                                deviceRelativeVideoRotation = OngoingCallVideoOrientation90;
+                                break;
+                            case webrtc::kVideoRotation_180:
+                                deviceRelativeVideoRotation = OngoingCallVideoOrientation180;
+                                break;
+                            case webrtc::kVideoRotation_270:
+                                deviceRelativeVideoRotation = OngoingCallVideoOrientation270;
+                                break;
+                            default:
+                                deviceRelativeVideoRotation = OngoingCallVideoOrientation0;
+                                break;
+                        }
+                    }
                 }
             } else if (videoFrame.video_frame_buffer()->type() == webrtc::VideoFrameBuffer::Type::kNV12) {
                 rtc::scoped_refptr<webrtc::NV12BufferInterface> nv12Buffer(static_cast<webrtc::NV12BufferInterface *>(videoFrame.video_frame_buffer().get()));
@@ -618,7 +645,7 @@ private:
             }
 
             if (storedSink && mappedBuffer) {
-                storedSink([[CallVideoFrameData alloc] initWithBuffer:mappedBuffer frame:videoFrame mirrorHorizontally:mirrorHorizontally mirrorVertically:mirrorVertically]);
+                storedSink([[CallVideoFrameData alloc] initWithBuffer:mappedBuffer frame:videoFrame mirrorHorizontally:mirrorHorizontally mirrorVertically:mirrorVertically hasDeviceRelativeVideoRotation:hasDeviceRelativeVideoRotation deviceRelativeVideoRotation:deviceRelativeVideoRotation]);
             }
         }));
     }
@@ -898,7 +925,11 @@ tgcalls::VideoCaptureInterfaceObject *GetVideoCaptureAssumingSameThread(tgcalls:
     std::unique_ptr<tgcalls::Instance> _tgVoip;
     bool _didStop;
     
+    OngoingCallStateWebrtc _pendingState;
     OngoingCallStateWebrtc _state;
+    bool _didPushStateOnce;
+    GroupCallDisposable *_pushStateDisposable;
+    
     OngoingCallVideoStateWebrtc _videoState;
     bool _connectedOnce;
     OngoingCallRemoteBatteryLevelWebrtc _remoteBatteryLevel;
@@ -1329,6 +1360,7 @@ static void (*InternalVoipLoggingFunction)(NSString *) = NULL;
             .directConnectionChannel = directConnectionChannel
         });
         _state = OngoingCallStateInitializing;
+        _pendingState = OngoingCallStateInitializing;
         _signalBars = 4;
     }
     return self;
@@ -1346,6 +1378,8 @@ static void (*InternalVoipLoggingFunction)(NSString *) = NULL;
         });
         _currentAudioDeviceModuleThread = nullptr;
     }
+    
+    [_pushStateDisposable dispose];
     
     if (_tgVoip != NULL) {
         [self stop:nil];
@@ -1442,6 +1476,18 @@ static void (*InternalVoipLoggingFunction)(NSString *) = NULL;
     }
 }
 
+- (void)pushPendingState {
+    _didPushStateOnce = true;
+    
+    if (_state != _pendingState) {
+        _state = _pendingState;
+        
+        if (_stateChanged) {
+            _stateChanged(_state, _videoState, _remoteVideoState, _remoteAudioState, _remoteBatteryLevel, _remotePreferredAspectRatio);
+        }
+    }
+}
+
 - (void)controllerStateChanged:(tgcalls::State)state {
     OngoingCallStateWebrtc callState = OngoingCallStateInitializing;
     switch (state) {
@@ -1458,11 +1504,32 @@ static void (*InternalVoipLoggingFunction)(NSString *) = NULL;
             break;
     }
     
-    if (_state != callState) {
-        _state = callState;
+    if (_pendingState != callState) {
+        _pendingState = callState;
         
-        if (_stateChanged) {
-            _stateChanged(_state, _videoState, _remoteVideoState, _remoteAudioState, _remoteBatteryLevel, _remotePreferredAspectRatio);
+        [_pushStateDisposable dispose];
+        _pushStateDisposable = nil;
+        
+        bool maybeDelayPush = false;
+        if (!_didPushStateOnce) {
+            maybeDelayPush = false;
+        } else if (callState == OngoingCallStateReconnecting) {
+            maybeDelayPush = true;
+        } else {
+            maybeDelayPush = false;
+        }
+        
+        if (!maybeDelayPush) {
+            [self pushPendingState];
+        } else {
+            __weak OngoingCallThreadLocalContextWebrtc *weakSelf = self;
+            _pushStateDisposable = [_queue scheduleBlock:^{
+                __strong OngoingCallThreadLocalContextWebrtc *strongSelf = weakSelf;
+                if (!strongSelf) {
+                    return;
+                }
+                [strongSelf pushPendingState];
+            } after:1.0];
         }
     }
 }

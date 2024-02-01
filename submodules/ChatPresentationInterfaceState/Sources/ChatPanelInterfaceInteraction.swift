@@ -7,6 +7,7 @@ import TelegramCore
 import Display
 import AccountContext
 import ContextUI
+import TooltipUI
 
 public enum ChatLoadingMessageSubject {
     case generic
@@ -16,7 +17,8 @@ public enum ChatLoadingMessageSubject {
 public enum ChatFinishMediaRecordingAction {
     case dismiss
     case preview
-    case send
+    case pause
+    case send(viewOnce: Bool)
 }
 
 public final class ChatPanelInterfaceInteractionStatuses {
@@ -70,6 +72,7 @@ public final class ChatPanelInterfaceInteraction {
     public let setupReplyMessage: (MessageId?, @escaping (ContainedViewLayoutTransition, @escaping () -> Void) -> Void) -> Void
     public let setupEditMessage: (MessageId?, @escaping (ContainedViewLayoutTransition) -> Void) -> Void
     public let beginMessageSelection: ([MessageId], @escaping (ContainedViewLayoutTransition) -> Void) -> Void
+    public let cancelMessageSelection: (ContainedViewLayoutTransition) -> Void
     public let deleteSelectedMessages: () -> Void
     public let reportSelectedMessages: () -> Void
     public let reportMessages: ([Message], ContextControllerProtocol?) -> Void
@@ -107,8 +110,9 @@ public final class ChatPanelInterfaceInteraction {
     public let finishMediaRecording: (ChatFinishMediaRecordingAction) -> Void
     public let stopMediaRecording: () -> Void
     public let lockMediaRecording: () -> Void
+    public let resumeMediaRecording: () -> Void
     public let deleteRecordedMedia: () -> Void
-    public let sendRecordedMedia: (Bool) -> Void
+    public let sendRecordedMedia: (Bool, Bool) -> Void
     public let displayRestrictedInfo: (ChatPanelRestrictionInfoSubject, ChatPanelRestrictionInfoDisplayType) -> Void
     public let displayVideoUnmuteTip: (CGPoint?) -> Void
     public let switchMediaRecordingMode: () -> Void
@@ -168,6 +172,9 @@ public final class ChatPanelInterfaceInteraction {
     public let addDoNotTranslateLanguage: (String) -> Void
     public let hideTranslationPanel: () -> Void
     public let openPremiumGift: () -> Void
+    public let openPremiumRequiredForMessaging: () -> Void
+    public let updateHistoryFilter: ((ChatPresentationInterfaceState.HistoryFilter?) -> ChatPresentationInterfaceState.HistoryFilter?) -> Void
+    public let updateDisplayHistoryFilterAsList: (Bool) -> Void
     public let requestLayout: (ContainedViewLayoutTransition) -> Void
     public let chatController: () -> ViewController?
     public let statuses: ChatPanelInterfaceInteractionStatuses?
@@ -176,6 +183,7 @@ public final class ChatPanelInterfaceInteraction {
         setupReplyMessage: @escaping (MessageId?, @escaping (ContainedViewLayoutTransition, @escaping () -> Void) -> Void) -> Void,
         setupEditMessage: @escaping (MessageId?, @escaping (ContainedViewLayoutTransition) -> Void) -> Void,
         beginMessageSelection: @escaping ([MessageId], @escaping (ContainedViewLayoutTransition) -> Void) -> Void,
+        cancelMessageSelection: @escaping (ContainedViewLayoutTransition) -> Void,
         deleteSelectedMessages: @escaping () -> Void,
         reportSelectedMessages: @escaping () -> Void,
         reportMessages: @escaping ([Message], ContextControllerProtocol?) -> Void,
@@ -213,8 +221,9 @@ public final class ChatPanelInterfaceInteraction {
         finishMediaRecording: @escaping (ChatFinishMediaRecordingAction) -> Void,
         stopMediaRecording: @escaping () -> Void,
         lockMediaRecording: @escaping () -> Void,
+        resumeMediaRecording: @escaping () -> Void,
         deleteRecordedMedia: @escaping () -> Void,
-        sendRecordedMedia: @escaping (Bool) -> Void,
+        sendRecordedMedia: @escaping (Bool, Bool) -> Void,
         displayRestrictedInfo: @escaping (ChatPanelRestrictionInfoSubject, ChatPanelRestrictionInfoDisplayType) -> Void,
         displayVideoUnmuteTip: @escaping (CGPoint?) -> Void,
         switchMediaRecordingMode: @escaping () -> Void,
@@ -274,6 +283,9 @@ public final class ChatPanelInterfaceInteraction {
         addDoNotTranslateLanguage:  @escaping (String) -> Void,
         hideTranslationPanel:  @escaping () -> Void,
         openPremiumGift: @escaping () -> Void,
+        openPremiumRequiredForMessaging: @escaping () -> Void,
+        updateHistoryFilter: @escaping ((ChatPresentationInterfaceState.HistoryFilter?) -> ChatPresentationInterfaceState.HistoryFilter?) -> Void,
+        updateDisplayHistoryFilterAsList: @escaping (Bool) -> Void,
         requestLayout: @escaping (ContainedViewLayoutTransition) -> Void,
         chatController: @escaping () -> ViewController?,
         statuses: ChatPanelInterfaceInteractionStatuses?
@@ -281,6 +293,7 @@ public final class ChatPanelInterfaceInteraction {
         self.setupReplyMessage = setupReplyMessage
         self.setupEditMessage = setupEditMessage
         self.beginMessageSelection = beginMessageSelection
+        self.cancelMessageSelection = cancelMessageSelection
         self.deleteSelectedMessages = deleteSelectedMessages
         self.reportSelectedMessages = reportSelectedMessages
         self.reportMessages = reportMessages
@@ -318,6 +331,7 @@ public final class ChatPanelInterfaceInteraction {
         self.finishMediaRecording = finishMediaRecording
         self.stopMediaRecording = stopMediaRecording
         self.lockMediaRecording = lockMediaRecording
+        self.resumeMediaRecording = resumeMediaRecording
         self.deleteRecordedMedia = deleteRecordedMedia
         self.sendRecordedMedia = sendRecordedMedia
         self.displayRestrictedInfo = displayRestrictedInfo
@@ -379,6 +393,9 @@ public final class ChatPanelInterfaceInteraction {
         self.addDoNotTranslateLanguage = addDoNotTranslateLanguage
         self.hideTranslationPanel = hideTranslationPanel
         self.openPremiumGift = openPremiumGift
+        self.openPremiumRequiredForMessaging = openPremiumRequiredForMessaging
+        self.updateHistoryFilter = updateHistoryFilter
+        self.updateDisplayHistoryFilterAsList = updateDisplayHistoryFilterAsList
         self.requestLayout = requestLayout
 
         self.chatController = chatController
@@ -393,6 +410,7 @@ public final class ChatPanelInterfaceInteraction {
         self.init(setupReplyMessage: { _, _ in
         }, setupEditMessage: { _, _ in
         }, beginMessageSelection: { _, _ in
+        }, cancelMessageSelection: { _ in
         }, deleteSelectedMessages: {
         }, reportSelectedMessages: {
         }, reportMessages: { _, _ in
@@ -430,8 +448,9 @@ public final class ChatPanelInterfaceInteraction {
         }, finishMediaRecording: { _ in
         }, stopMediaRecording: {
         }, lockMediaRecording: {
+        }, resumeMediaRecording: {
         }, deleteRecordedMedia: {
-        }, sendRecordedMedia: { _ in
+        }, sendRecordedMedia: { _, _ in
         }, displayRestrictedInfo: { _, _ in
         }, displayVideoUnmuteTip: { _ in
         }, switchMediaRecordingMode: {
@@ -492,6 +511,9 @@ public final class ChatPanelInterfaceInteraction {
         }, addDoNotTranslateLanguage: { _ in
         }, hideTranslationPanel: {
         }, openPremiumGift: {
+        }, openPremiumRequiredForMessaging: {
+        }, updateHistoryFilter: { _ in
+        }, updateDisplayHistoryFilterAsList: { _ in
         }, requestLayout: { _ in
         }, chatController: {
             return nil

@@ -18,6 +18,14 @@ public enum EnginePeerCachedInfoItem<T> {
     }
 }
 
+public struct EngineDisplaySavedChatsAsTopics: Codable, Equatable {
+    public var value: Bool
+    
+    public init(value: Bool) {
+        self.value = value
+    }
+}
+
 extension EnginePeerCachedInfoItem: Equatable where T: Equatable {
     public static func ==(lhs: EnginePeerCachedInfoItem<T>, rhs: EnginePeerCachedInfoItem<T>) -> Bool {
         switch lhs {
@@ -313,6 +321,40 @@ public extension TelegramEngine.EngineData.Item {
                     return channel.participantsSummary.memberCount.flatMap(Int.init)
                 case let group as CachedGroupData:
                     return group.participants?.participants.count
+                default:
+                    return nil
+                }
+            }
+        }
+        
+        public struct Wallpaper: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
+            public typealias Result = Optional<TelegramWallpaper>
+
+            fileprivate var id: EnginePeer.Id
+            public var mapKey: EnginePeer.Id {
+                return self.id
+            }
+
+            public init(id: EnginePeer.Id) {
+                self.id = id
+            }
+
+            var key: PostboxViewKey {
+                return .cachedPeerData(peerId: self.id)
+            }
+
+            func extract(view: PostboxView) -> Result {
+                guard let view = view as? CachedPeerDataView else {
+                    preconditionFailure()
+                }
+                guard let cachedPeerData = view.cachedPeerData else {
+                    return nil
+                }
+                switch cachedPeerData {
+                case let user as CachedUserData:
+                    return user.wallpaper
+                case let channel as CachedChannelData:
+                    return channel.wallpaper
                 default:
                     return nil
                 }
@@ -810,6 +852,40 @@ public extension TelegramEngine.EngineData.Item {
             }
         }
         
+        public struct MessageReadStatsAreHidden: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
+            public typealias Result = Bool?
+
+            fileprivate var id: EnginePeer.Id
+            public var mapKey: EnginePeer.Id {
+                return self.id
+            }
+
+            public init(id: EnginePeer.Id) {
+                self.id = id
+            }
+
+            var key: PostboxViewKey {
+                return .cachedPeerData(peerId: self.id)
+            }
+
+            func extract(view: PostboxView) -> Result {
+                guard let view = view as? CachedPeerDataView else {
+                    preconditionFailure()
+                }
+                
+                if self.id.namespace == Namespaces.Peer.CloudUser {
+                    if let cachedData = view.cachedPeerData as? CachedUserData, cachedData.flags.contains(.readDatesPrivate) {
+                        return true
+                    } else {
+                        return false
+                    }
+                } else {
+                    return false
+                }
+            }
+        }
+
+        
         public struct CanDeleteHistory: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, PostboxViewDataItem {
             public typealias Result = Bool
 
@@ -948,6 +1024,63 @@ public extension TelegramEngine.EngineData.Item {
                     return cachedData.flags.contains(.translationHidden)
                 } else if let cachedData = view.cachedPeerData as? CachedChannelData {
                     return cachedData.flags.contains(.translationHidden)
+                } else {
+                    return false
+                }
+            }
+        }
+        
+        public struct IsPremiumRequiredForMessaging: TelegramEngineDataItem, TelegramEngineMapKeyDataItem, AnyPostboxViewDataItem {
+            public typealias Result = Bool
+
+            fileprivate var id: EnginePeer.Id
+            public var mapKey: EnginePeer.Id {
+                return self.id
+            }
+
+            public init(id: EnginePeer.Id) {
+                self.id = id
+            }
+
+            func keys(data: TelegramEngine.EngineData) -> [PostboxViewKey] {
+                return [
+                    .cachedPeerData(peerId: self.id),
+                    .basicPeer(data.accountPeerId),
+                    .basicPeer(self.id)
+                ]
+            }
+
+            func _extract(data: TelegramEngine.EngineData, views: [PostboxViewKey: PostboxView]) -> Any {
+                guard let basicPeerView = views[.basicPeer(data.accountPeerId)] as? BasicPeerView else {
+                    assertionFailure()
+                    return false
+                }
+                guard let basicTargetPeerView = views[.basicPeer(self.id)] as? BasicPeerView else {
+                    assertionFailure()
+                    return false
+                }
+                guard let view = views[.cachedPeerData(peerId: self.id)] as? CachedPeerDataView else {
+                    assertionFailure()
+                    return false
+                }
+                
+                if let peer = basicPeerView.peer, peer.isPremium {
+                    return false
+                }
+                
+                guard let targetPeer = basicTargetPeerView.peer as? TelegramUser else {
+                    return false
+                }
+                if !targetPeer.flags.contains(.requirePremium) {
+                    return false
+                }
+                
+                if self.id.namespace == Namespaces.Peer.CloudUser {
+                    if let cachedData = view.cachedPeerData as? CachedUserData {
+                        return cachedData.flags.contains(.premiumRequired)
+                    } else {
+                        return true
+                    }
                 } else {
                     return false
                 }
@@ -1119,5 +1252,29 @@ public extension TelegramEngine.EngineData.Item {
                 }
             }
         }
+        
+        public struct DisplaySavedChatsAsTopics: TelegramEngineDataItem, PostboxViewDataItem {
+            public typealias Result = Bool
+
+            public init() {
+            }
+
+            var key: PostboxViewKey {
+                return .preferences(keys: Set([PreferencesKeys.displaySavedChatsAsTopics()]))
+            }
+
+            func extract(view: PostboxView) -> Result {
+                guard let view = view as? PreferencesView else {
+                    preconditionFailure()
+                }
+                
+                if let value = view.values[PreferencesKeys.displaySavedChatsAsTopics()]?.get(EngineDisplaySavedChatsAsTopics.self) {
+                    return value.value
+                } else {
+                    return false
+                }
+            }
+        }
+
     }
 }

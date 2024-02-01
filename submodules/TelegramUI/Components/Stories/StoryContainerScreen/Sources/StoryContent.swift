@@ -31,6 +31,7 @@ public final class StoryContentItem: Equatable {
     
     public final class SharedState {
         public var replyDrafts: [StoryId: NSAttributedString] = [:]
+        public var baseRate: Double = 1.0
         
         public init() {
         }
@@ -53,6 +54,9 @@ public final class StoryContentItem: Equatable {
         }
         
         open func enterAmbientMode(ambient: Bool) {
+        }
+        
+        open func setBaseRate(_ baseRate: Double) {
         }
         
         open var videoPlaybackPosition: Double? {
@@ -141,17 +145,23 @@ public final class StoryContentContextState {
         public let areVoiceMessagesAvailable: Bool
         public let presence: EnginePeer.Presence?
         public let canViewStats: Bool
+        public let isPremiumRequiredForMessaging: Bool
+        public let preferHighQualityStories: Bool
         
         public init(
             isMuted: Bool,
             areVoiceMessagesAvailable: Bool,
             presence: EnginePeer.Presence?,
-            canViewStats: Bool
+            canViewStats: Bool,
+            isPremiumRequiredForMessaging: Bool,
+            preferHighQualityStories: Bool
         ) {
             self.isMuted = isMuted
             self.areVoiceMessagesAvailable = areVoiceMessagesAvailable
             self.presence = presence
             self.canViewStats = canViewStats
+            self.isPremiumRequiredForMessaging = isPremiumRequiredForMessaging
+            self.preferHighQualityStories = preferHighQualityStories
         }
         
         public static func == (lhs: StoryContentContextState.AdditionalPeerData, rhs: StoryContentContextState.AdditionalPeerData) -> Bool {
@@ -165,6 +175,12 @@ public final class StoryContentContextState {
                 return false
             }
             if lhs.canViewStats != rhs.canViewStats {
+                return false
+            }
+            if lhs.isPremiumRequiredForMessaging != rhs.isPremiumRequiredForMessaging {
+                return false
+            }
+            if lhs.preferHighQualityStories != rhs.preferHighQualityStories {
                 return false
             }
             return true

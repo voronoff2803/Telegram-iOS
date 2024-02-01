@@ -25,6 +25,17 @@ final class ContextQueueImpl: NSObject, OngoingCallThreadLocalContextQueueWebrtc
     func isCurrent() -> Bool {
         return self.queue.isCurrent()
     }
+    
+    func scheduleBlock(_ f: @escaping () -> Void, after timeout: Double) -> GroupCallDisposable {
+        let timer = SwiftSignalKit.Timer(timeout: timeout, repeat: false, completion: {
+            f()
+        }, queue: self.queue)
+        timer.start()
+        
+        return GroupCallDisposable(block: {
+            timer.invalidate()
+        })
+    }
 }
 
 enum BroadcastPartSubject {
@@ -366,6 +377,8 @@ public final class OngoingGroupCallContext {
         }
 
         public enum Buffer {
+            case argb(NativeBuffer)
+            case bgra(NativeBuffer)
             case native(NativeBuffer)
             case nv12(NV12Buffer)
             case i420(I420Buffer)
@@ -375,12 +388,19 @@ public final class OngoingGroupCallContext {
         public let width: Int
         public let height: Int
         public let orientation: OngoingCallVideoOrientation
+        public let deviceRelativeOrientation: OngoingCallVideoOrientation?
         public let mirrorHorizontally: Bool
         public let mirrorVertically: Bool
 
         init(frameData: CallVideoFrameData) {
             if let nativeBuffer = frameData.buffer as? CallVideoFrameNativePixelBuffer {
-                self.buffer = .native(NativeBuffer(pixelBuffer: nativeBuffer.pixelBuffer))
+                if CVPixelBufferGetPixelFormatType(nativeBuffer.pixelBuffer) == kCVPixelFormatType_32ARGB {
+                    self.buffer = .argb(NativeBuffer(pixelBuffer: nativeBuffer.pixelBuffer))
+                } else if CVPixelBufferGetPixelFormatType(nativeBuffer.pixelBuffer) == kCVPixelFormatType_32BGRA {
+                    self.buffer = .bgra(NativeBuffer(pixelBuffer: nativeBuffer.pixelBuffer))
+                } else {
+                    self.buffer = .native(NativeBuffer(pixelBuffer: nativeBuffer.pixelBuffer))
+                }
             } else if let nv12Buffer = frameData.buffer as? CallVideoFrameNV12Buffer {
                 self.buffer = .nv12(NV12Buffer(wrapped: nv12Buffer))
             } else if let i420Buffer = frameData.buffer as? CallVideoFrameI420Buffer {
@@ -392,6 +412,11 @@ public final class OngoingGroupCallContext {
             self.width = Int(frameData.width)
             self.height = Int(frameData.height)
             self.orientation = OngoingCallVideoOrientation(frameData.orientation)
+            if frameData.hasDeviceRelativeOrientation {
+                self.deviceRelativeOrientation = OngoingCallVideoOrientation(frameData.deviceRelativeOrientation)
+            } else {
+                self.deviceRelativeOrientation = nil
+            }
             self.mirrorHorizontally = frameData.mirrorHorizontally
             self.mirrorVertically = frameData.mirrorVertically
         }

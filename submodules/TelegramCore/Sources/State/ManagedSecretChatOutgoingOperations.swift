@@ -1876,6 +1876,12 @@ private func sendStandaloneMessage(auxiliaryMethods: AccountAuxiliaryMethods, po
             if let value = contents.media {
                 media.append(value)
             }
+            
+            var attributes = contents.attributes
+            if !attributes.contains(where: { $0 is AutoremoveTimeoutMessageAttribute }), let messageAutoremoveTimeout = state.messageAutoremoveTimeout {
+                attributes.append(AutoclearTimeoutMessageAttribute(timeout: messageAutoremoveTimeout, countdownBeginTime: nil))
+            }
+            
             let message = Message(
                 stableId: 1,
                 stableVersion: 0,
@@ -1889,10 +1895,11 @@ private func sendStandaloneMessage(auxiliaryMethods: AccountAuxiliaryMethods, po
                 tags: [],
                 globalTags: [],
                 localTags: [],
+                customTags: [],
                 forwardInfo: nil,
                 author: nil,
                 text: contents.text,
-                attributes: contents.attributes,
+                attributes: attributes,
                 media: media,
                 peers: SimpleDictionary(),
                 associatedMessages: SimpleDictionary(),
@@ -1967,7 +1974,7 @@ private func sendStandaloneMessage(auxiliaryMethods: AccountAuxiliaryMethods, po
                         }
                         
                         let entitiesAttribute = message.textEntitiesAttribute
-                        let (tags, globalTags) = tagsForStoreMessage(incoming: false, attributes: contents.attributes, media: updatedMedia, textEntities: entitiesAttribute?.entities, isPinned: false)
+                        let (tags, globalTags) = tagsForStoreMessage(incoming: false, attributes: attributes, media: updatedMedia, textEntities: entitiesAttribute?.entities, isPinned: false)
                         
                         let storedMessage = StoreMessage(
                             peerId: peerId,

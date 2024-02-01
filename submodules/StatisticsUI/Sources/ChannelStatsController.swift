@@ -1147,7 +1147,18 @@ public func channelStatsController(context: AccountContext, updatedPresentationD
                     }
                 }
                 
-                presentImpl?(UndoOverlayController(presentationData: presentationData, content: .forward(savedMessages: savedMessages, text: text), elevatedLayout: false, animateInAsReplacement: true, action: { _ in return false }))
+                presentImpl?(UndoOverlayController(presentationData: presentationData, content: .forward(savedMessages: savedMessages, text: text), elevatedLayout: false, animateInAsReplacement: true, action: { action in
+                    if savedMessages, action == .info {
+                        let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+                        |> deliverOnMainQueue).start(next: { peer in
+                            guard let peer else {
+                                return
+                            }
+                            navigateToChatImpl?(peer)
+                        })
+                    }
+                    return false
+                }))
             })
         }
         shareController.actionCompleted = {
@@ -1427,7 +1438,7 @@ public func channelStatsController(context: AccountContext, updatedPresentationD
     }
     navigateToChatImpl = { [weak controller] peer in
         if let navigationController = controller?.navigationController as? NavigationController {
-            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), keepStack: .always, purposefulAction: {}, peekData: nil))
+            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), keepStack: .always, purposefulAction: {}, peekData: nil, forceOpenChat: true))
         }
     }
     navigateToMessageImpl = { [weak controller] messageId in
@@ -1446,7 +1457,7 @@ public func channelStatsController(context: AccountContext, updatedPresentationD
     return controller
 }
 
-private final class ChannelStatsContextExtractedContentSource: ContextExtractedContentSource {
+final class ChannelStatsContextExtractedContentSource: ContextExtractedContentSource {
     var keepInPlace: Bool
     let ignoreContentTouches: Bool = true
     let blurBackground: Bool = true

@@ -57,7 +57,7 @@ func leftNavigationButtonForChatInterfaceState(_ presentationInterfaceState: Cha
     return nil
 }
 
-func rightNavigationButtonForChatInterfaceState(_ presentationInterfaceState: ChatPresentationInterfaceState, strings: PresentationStrings, currentButton: ChatNavigationButton?, target: Any?, selector: Selector?, chatInfoNavigationButton: ChatNavigationButton?, moreInfoNavigationButton: ChatNavigationButton?) -> ChatNavigationButton? {
+func rightNavigationButtonForChatInterfaceState(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, strings: PresentationStrings, currentButton: ChatNavigationButton?, target: Any?, selector: Selector?, chatInfoNavigationButton: ChatNavigationButton?, moreInfoNavigationButton: ChatNavigationButton?) -> ChatNavigationButton? {
     if let _ = presentationInterfaceState.interfaceState.selectionState {
         if case .messageOptions = presentationInterfaceState.subject {
             return nil
@@ -68,6 +68,18 @@ func rightNavigationButtonForChatInterfaceState(_ presentationInterfaceState: Ch
             let buttonItem = UIBarButtonItem(title: strings.Common_Cancel, style: .plain, target: target, action: selector)
             buttonItem.accessibilityLabel = strings.Common_Cancel
             return ChatNavigationButton(action: .cancelMessageSelection, buttonItem: buttonItem)
+        }
+    }
+    
+    if case let .replyThread(message) = presentationInterfaceState.chatLocation, message.peerId == context.account.peerId {
+        let isTags = presentationInterfaceState.hasSearchTags
+        
+        if case .search(isTags) = currentButton?.action {
+            return currentButton
+        } else {
+            let buttonItem = UIBarButtonItem(image: isTags ? PresentationResourcesRootController.navigationCompactTagsSearchIcon(presentationInterfaceState.theme) : PresentationResourcesRootController.navigationCompactSearchIcon(presentationInterfaceState.theme), style: .plain, target: target, action: selector)
+            buttonItem.accessibilityLabel = strings.Conversation_Search
+            return ChatNavigationButton(action: .search(hasTags: isTags), buttonItem: buttonItem)
         }
     }
     
@@ -104,7 +116,7 @@ func rightNavigationButtonForChatInterfaceState(_ presentationInterfaceState: Ch
             } else {
                 let buttonItem = UIBarButtonItem(image: PresentationResourcesRootController.navigationCompactSearchIcon(presentationInterfaceState.theme), style: .plain, target: target, action: selector)
                 buttonItem.accessibilityLabel = strings.Conversation_Search
-                return ChatNavigationButton(action: .search, buttonItem: buttonItem)
+                return ChatNavigationButton(action: .search(hasTags: false), buttonItem: buttonItem)
             }
         } else {
             if case .spacer = currentButton?.action {
@@ -122,7 +134,7 @@ func rightNavigationButtonForChatInterfaceState(_ presentationInterfaceState: Ch
                 } else {
                     let buttonItem = UIBarButtonItem(image: PresentationResourcesRootController.navigationCompactSearchIcon(presentationInterfaceState.theme), style: .plain, target: target, action: selector)
                     buttonItem.accessibilityLabel = strings.Conversation_Search
-                    return ChatNavigationButton(action: .search, buttonItem: buttonItem)
+                    return ChatNavigationButton(action: .search(hasTags: false), buttonItem: buttonItem)
                 }
             } else {
                 if case .spacer = currentButton?.action {
@@ -138,31 +150,48 @@ func rightNavigationButtonForChatInterfaceState(_ presentationInterfaceState: Ch
         return chatInfoNavigationButton
     }
     
-    if case .standard(true) = presentationInterfaceState.mode {
+    if case .standard(.previewing) = presentationInterfaceState.mode {
         return chatInfoNavigationButton
-    } else if let peer = presentationInterfaceState.renderedPeer?.peer {
-        if presentationInterfaceState.accountPeerId == peer.id {
+    } else if let peerId = presentationInterfaceState.chatLocation.peerId {
+        if presentationInterfaceState.accountPeerId == peerId {
+            var displaySearchButton = false
+            
+            if case .replyThread = presentationInterfaceState.chatLocation {
+                displaySearchButton = true
+            }
+            
             if case .scheduledMessages = presentationInterfaceState.subject {
                 return chatInfoNavigationButton
             } else {
-                if presentationInterfaceState.hasPlentyOfMessages {
-                    if case .search = currentButton?.action {
-                        return currentButton
-                    } else {
-                        let buttonItem = UIBarButtonItem(image: PresentationResourcesRootController.navigationCompactSearchIcon(presentationInterfaceState.theme), style: .plain, target: target, action: selector)
-                        buttonItem.accessibilityLabel = strings.Conversation_Search
-                        return ChatNavigationButton(action: .search, buttonItem: buttonItem)
-                    }
+                displaySearchButton = true
+            }
+            
+            if displaySearchButton {
+                let isTags = presentationInterfaceState.hasSearchTags
+                
+                if case .search(isTags) = currentButton?.action {
+                    return currentButton
                 } else {
-                    if case .spacer = currentButton?.action {
-                        return currentButton
-                    } else {
-                        return ChatNavigationButton(action: .spacer, buttonItem: UIBarButtonItem(title: "", style: .plain, target: target, action: selector))
-                    }
+                    let buttonItem = UIBarButtonItem(image: isTags ? PresentationResourcesRootController.navigationCompactTagsSearchIcon(presentationInterfaceState.theme) : PresentationResourcesRootController.navigationCompactSearchIcon(presentationInterfaceState.theme), style: .plain, target: target, action: selector)
+                    buttonItem.accessibilityLabel = strings.Conversation_Search
+                    return ChatNavigationButton(action: .search(hasTags: isTags), buttonItem: buttonItem)
                 }
             }
         }
     }
 
     return chatInfoNavigationButton
+}
+
+func secondaryRightNavigationButtonForChatInterfaceState(context: AccountContext, presentationInterfaceState: ChatPresentationInterfaceState, strings: PresentationStrings, currentButton: ChatNavigationButton?, target: Any?, selector: Selector?, chatInfoNavigationButton: ChatNavigationButton?, moreInfoNavigationButton: ChatNavigationButton?) -> ChatNavigationButton? {
+    if presentationInterfaceState.interfaceState.selectionState != nil {
+        return nil
+    }
+    if case .standard(.default) = presentationInterfaceState.mode {
+        if case .peer(context.account.peerId) = presentationInterfaceState.chatLocation, presentationInterfaceState.subject != .scheduledMessages {
+            return moreInfoNavigationButton
+        }
+    }
+    
+    return nil
 }

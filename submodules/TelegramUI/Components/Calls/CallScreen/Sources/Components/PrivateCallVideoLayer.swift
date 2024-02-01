@@ -5,45 +5,14 @@ import MetalPerformanceShaders
 import Accelerate
 import MetalEngine
 
-func imageToCVPixelBuffer(image: UIImage) -> CVPixelBuffer? {
-    guard let cgImage = image.cgImage, let data = cgImage.dataProvider?.data, let bytes = CFDataGetBytePtr(data), let colorSpace = cgImage.colorSpace, case .rgb = colorSpace.model, cgImage.bitsPerPixel / cgImage.bitsPerComponent == 4 else {
-        return nil
-    }
-
-    let width = cgImage.width
-    let height = cgImage.width
-
-    var pixelBuffer: CVPixelBuffer? = nil
-    let _ = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, [
-        kCVPixelBufferIOSurfacePropertiesKey: NSDictionary()
-    ] as CFDictionary, &pixelBuffer)
-    guard let pixelBuffer else {
-        return nil
-    }
-
-    CVPixelBufferLockBaseAddress(pixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
-    defer {
-        CVPixelBufferUnlockBaseAddress(pixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
-    }
-    guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
-        return nil
-    }
-
-    var srcBuffer = vImage_Buffer(data: UnsafeMutableRawPointer(mutating: bytes), height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: cgImage.bytesPerRow)
-    var dstBuffer = vImage_Buffer(data: UnsafeMutableRawPointer(mutating: baseAddress), height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: CVPixelBufferGetBytesPerRow(pixelBuffer))
-    
-    vImageCopyBuffer(&srcBuffer, &dstBuffer, 4, vImage_Flags(kvImageDoNotTile))
-
-    return pixelBuffer
-}
-
 final class PrivateCallVideoLayer: MetalEngineSubjectLayer, MetalEngineSubject {
     var internalData: MetalEngineSubjectInternalData?
     
     let blurredLayer: MetalEngineSubjectLayer
     
     final class BlurState: ComputeState {
-        let computePipelineStateYUVToRGBA: MTLComputePipelineState
+        let computePipelineStateYUVBiPlanarToRGBA: MTLComputePipelineState
+        let computePipelineStateYUVTriPlanarToRGBA: MTLComputePipelineState
         let computePipelineStateHorizontal: MTLComputePipelineState
         let computePipelineStateVertical: MTLComputePipelineState
         let downscaleKernel: MPSImageBilinearScale
@@ -52,13 +21,22 @@ final class PrivateCallVideoLayer: MetalEngineSubjectLayer, MetalEngineSubject {
             guard let library = metalLibrary(device: device) else {
                 return nil
             }
-            guard let functionVideoYUVToRGBA = library.makeFunction(name: "videoYUVToRGBA") else {
+            
+            guard let functionVideoBiPlanarToRGBA = library.makeFunction(name: "videoBiPlanarToRGBA") else {
                 return nil
             }
-            guard let computePipelineStateYUVToRGBA = try? device.makeComputePipelineState(function: functionVideoYUVToRGBA) else {
+            guard let computePipelineStateYUVBiPlanarToRGBA = try? device.makeComputePipelineState(function: functionVideoBiPlanarToRGBA) else {
                 return nil
             }
-            self.computePipelineStateYUVToRGBA = computePipelineStateYUVToRGBA
+            self.computePipelineStateYUVBiPlanarToRGBA = computePipelineStateYUVBiPlanarToRGBA
+            
+            guard let functionVideoTriPlanarToRGBA = library.makeFunction(name: "videoTriPlanarToRGBA") else {
+                return nil
+            }
+            guard let computePipelineStateYUVTriPlanarToRGBA = try? device.makeComputePipelineState(function: functionVideoTriPlanarToRGBA) else {
+                return nil
+            }
+            self.computePipelineStateYUVTriPlanarToRGBA = computePipelineStateYUVTriPlanarToRGBA
             
             guard let gaussianBlurHorizontal = library.makeFunction(name: "gaussianBlurHorizontal"), let gaussianBlurVertical = library.makeFunction(name: "gaussianBlurVertical") else {
                 return nil
@@ -139,7 +117,7 @@ final class PrivateCallVideoLayer: MetalEngineSubjectLayer, MetalEngineSubject {
             return
         }
         
-        let rgbaTextureSpec = TextureSpec(width: videoTextures.y.width, height: videoTextures.y.height, pixelFormat: .rgba8UnsignedNormalized)
+        let rgbaTextureSpec = TextureSpec(width: Int(videoTextures.resolution.width), height: Int(videoTextures.resolution.height), pixelFormat: .rgba8UnsignedNormalized)
         if self.rgbaTexture == nil || self.rgbaTexture?.spec != rgbaTextureSpec {
             self.rgbaTexture = MetalEngine.shared.pooledTexture(spec: rgbaTextureSpec)
         }
@@ -168,10 +146,19 @@ final class PrivateCallVideoLayer: MetalEngineSubjectLayer, MetalEngineSubject {
             let threadgroupSize = MTLSize(width: 16, height: 16, depth: 1)
             let threadgroupCount = MTLSize(width: (rgbaTexture.width + threadgroupSize.width - 1) / threadgroupSize.width, height: (rgbaTexture.height + threadgroupSize.height - 1) / threadgroupSize.height, depth: 1)
             
-            computeEncoder.setComputePipelineState(blurState.computePipelineStateYUVToRGBA)
-            computeEncoder.setTexture(videoTextures.y, index: 0)
-            computeEncoder.setTexture(videoTextures.uv, index: 1)
-            computeEncoder.setTexture(rgbaTexture, index: 2)
+            switch videoTextures.textureLayout {
+            case let .biPlanar(biPlanar):
+                computeEncoder.setComputePipelineState(blurState.computePipelineStateYUVBiPlanarToRGBA)
+                computeEncoder.setTexture(biPlanar.y, index: 0)
+                computeEncoder.setTexture(biPlanar.uv, index: 1)
+                computeEncoder.setTexture(rgbaTexture, index: 2)
+            case let .triPlanar(triPlanar):
+                computeEncoder.setComputePipelineState(blurState.computePipelineStateYUVTriPlanarToRGBA)
+                computeEncoder.setTexture(triPlanar.y, index: 0)
+                computeEncoder.setTexture(triPlanar.u, index: 1)
+                computeEncoder.setTexture(triPlanar.u, index: 2)
+                computeEncoder.setTexture(rgbaTexture, index: 3)
+            }
             computeEncoder.dispatchThreadgroups(threadgroupCount, threadsPerThreadgroup: threadgroupSize)
             
             computeEncoder.endEncoding()
@@ -221,10 +208,17 @@ final class PrivateCallVideoLayer: MetalEngineSubjectLayer, MetalEngineSubject {
                 
                 var rect = SIMD4<Float>(Float(effectiveRect.minX), Float(effectiveRect.minY), Float(effectiveRect.width), Float(effectiveRect.height))
                 encoder.setVertexBytes(&rect, length: 4 * 4, index: 0)
+                
+                var mirror = SIMD2<UInt32>(
+                    videoTextures.mirrorDirection.contains(.horizontal) ? 1 : 0,
+                    videoTextures.mirrorDirection.contains(.vertical) ? 1 : 0
+                )
+                encoder.setVertexBytes(&mirror, length: 2 * 4, index: 1)
+                
                 encoder.setFragmentTexture(blurredTexture, index: 0)
                 
-                var brightness: Float = 1.0
-                var saturation: Float = 1.2
+                var brightness: Float = 0.7
+                var saturation: Float = 1.3
                 var overlay: SIMD4<Float> = SIMD4<Float>(1.0, 1.0, 1.0, 0.2)
                 encoder.setFragmentBytes(&brightness, length: 4, index: 0)
                 encoder.setFragmentBytes(&saturation, length: 4, index: 1)
@@ -243,6 +237,13 @@ final class PrivateCallVideoLayer: MetalEngineSubjectLayer, MetalEngineSubject {
             
             var rect = SIMD4<Float>(Float(effectiveRect.minX), Float(effectiveRect.minY), Float(effectiveRect.width), Float(effectiveRect.height))
             encoder.setVertexBytes(&rect, length: 4 * 4, index: 0)
+            
+            var mirror = SIMD2<UInt32>(
+                videoTextures.mirrorDirection.contains(.horizontal) ? 1 : 0,
+                videoTextures.mirrorDirection.contains(.vertical) ? 1 : 0
+            )
+            encoder.setVertexBytes(&mirror, length: 2 * 4, index: 1)
+            
             encoder.setFragmentTexture(rgbaTexture, index: 0)
             
             var brightness: Float = 1.0

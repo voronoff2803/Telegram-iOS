@@ -131,6 +131,13 @@ swift_library(
         "//submodules/TelegramUI/Components/PeerInfo/PeerInfoCoverComponent",
         "//submodules/TelegramUI/Components/LottieComponent",
         "//submodules/SolidRoundedButtonNode",
+        "//submodules/TelegramUI/Components/PeerInfo/PeerInfoPaneNode",
+        "//submodules/TelegramUI/Components/PeerInfo/PeerInfoChatListPaneNode",
+        "//submodules/TelegramUI/Components/PeerInfo/PeerInfoChatPaneNode",
+        "//submodules/MediaPickerUI",
+        "//submodules/AttachmentUI",
+        "//submodules/TelegramUI/Components/Settings/BoostLevelIconComponent",
+        "//submodules/Components/MultilineTextComponent",
     ],
     visibility = [
         "//visibility:public",

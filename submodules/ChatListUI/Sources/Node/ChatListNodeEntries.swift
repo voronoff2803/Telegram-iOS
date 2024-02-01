@@ -97,12 +97,13 @@ public enum ChatListNodeEntryPromoInfo: Equatable {
     case psa(type: String, message: String?)
 }
 
-enum ChatListNotice: Equatable {
+public enum ChatListNotice: Equatable {
     case clearStorage(sizeFraction: Double)
     case setupPassword
     case premiumUpgrade(discount: Int32)
     case premiumAnnualDiscount(discount: Int32)
     case premiumRestore(discount: Int32)
+    case xmasPremiumGift
     case reviewLogin(newSessionReview: NewSessionReview, totalCount: Int)
 }
 
@@ -134,6 +135,8 @@ enum ChatListNodeEntry: Comparable, Identifiable {
         var topForumTopicItems: [EngineChatList.ForumTopicData]
         var revealed: Bool
         var storyState: ChatListNodeState.StoryState?
+        var requiresPremiumForMessaging: Bool
+        var displayAsTopicList: Bool
         
         init(
             // MARK: AI PinnedChats
@@ -161,7 +164,9 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             forumTopicData: EngineChatList.ForumTopicData?,
             topForumTopicItems: [EngineChatList.ForumTopicData],
             revealed: Bool,
-            storyState: ChatListNodeState.StoryState?
+            storyState: ChatListNodeState.StoryState?,
+            requiresPremiumForMessaging: Bool,
+            displayAsTopicList: Bool
         ) {
             // MARK: AI PinnedChats
             self.aiItem = aiItem
@@ -189,6 +194,8 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             self.topForumTopicItems = topForumTopicItems
             self.revealed = revealed
             self.storyState = storyState
+            self.requiresPremiumForMessaging = requiresPremiumForMessaging
+            self.displayAsTopicList = displayAsTopicList
         }
         
         static func ==(lhs: PeerEntryData, rhs: PeerEntryData) -> Bool {
@@ -299,6 +306,12 @@ enum ChatListNodeEntry: Comparable, Identifiable {
                 return false
             }
             if lhs.storyState != rhs.storyState {
+                return false
+            }
+            if lhs.requiresPremiumForMessaging != rhs.requiresPremiumForMessaging {
+                return false
+            }
+            if lhs.displayAsTopicList != rhs.displayAsTopicList {
                 return false
             }
             return true
@@ -734,7 +747,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                     stats: stats,
                     hasUnseenCloseFriends: stats.hasUnseenCloseFriends
                 )
-            }
+            },
+            requiresPremiumForMessaging: false,
+            displayAsTopicList: entry.displayAsTopicList
         ))
         
         if let threadInfo, threadInfo.isHidden {
@@ -788,7 +803,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                         forumTopicData: nil,
                         topForumTopicItems: [],
                         revealed: false,
-                        storyState: nil
+                        storyState: nil,
+                        requiresPremiumForMessaging: false,
+                        displayAsTopicList: false
                     )))
                     if foundPinningIndex != 0 {
                         foundPinningIndex -= 1
@@ -819,7 +836,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                 forumTopicData: nil,
                 topForumTopicItems: [],
                 revealed: false,
-                storyState: nil
+                storyState: nil,
+                requiresPremiumForMessaging: false,
+                displayAsTopicList: false
             )))
         } else {
             if !filteredAdditionalItemEntries.isEmpty {
@@ -870,7 +889,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                         forumTopicData: item.item.forumTopicData,
                         topForumTopicItems: item.item.topForumTopicItems,
                         revealed: state.hiddenItemShouldBeTemporaryRevealed || state.editing,
-                        storyState: nil
+                        storyState: nil,
+                        requiresPremiumForMessaging: false,
+                        displayAsTopicList: false
                     )))
                     if pinningIndex != 0 {
                         pinningIndex -= 1

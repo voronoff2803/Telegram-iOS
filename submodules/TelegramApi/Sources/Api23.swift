@@ -801,11 +801,11 @@ public extension Api {
 public extension Api {
     enum UserStatus: TypeConstructorDescription {
         case userStatusEmpty
-        case userStatusLastMonth
-        case userStatusLastWeek
+        case userStatusLastMonth(flags: Int32)
+        case userStatusLastWeek(flags: Int32)
         case userStatusOffline(wasOnline: Int32)
         case userStatusOnline(expires: Int32)
-        case userStatusRecently
+        case userStatusRecently(flags: Int32)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
@@ -815,17 +815,17 @@ public extension Api {
                     }
                     
                     break
-                case .userStatusLastMonth:
+                case .userStatusLastMonth(let flags):
                     if boxed {
-                        buffer.appendInt32(2011940674)
+                        buffer.appendInt32(1703516023)
                     }
-                    
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     break
-                case .userStatusLastWeek:
+                case .userStatusLastWeek(let flags):
                     if boxed {
-                        buffer.appendInt32(129960444)
+                        buffer.appendInt32(1410997530)
                     }
-                    
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     break
                 case .userStatusOffline(let wasOnline):
                     if boxed {
@@ -839,11 +839,11 @@ public extension Api {
                     }
                     serializeInt32(expires, buffer: buffer, boxed: false)
                     break
-                case .userStatusRecently:
+                case .userStatusRecently(let flags):
                     if boxed {
-                        buffer.appendInt32(-496024847)
+                        buffer.appendInt32(2065268168)
                     }
-                    
+                    serializeInt32(flags, buffer: buffer, boxed: false)
                     break
     }
     }
@@ -852,16 +852,16 @@ public extension Api {
         switch self {
                 case .userStatusEmpty:
                 return ("userStatusEmpty", [])
-                case .userStatusLastMonth:
-                return ("userStatusLastMonth", [])
-                case .userStatusLastWeek:
-                return ("userStatusLastWeek", [])
+                case .userStatusLastMonth(let flags):
+                return ("userStatusLastMonth", [("flags", flags as Any)])
+                case .userStatusLastWeek(let flags):
+                return ("userStatusLastWeek", [("flags", flags as Any)])
                 case .userStatusOffline(let wasOnline):
                 return ("userStatusOffline", [("wasOnline", wasOnline as Any)])
                 case .userStatusOnline(let expires):
                 return ("userStatusOnline", [("expires", expires as Any)])
-                case .userStatusRecently:
-                return ("userStatusRecently", [])
+                case .userStatusRecently(let flags):
+                return ("userStatusRecently", [("flags", flags as Any)])
     }
     }
     
@@ -869,10 +869,26 @@ public extension Api {
             return Api.UserStatus.userStatusEmpty
         }
         public static func parse_userStatusLastMonth(_ reader: BufferReader) -> UserStatus? {
-            return Api.UserStatus.userStatusLastMonth
+            var _1: Int32?
+            _1 = reader.readInt32()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.UserStatus.userStatusLastMonth(flags: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_userStatusLastWeek(_ reader: BufferReader) -> UserStatus? {
-            return Api.UserStatus.userStatusLastWeek
+            var _1: Int32?
+            _1 = reader.readInt32()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.UserStatus.userStatusLastWeek(flags: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_userStatusOffline(_ reader: BufferReader) -> UserStatus? {
             var _1: Int32?
@@ -897,7 +913,15 @@ public extension Api {
             }
         }
         public static func parse_userStatusRecently(_ reader: BufferReader) -> UserStatus? {
-            return Api.UserStatus.userStatusRecently
+            var _1: Int32?
+            _1 = reader.readInt32()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.UserStatus.userStatusRecently(flags: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1156,13 +1180,13 @@ public extension Api {
 }
 public extension Api {
     enum WallPaperSettings: TypeConstructorDescription {
-        case wallPaperSettings(flags: Int32, backgroundColor: Int32?, secondBackgroundColor: Int32?, thirdBackgroundColor: Int32?, fourthBackgroundColor: Int32?, intensity: Int32?, rotation: Int32?)
+        case wallPaperSettings(flags: Int32, backgroundColor: Int32?, secondBackgroundColor: Int32?, thirdBackgroundColor: Int32?, fourthBackgroundColor: Int32?, intensity: Int32?, rotation: Int32?, emoticon: String?)
     
     public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
     switch self {
-                case .wallPaperSettings(let flags, let backgroundColor, let secondBackgroundColor, let thirdBackgroundColor, let fourthBackgroundColor, let intensity, let rotation):
+                case .wallPaperSettings(let flags, let backgroundColor, let secondBackgroundColor, let thirdBackgroundColor, let fourthBackgroundColor, let intensity, let rotation, let emoticon):
                     if boxed {
-                        buffer.appendInt32(499236004)
+                        buffer.appendInt32(925826256)
                     }
                     serializeInt32(flags, buffer: buffer, boxed: false)
                     if Int(flags) & Int(1 << 0) != 0 {serializeInt32(backgroundColor!, buffer: buffer, boxed: false)}
@@ -1171,14 +1195,15 @@ public extension Api {
                     if Int(flags) & Int(1 << 6) != 0 {serializeInt32(fourthBackgroundColor!, buffer: buffer, boxed: false)}
                     if Int(flags) & Int(1 << 3) != 0 {serializeInt32(intensity!, buffer: buffer, boxed: false)}
                     if Int(flags) & Int(1 << 4) != 0 {serializeInt32(rotation!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 7) != 0 {serializeString(emoticon!, buffer: buffer, boxed: false)}
                     break
     }
     }
     
     public func descriptionFields() -> (String, [(String, Any)]) {
         switch self {
-                case .wallPaperSettings(let flags, let backgroundColor, let secondBackgroundColor, let thirdBackgroundColor, let fourthBackgroundColor, let intensity, let rotation):
-                return ("wallPaperSettings", [("flags", flags as Any), ("backgroundColor", backgroundColor as Any), ("secondBackgroundColor", secondBackgroundColor as Any), ("thirdBackgroundColor", thirdBackgroundColor as Any), ("fourthBackgroundColor", fourthBackgroundColor as Any), ("intensity", intensity as Any), ("rotation", rotation as Any)])
+                case .wallPaperSettings(let flags, let backgroundColor, let secondBackgroundColor, let thirdBackgroundColor, let fourthBackgroundColor, let intensity, let rotation, let emoticon):
+                return ("wallPaperSettings", [("flags", flags as Any), ("backgroundColor", backgroundColor as Any), ("secondBackgroundColor", secondBackgroundColor as Any), ("thirdBackgroundColor", thirdBackgroundColor as Any), ("fourthBackgroundColor", fourthBackgroundColor as Any), ("intensity", intensity as Any), ("rotation", rotation as Any), ("emoticon", emoticon as Any)])
     }
     }
     
@@ -1197,6 +1222,8 @@ public extension Api {
             if Int(_1!) & Int(1 << 3) != 0 {_6 = reader.readInt32() }
             var _7: Int32?
             if Int(_1!) & Int(1 << 4) != 0 {_7 = reader.readInt32() }
+            var _8: String?
+            if Int(_1!) & Int(1 << 7) != 0 {_8 = parseString(reader) }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 4) == 0) || _3 != nil
@@ -1204,8 +1231,9 @@ public extension Api {
             let _c5 = (Int(_1!) & Int(1 << 6) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 3) == 0) || _6 != nil
             let _c7 = (Int(_1!) & Int(1 << 4) == 0) || _7 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
-                return Api.WallPaperSettings.wallPaperSettings(flags: _1!, backgroundColor: _2, secondBackgroundColor: _3, thirdBackgroundColor: _4, fourthBackgroundColor: _5, intensity: _6, rotation: _7)
+            let _c8 = (Int(_1!) & Int(1 << 7) == 0) || _8 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.WallPaperSettings.wallPaperSettings(flags: _1!, backgroundColor: _2, secondBackgroundColor: _3, thirdBackgroundColor: _4, fourthBackgroundColor: _5, intensity: _6, rotation: _7, emoticon: _8)
             }
             else {
                 return nil

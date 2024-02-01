@@ -4,6 +4,40 @@ import Display
 import MetalEngine
 import MetalKit
 
+#if DEBUG
+import os
+#endif
+
+#if DEBUG
+class Signposter {
+    func emitEvent(_ string: StaticString) {
+    }
+}
+
+@available(iOS 15.0, *)
+final class SignposterImpl: Signposter {
+    private let signposter = OSSignposter()
+    private let signpostId: OSSignpostID
+    
+    override init() {
+        self.signpostId = self.signposter.makeSignpostID()
+    }
+    
+    override func emitEvent(_ string: StaticString) {
+        self.signposter.emitEvent("Fetch complete.", id: self.signpostId)
+    }
+}
+
+let signposter: Signposter = {
+    if #available(iOS 15.0, *) {
+        return SignposterImpl()
+    } else {
+        return Signposter()
+    }
+}()
+
+#endif
+
 private final class BundleMarker: NSObject {
 }
 
@@ -110,6 +144,8 @@ public final class DustEffectLayer: MetalEngineSubjectLayer, MetalEngineSubject 
     private var items: [Item] = []
     private var lastTimeStep: Double = 0.0
     
+    public var animationSpeed: Float = 1.0
+    
     public var becameEmpty: (() -> Void)?
     
     override public init() {
@@ -160,11 +196,10 @@ public final class DustEffectLayer: MetalEngineSubjectLayer, MetalEngineSubject 
         }
         
         self.lastTimeStep = deltaTimeValue
-        //print("updateItems: \(deltaTime), localDeltaTime: \(localDeltaTime)")
         
         var didRemoveItems = false
         for i in (0 ..< self.items.count).reversed() {
-            self.items[i].phase += Float(deltaTimeValue) / Float(UIView.animationDurationFactor())
+            self.items[i].phase += Float(deltaTimeValue) * self.animationSpeed / Float(UIView.animationDurationFactor())
             
             if self.items[i].phase >= 4.0 {
                 self.items.remove(at: i)
@@ -222,25 +257,19 @@ public final class DustEffectLayer: MetalEngineSubjectLayer, MetalEngineSubject 
             if item.particleBuffer == nil {
                 if let particleBuffer = MetalEngine.shared.sharedBuffer(spec: BufferSpec(length: particleCount * 4 * (4 + 1))) {
                     item.particleBuffer = particleBuffer
-                    
-                    /*let particles = particleBuffer.buffer.contents().assumingMemoryBound(to: Float.self)
-                    for i in 0 ..< particleCount {
-                        particles[i * 5 + 0] = 0.0;
-                        particles[i * 5 + 1] = 0.0;
-                        
-                        let direction = Float.random(in: 0.0 ..< Float.pi * 2.0)
-                        let velocity = Float.random(in: 0.1 ... 0.2) * 420.0
-                        particles[i * 5 + 2] = cos(direction) * velocity
-                        particles[i * 5 + 3] = sin(direction) * velocity
-                        
-                        particles[i * 5 + 4] = Float.random(in: 0.7 ... 1.5)
-                    }*/
                 }
             }
         }
         
         let lastTimeStep = self.lastTimeStep
         self.lastTimeStep = 0.0
+        
+        #if DEBUG
+        if lastTimeStep * 1000.0 >= 20.0 {
+            print("Animation Lag: \(lastTimeStep * 1000.0) ms")
+            signposter.emitEvent("AnimationLag")
+        }
+        #endif
         
         let _ = context.compute(state: DustComputeState.self, commands: { [weak self] commandBuffer, state in
             guard let self else {
@@ -277,6 +306,7 @@ public final class DustEffectLayer: MetalEngineSubjectLayer, MetalEngineSubject 
                     var phase = item.phase
                     computeEncoder.setBytes(&phase, length: 4, index: 2)
                     var timeStep: Float = Float(lastTimeStep) / Float(UIView.animationDurationFactor())
+                    timeStep *= 2.0
                     computeEncoder.setBytes(&timeStep, length: 4, index: 3)
                     computeEncoder.dispatchThreadgroups(threadgroupCount, threadsPerThreadgroup: threadgroupSize)
                 }

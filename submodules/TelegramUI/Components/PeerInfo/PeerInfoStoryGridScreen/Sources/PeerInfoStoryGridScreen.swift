@@ -482,9 +482,11 @@ final class PeerInfoStoryGridScreenComponent: Component {
                 topInset: environment.navigationHeight,
                 sideInset: environment.safeInsets.left,
                 bottomInset: bottomInset,
+                deviceMetrics: environment.deviceMetrics,
                 visibleHeight: availableSize.height,
                 isScrollingLockedAtTop: false,
                 expandProgress: 1.0,
+                navigationHeight: 0.0,
                 presentationData: component.context.sharedContext.currentPresentationData.with({ $0 }),
                 synchronous: false,
                 transition: transition.containedViewLayoutTransition

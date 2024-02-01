@@ -815,9 +815,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 }
                 
                 icons.append(PresentationAppIcon(name: "Premium", imageName: "Premium", isPremium: true))
-                icons.append(PresentationAppIcon(name: "PremiumBlack", imageName: "PremiumBlack", isPremium: true))
                 icons.append(PresentationAppIcon(name: "PremiumTurbo", imageName: "PremiumTurbo", isPremium: true))
-                                
+                icons.append(PresentationAppIcon(name: "PremiumBlack", imageName: "PremiumBlack", isPremium: true))
+                
                 return icons
             } else {
                 return []
@@ -907,7 +907,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             })
             
             var setPresentationCall: ((PresentationCall?) -> Void)?
-            let sharedContext = SharedAccountContextImpl(mainWindow: self.mainWindow, sharedContainerPath: legacyBasePath, basePath: rootPath, encryptionParameters: encryptionParameters, accountManager: accountManager, appLockContext: appLockContext, applicationBindings: applicationBindings, initialPresentationDataAndSettings: initialPresentationDataAndSettings, networkArguments: networkArguments, hasInAppPurchases: buildConfig.isAppStoreBuild && buildConfig.apiId == 1, rootPath: rootPath, legacyBasePath: legacyBasePath, apsNotificationToken: self.notificationTokenPromise.get() |> map(Optional.init), voipNotificationToken: self.voipTokenPromise.get() |> map(Optional.init), firebaseSecretStream: self.firebaseSecretStream.get(), setNotificationCall: { call in
+            let sharedContext = SharedAccountContextImpl(mainWindow: self.mainWindow, sharedContainerPath: legacyBasePath, basePath: rootPath, encryptionParameters: encryptionParameters, accountManager: accountManager, appLockContext: appLockContext, notificationController: nil, applicationBindings: applicationBindings, initialPresentationDataAndSettings: initialPresentationDataAndSettings, networkArguments: networkArguments, hasInAppPurchases: buildConfig.isAppStoreBuild && buildConfig.apiId == 1, rootPath: rootPath, legacyBasePath: legacyBasePath, apsNotificationToken: self.notificationTokenPromise.get() |> map(Optional.init), voipNotificationToken: self.voipTokenPromise.get() |> map(Optional.init), firebaseSecretStream: self.firebaseSecretStream.get(), setNotificationCall: { call in
                 setPresentationCall?(call)
             }, navigateToChat: { accountId, peerId, messageId in
                 self.openChatWhenReady(accountId: accountId, peerId: peerId, threadId: nil, messageId: messageId, storyId: nil)
@@ -1213,6 +1213,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         return true
                     })
                     self.mainWindow.topLevelOverlayControllers = [context.sharedApplicationContext.overlayMediaController, context.notificationController]
+                    (context.context.sharedContext as? SharedAccountContextImpl)?.notificationController = context.notificationController
                     var authorizeNotifications = true
                     if #available(iOS 10.0, *) {
                         authorizeNotifications = false
@@ -1540,6 +1541,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             }
         })
         
+        //self.addBackgroundDownloadTask()
+        
         return true
     }
     
@@ -1674,7 +1677,21 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         task.resume()
     }
     
+    private func addBackgroundDownloadTask() {
+        let baseAppBundleId = Bundle.main.bundleIdentifier!
+        let session = self.urlSession(identifier: "\(baseAppBundleId).backroundSession")
+
+        var request = URLRequest(url: URL(string: "https://example.com/\(UInt64.random(in: 0 ... UInt64.max))")!)
+        request.httpMethod = "GET"
+        
+        let task = session.downloadTask(with: request)
+        Logger.shared.log("App \(self.episodeId)", "adding download task \(String(describing: request.url))")
+        task.earliestBeginDate = Date(timeIntervalSinceNow: 30.0)
+        task.resume()
+    }
+    
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        Logger.shared.log("App \(self.episodeId)", "completed download task \(String(describing: task.originalRequest?.url)) error: \(String(describing: error))")
         if let response = task.response as? HTTPURLResponse {
             if let originalRequest = task.originalRequest {
                 if let requestResourceId = originalRequest.value(forHTTPHeaderField: "tresource") {
@@ -2054,7 +2071,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             stableId: callUpdate.callId,
             handle: "\(callUpdate.peer.id.id._internalGetInt64Value())",
             phoneNumber: phoneNumber.flatMap(formatPhoneNumber),
-            isVideo: false,
+            isVideo: callUpdate.isVideo,
             displayTitle: callUpdate.peer.debugDisplayTitle,
             completion: { error in
                 if let error = error {

@@ -38,7 +38,7 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
                     for chat in chats {
                         if let groupOrChannel = parseTelegramGroupOrChannel(chat: chat) {
                             switch chat {
-                            case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _):
+                            case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _):
                                 if let participantsCount = participantsCount {
                                     subscribers[groupOrChannel.id] = participantsCount
                                 }
@@ -83,3 +83,8 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
     return processedSearchResult
 }
 
+func _internal_searchLocalSavedMessagesPeers(account: Account, query: String, indexNameMapping: [EnginePeer.Id: [PeerIndexNameRepresentation]]) -> Signal<[EnginePeer], NoError> {
+    return account.postbox.transaction { transaction -> [EnginePeer] in
+        return transaction.searchSubPeers(peerId: account.peerId, query: query, indexNameMapping: indexNameMapping).map(EnginePeer.init)
+    }
+}

@@ -28,56 +28,7 @@ import InvisibleInkDustNode
 import MediaPickerUI
 import ChatControllerInteraction
 import UIKitRuntimeUtils
-
-public enum PeerInfoPaneKey: Int32 {
-    case members
-    case stories
-    case media
-    case files
-    case music
-    case voice
-    case links
-    case gifs
-    case groupsInCommon
-    case recommended
-}
-
-public struct PeerInfoStatusData: Equatable {
-    public var text: String
-    public var isActivity: Bool
-    public var key: PeerInfoPaneKey?
-    
-    public init(
-        text: String,
-        isActivity: Bool,
-        key: PeerInfoPaneKey?
-    ) {
-        self.text = text
-        self.isActivity = isActivity
-        self.key = key
-    }
-}
-
-public protocol PeerInfoPaneNode: ASDisplayNode {
-    var isReady: Signal<Bool, NoError> { get }
-    
-    var parentController: ViewController? { get set }
-
-    var status: Signal<PeerInfoStatusData?, NoError> { get }
-    var tabBarOffsetUpdated: ((ContainedViewLayoutTransition) -> Void)? { get set }
-    var tabBarOffset: CGFloat { get }
-    
-    func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition)
-    func scrollToTop() -> Bool
-    func transferVelocity(_ velocity: CGFloat)
-    func cancelPreviewGestures()
-    func findLoadedMessage(id: MessageId) -> Message?
-    func transitionNodeForGallery(messageId: MessageId, media: Media) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))?
-    func addToTransitionSurface(view: UIView)
-    func updateHiddenMedia()
-    func updateSelectedMessages(animated: Bool)
-    func ensureMessageIsVisible(id: MessageId)
-}
+import PeerInfoPaneNode
 
 private final class FrameSequenceThumbnailNode: ASDisplayNode {
     private let context: AccountContext
@@ -768,6 +719,7 @@ private final class SparseItemGridBindingImpl: SparseItemGridBinding, ListShimme
                 tags: [],
                 globalTags: [],
                 localTags: [],
+                customTags: [],
                 forwardInfo: nil,
                 author: nil,
                 text: "",
@@ -1150,7 +1102,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
         return self._itemInteraction!
     }
     
-    private var currentParams: (size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, presentationData: PresentationData)?
+    private var currentParams: (size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, navigationHeight: CGFloat, presentationData: PresentationData)?
     
     private let ready = Promise<Bool>()
     private var didSetReady: Bool = false
@@ -1260,14 +1212,14 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
         
         var threadId: Int64?
         if case let .replyThread(message) = chatLocation {
-            threadId = Int64(message.messageId.id)
+            threadId = message.threadId
         }
 
         self.listSource = self.context.engine.messages.sparseMessageList(peerId: self.peerId, threadId: threadId, tag: tagMaskForType(self.contentType))
         if threadId == nil {
             switch contentType {
             case .photoOrVideo, .photo, .video:
-                self.calendarSource = self.context.engine.messages.sparseMessageCalendar(peerId: self.peerId, threadId: threadId, tag: tagMaskForType(self.contentType))
+                self.calendarSource = self.context.engine.messages.sparseMessageCalendar(peerId: self.peerId, threadId: threadId, tag: tagMaskForType(self.contentType), displayMedia: true)
             default:
                 self.calendarSource = nil
             }
@@ -1654,7 +1606,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
 
         self.presentationDataDisposable = (self.context.sharedContext.presentationData
         |> deliverOnMainQueue).start(next: { [weak self] presentationData in
-            guard let strongSelf = self, let (size, topInset, sideInset, bottomInset, _, _, _, _) = strongSelf.currentParams  else {
+            guard let strongSelf = self, let (size, topInset, sideInset, bottomInset, _, _, _, _, _, _) = strongSelf.currentParams  else {
                 return
             }
             strongSelf.itemGridBinding.updatePresentationData(presentationData: presentationData)
@@ -1722,7 +1674,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
         
         var threadId: Int64?
         if case let .replyThread(message) = chatLocation {
-            threadId = Int64(message.messageId.id)
+            threadId = message.threadId
         }
 
         self.listSource = self.context.engine.messages.sparseMessageList(peerId: self.peerId, threadId: threadId, tag: tagMaskForType(self.contentType))
@@ -1791,12 +1743,12 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
     private func updateHistory(items: SparseItemGrid.Items, synchronous: Bool, reloadAtTop: Bool) {
         self.items = items
 
-        if let (size, topInset, sideInset, bottomInset, visibleHeight, isScrollingLockedAtTop, expandProgress, presentationData) = self.currentParams {
+        if let (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData) = self.currentParams {
             var gridSnapshot: UIView?
             if reloadAtTop {
                 gridSnapshot = self.itemGrid.view.snapshotView(afterScreenUpdates: false)
             }
-            self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, presentationData: presentationData, synchronous: false, transition: .immediate)
+            self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: false, transition: .immediate)
             if let gridSnapshot = gridSnapshot {
                 self.view.addSubview(gridSnapshot)
                 gridSnapshot.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak gridSnapshot] _ in
@@ -2085,7 +2037,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
         switch self.contentType {
         case .files, .music, .voiceAndVideoMessages:
             self.itemGrid.forEachVisibleItem { item in
-                guard let itemView = item.view as? ItemView, let (size, topInset, sideInset, bottomInset, _, _, _, _) = self.currentParams else {
+                guard let itemView = item.view as? ItemView, let (size, topInset, sideInset, bottomInset, _, _, _, _, _, _) = self.currentParams else {
                     return
                 }
                 if let item = itemView.item {
@@ -2142,8 +2094,8 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
         }
     }
     
-    public func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition) {
-        self.currentParams = (size, topInset, sideInset, bottomInset, visibleHeight, isScrollingLockedAtTop, expandProgress, presentationData)
+    public func update(size: CGSize, topInset: CGFloat, sideInset: CGFloat, bottomInset: CGFloat, deviceMetrics: DeviceMetrics, visibleHeight: CGFloat, isScrollingLockedAtTop: Bool, expandProgress: CGFloat, navigationHeight: CGFloat, presentationData: PresentationData, synchronous: Bool, transition: ContainedViewLayoutTransition) {
+        self.currentParams = (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData)
 
         transition.updateFrame(node: self.contextGestureContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height)))
 
@@ -2178,6 +2130,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
                     tags: [],
                     globalTags: [],
                     localTags: [],
+                    customTags: [],
                     forwardInfo: nil,
                     author: nil,
                     text: "",

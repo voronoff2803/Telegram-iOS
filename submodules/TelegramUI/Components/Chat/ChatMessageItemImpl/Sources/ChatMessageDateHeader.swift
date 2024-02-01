@@ -47,9 +47,13 @@ public final class ChatMessageDateHeader: ListViewItemHeader {
         self.action = action
         self.roundedTimestamp = dateHeaderTimestampId(timestamp: timestamp)
         self.id = ListViewItemNode.HeaderId(space: 0, id: Int64(self.roundedTimestamp))
+        
+        let isRotated = controllerInteraction?.chatIsRotated ?? true
+        
+        self.stickDirection = isRotated ? .bottom : .top
     }
     
-    public let stickDirection: ListViewItemHeaderStickDirection = .bottom
+    public let stickDirection: ListViewItemHeaderStickDirection
     public let stickOverInsets: Bool = true
     
     public let height: CGFloat = 34.0
@@ -191,9 +195,13 @@ public final class ChatMessageDateHeaderNode: ListViewItemHeaderNode {
         }
         self.text = text
         
-        super.init(layerBacked: false, dynamicBounce: true, isRotated: true, seeThrough: false)
+        let isRotated = controllerInteraction?.chatIsRotated ?? true
         
-        self.transform = CATransform3DMakeRotation(CGFloat.pi, 0.0, 0.0, 1.0)
+        super.init(layerBacked: false, dynamicBounce: true, isRotated: isRotated, seeThrough: false)
+        
+        if isRotated {
+            self.transform = CATransform3DMakeRotation(CGFloat.pi, 0.0, 0.0, 1.0)
+        }
         
         let graphics = PresentationResourcesChat.principalGraphics(theme: presentationData.theme.theme, wallpaper: presentationData.theme.wallpaper, bubbleCorners: presentationData.chatBubbleCorners)
 
@@ -335,6 +343,10 @@ public final class ChatMessageDateHeaderNode: ListViewItemHeaderNode {
             }
         }
     }
+    
+    override public func getEffectiveAlpha() -> CGFloat {
+        return self.backgroundNode.alpha
+    }
 
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         if !self.bounds.contains(point) {
@@ -374,10 +386,10 @@ public final class ChatMessageAvatarHeader: ListViewItemHeader {
     public let effectiveTimestamp: Int32
     public let presentationData: ChatPresentationData
     public let context: AccountContext
-    public let controllerInteraction: ChatControllerInteraction
+    public let controllerInteraction: ChatControllerInteraction?
     public let storyStats: PeerStoryStats?
 
-    public init(timestamp: Int32, peerId: PeerId, peer: Peer?, messageReference: MessageReference?, message: Message, presentationData: ChatPresentationData, context: AccountContext, controllerInteraction: ChatControllerInteraction, storyStats: PeerStoryStats?) {
+    public init(timestamp: Int32, peerId: PeerId, peer: Peer?, messageReference: MessageReference?, message: Message, presentationData: ChatPresentationData, context: AccountContext, controllerInteraction: ChatControllerInteraction?, storyStats: PeerStoryStats?) {
         self.peerId = peerId
         self.peer = peer
         self.messageReference = messageReference
@@ -398,9 +410,13 @@ public final class ChatMessageAvatarHeader: ListViewItemHeader {
         self.controllerInteraction = controllerInteraction
         self.id = ListViewItemNode.HeaderId(space: 1, id: Id(peerId: peerId, timestampId: dateHeaderTimestampId(timestamp: timestamp)))
         self.storyStats = storyStats
+        
+        let isRotated = controllerInteraction?.chatIsRotated ?? true
+        
+        self.stickDirection = isRotated ? .top : .bottom
     }
     
-    public let stickDirection: ListViewItemHeaderStickDirection = .top
+    public let stickDirection: ListViewItemHeaderStickDirection
     public let stickOverInsets: Bool = false
 
     public let height: CGFloat = 38.0
@@ -439,7 +455,7 @@ private let maxVideoLoopCount = 3
 public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, ChatMessageAvatarHeaderNode {
     private let context: AccountContext
     private var presentationData: ChatPresentationData
-    private let controllerInteraction: ChatControllerInteraction
+    private let controllerInteraction: ChatControllerInteraction?
     private var storyStats: PeerStoryStats?
     
     private let peerId: PeerId
@@ -469,7 +485,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
         }
     }
     
-    public init(peerId: PeerId, peer: Peer?, messageReference: MessageReference?, adMessageId: EngineMessage.Id?, presentationData: ChatPresentationData, context: AccountContext, controllerInteraction: ChatControllerInteraction, storyStats: PeerStoryStats?, synchronousLoad: Bool) {
+    public init(peerId: PeerId, peer: Peer?, messageReference: MessageReference?, adMessageId: EngineMessage.Id?, presentationData: ChatPresentationData, context: AccountContext, controllerInteraction: ChatControllerInteraction?, storyStats: PeerStoryStats?, synchronousLoad: Bool) {
         self.peerId = peerId
         self.peer = peer
         self.messageReference = messageReference
@@ -482,10 +498,15 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
         self.containerNode = ContextControllerSourceNode()
 
         self.avatarNode = AvatarNode(font: avatarFont)
+        self.avatarNode.contentNode.displaysAsynchronously = !presentationData.isPreview
 
-        super.init(layerBacked: false, dynamicBounce: true, isRotated: true, seeThrough: false)
+        let isRotated = controllerInteraction?.chatIsRotated ?? true
+        
+        super.init(layerBacked: false, dynamicBounce: true, isRotated: isRotated, seeThrough: false)
 
-        self.transform = CATransform3DMakeRotation(CGFloat.pi, 0.0, 0.0, 1.0)
+        if isRotated {
+            self.transform = CATransform3DMakeRotation(CGFloat.pi, 0.0, 0.0, 1.0)
+        }
 
         self.addSubnode(self.containerNode)
         self.containerNode.addSubnode(self.avatarNode)
@@ -506,7 +527,7 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
             if let messageReference = messageReference, case let .message(_, _, id, _, _, _) = messageReference.content {
                 messageId = id
             }
-            strongSelf.controllerInteraction.openPeerContextMenu(peer, messageId, strongSelf.containerNode, strongSelf.containerNode.bounds, gesture)
+            strongSelf.controllerInteraction?.openPeerContextMenu(peer, messageId, strongSelf.containerNode, strongSelf.containerNode.bounds, gesture)
         }
 
         self.updateSelectionState(animated: false)
@@ -701,12 +722,16 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
 
     override public func updateFlashingOnScrolling(_ isFlashingOnScrolling: Bool, animated: Bool) {
     }
+    
+    private var currentSelectionOffset: CGFloat = 0.0
 
     public func updateSelectionState(animated: Bool) {
-        let offset: CGFloat = self.controllerInteraction.selectionState != nil ? 42.0 : 0.0
+        let currentSelectionOffset = self.currentSelectionOffset
+        let offset: CGFloat = self.controllerInteraction?.selectionState != nil ? 42.0 : 0.0
+        self.currentSelectionOffset = offset
 
-        let previousSubnodeTransform = self.subnodeTransform
-        self.subnodeTransform = CATransform3DMakeTranslation(offset, 0.0, 0.0);
+        let previousSubnodeTransform = CATransform3DMakeTranslation(currentSelectionOffset, 0.0, 0.0)
+        self.subnodeTransform = CATransform3DMakeTranslation(offset, 0.0, 0.0)
         if animated {
             self.layer.animate(from: NSValue(caTransform3D: previousSubnodeTransform), to: NSValue(caTransform3D: self.subnodeTransform), keyPath: "sublayerTransform", timingFunction: CAMediaTimingFunctionName.easeOut.rawValue, duration: 0.2)
         }
@@ -727,15 +752,15 @@ public final class ChatMessageAvatarHeaderNodeImpl: ListViewItemHeaderNode, Chat
     @objc private func tapGesture(_ recognizer: ListViewTapGestureRecognizer) {
         if case .ended = recognizer.state {
             if self.peerId.namespace == Namespaces.Peer.Empty, case let .message(_, _, id, _, _, _) = self.messageReference?.content {
-                self.controllerInteraction.displayMessageTooltip(id, self.presentationData.strings.Conversation_ForwardAuthorHiddenTooltip, self, self.avatarNode.frame)
+                self.controllerInteraction?.displayMessageTooltip(id, self.presentationData.strings.Conversation_ForwardAuthorHiddenTooltip, self, self.avatarNode.frame)
             } else if let peer = self.peer {
                 if let adMessageId = self.adMessageId {
-                    self.controllerInteraction.activateAdAction(adMessageId)
+                    self.controllerInteraction?.activateAdAction(adMessageId)
                 } else {
                     if let channel = peer as? TelegramChannel, case .broadcast = channel.info {
-                        self.controllerInteraction.openPeer(EnginePeer(peer), .chat(textInputState: nil, subject: nil, peekData: nil), self.messageReference, .default)
+                        self.controllerInteraction?.openPeer(EnginePeer(peer), .chat(textInputState: nil, subject: nil, peekData: nil), self.messageReference, .default)
                     } else {
-                        self.controllerInteraction.openPeer(EnginePeer(peer), .info(nil), self.messageReference, .groupParticipant(storyStats: nil, avatarHeaderNode: self))
+                        self.controllerInteraction?.openPeer(EnginePeer(peer), .info(nil), self.messageReference, .groupParticipant(storyStats: nil, avatarHeaderNode: self))
                     }
                 }
             }

@@ -144,7 +144,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let openPeer: (EnginePeer, ChatControllerInteractionNavigateToPeer, MessageReference?, OpenPeerSource) -> Void
     public let openPeerMention: (String, Promise<Bool>?) -> Void
     public let openMessageContextMenu: (Message, Bool, ASDisplayNode, CGRect, UIGestureRecognizer?, CGPoint?) -> Void
-    public let updateMessageReaction: (Message, ChatControllerInteractionReaction) -> Void
+    public let updateMessageReaction: (Message, ChatControllerInteractionReaction, Bool) -> Void
     public let openMessageReactionContextMenu: (Message, ContextExtractedContentContainingView, ContextGesture?, MessageReaction.Reaction) -> Void
     public let activateMessagePinch: (PinchSourceContainerNode) -> Void
     public let openMessageContextActions: (Message, ASDisplayNode, CGRect, ContextGesture?) -> Void
@@ -225,7 +225,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let openJoinLink: (String) -> Void
     public let openWebView: (String, String, Bool, ChatOpenWebViewSource) -> Void
     public let activateAdAction: (EngineMessage.Id) -> Void
-    public let openRequestedPeerSelection: (EngineMessage.Id, ReplyMarkupButtonRequestPeerType, Int32) -> Void
+    public let openRequestedPeerSelection: (EngineMessage.Id, ReplyMarkupButtonRequestPeerType, Int32, Int32) -> Void
     public let saveMediaToFiles: (EngineMessage.Id) -> Void
     public let openNoAdsDemo: () -> Void
     public let displayGiveawayParticipationStatus: (EngineMessage.Id) -> Void
@@ -259,6 +259,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public var playNextOutgoingGift: Bool = false
     public var recommendedChannelsOpenUp: Bool = false
     public var enableFullTranslucency: Bool = true
+    public var chatIsRotated: Bool = true
     
     public init(
         openMessage: @escaping (Message, OpenMessageParams) -> Bool,
@@ -266,7 +267,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         openPeerMention: @escaping (String, Promise<Bool>?) -> Void,
         openMessageContextMenu: @escaping (Message, Bool, ASDisplayNode, CGRect, UIGestureRecognizer?, CGPoint?) -> Void,
         openMessageReactionContextMenu: @escaping (Message, ContextExtractedContentContainingView, ContextGesture?, MessageReaction.Reaction) -> Void,
-        updateMessageReaction: @escaping (Message, ChatControllerInteractionReaction) -> Void,
+        updateMessageReaction: @escaping (Message, ChatControllerInteractionReaction, Bool) -> Void,
         activateMessagePinch: @escaping (PinchSourceContainerNode) -> Void,
         openMessageContextActions: @escaping (Message, ASDisplayNode, CGRect, ContextGesture?) -> Void,
         navigateToMessage: @escaping (MessageId, MessageId, NavigateToMessageParams) -> Void,
@@ -346,7 +347,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         openJoinLink: @escaping (String) -> Void,
         openWebView: @escaping (String, String, Bool, ChatOpenWebViewSource) -> Void,
         activateAdAction: @escaping (EngineMessage.Id) -> Void,
-        openRequestedPeerSelection: @escaping (EngineMessage.Id, ReplyMarkupButtonRequestPeerType, Int32) -> Void,
+        openRequestedPeerSelection: @escaping (EngineMessage.Id, ReplyMarkupButtonRequestPeerType, Int32, Int32) -> Void,
         saveMediaToFiles: @escaping (EngineMessage.Id) -> Void,
         openNoAdsDemo: @escaping () -> Void,
         displayGiveawayParticipationStatus: @escaping (EngineMessage.Id) -> Void,

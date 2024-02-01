@@ -18,6 +18,9 @@ import StoryContainerScreen
 import CameraScreen
 import MediaEditorScreen
 import ChatControllerInteraction
+import SavedMessagesScreen
+import WallpaperGalleryScreen
+import ChatMessageNotificationItem
 
 public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParams) {
     if case let .peer(peer) = params.chatLocation {
@@ -37,6 +40,13 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
             } else {
                 return false
             }
+        }
+    } else if case let .peer(peer) = params.chatLocation, peer.id == params.context.account.peerId {
+        viewForumAsMessages = params.context.engine.data.get(
+            TelegramEngine.EngineData.Item.Peer.DisplaySavedChatsAsTopics()
+        )
+        |> map { value in
+            return !value
         }
     }
     
@@ -73,14 +83,29 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
             let controller = ChatListControllerImpl(context: params.context, location: .forum(peerId: peer.id), controlsHistoryPreload: false, enableDebugActions: false)
             
             let activateMessageSearch = params.activateMessageSearch
+            let chatListCompletion = params.chatListCompletion
             params.navigationController.pushViewController(controller, completion: { [weak controller] in
-                guard let controller, let activateMessageSearch else {
+                guard let controller else {
                     return
                 }
-                controller.activateSearch(query: activateMessageSearch.1)
+                if let activateMessageSearch {
+                    controller.activateSearch(query: activateMessageSearch.1)
+                }
+                
+                if let chatListCompletion {
+                    chatListCompletion(controller)
+                }
             })
             
             return
+        }
+        
+        if !params.forceOpenChat, !viewForumAsMessages, params.subject == nil, case let .peer(peer) = params.chatLocation, peer.id == params.context.account.peerId {
+            if let controller = params.context.sharedContext.makePeerInfoController(context: params.context, updatedPresentationData: nil, peer: peer._asPeer(), mode: .generic, avatarInitiallyExpanded: false, fromChat: false, requestsContext: nil) {
+                params.navigationController.pushViewController(controller, animated: params.animated, completion: {
+                })
+                return
+            }
         }
         
         var found = false
@@ -259,7 +284,7 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
                                     return true
                                 }
                             case let .replyThread(replyThreadMessage):
-                                if message.id.peerId == replyThreadMessage.messageId.peerId {
+                                if message.id.peerId == replyThreadMessage.peerId {
                                     return true
                                 }
                             }
