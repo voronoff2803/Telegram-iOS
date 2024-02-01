@@ -46,9 +46,12 @@ swift_library(
         "Sources/**/*.swift",
     ]),
     copts = [
-        "-warnings-as-errors",
+#        "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/RevenueCatUI:RevenueCatUI",
+        "//submodules/RevenueCat:RevenueCat",
+        "//submodules/AIStrings:AIStrings",
         "//submodules/OpenAI:OpenAI",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",

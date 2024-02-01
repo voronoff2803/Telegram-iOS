@@ -164,6 +164,10 @@ empty_languages = [
     "uz",
 ]
 
+ai_languages = [
+    "ru",
+]
+
 [
     genrule(
         name = "Localizable_{}.strings".format(language),
@@ -248,8 +252,11 @@ filegroup(
     name = "AppStringResources",
     srcs = [
         "Telegram-iOS/en.lproj/Localizable.strings",
+        "Telegram-iOS/en.lproj/AILocalizable.strings",
     ] + [
         "{}.lproj/Localizable.strings".format(language) for language in empty_languages
+    ] + [
+        "Telegram-iOS/{}.lproj/AILocalizable.strings".format(language) for language in ai_languages
     ],
 )
 

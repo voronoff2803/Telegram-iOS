@@ -291,7 +291,7 @@ func chatHistoryEntriesForView(
         print("summaryItem summary \(summaryItem.timestamp)")
         var i = 0
         for entry in entries {
-            print("summaryItem \(entry.timestamp!)")
+            print("summaryItem \(entry.timestamp as Any)")
             if entry < summaryEntry {
                 i += 1
             } else {

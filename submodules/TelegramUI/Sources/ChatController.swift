@@ -120,6 +120,8 @@ import PeerInfoScreen
 import OpenAI
 // MARK: AI SummaryChat
 import ChatHistoryEntry
+import RevenueCat
+import RevenueCatUI
 //
 
 public enum ChatControllerPeekActions {
@@ -6610,6 +6612,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     // MARK: AI Generate Feature
     func aiGenerateMessage() {
+        if #available(iOS 15, *) {
+            
+            let controller = PaywallViewController()
+            present(controller, animated: true, completion: nil)
+    
+        }
+        
+        return
+        
         guard let source = self.chatDisplayNode.historyNode.historyView else { return }
         
         let messages: [AIManager.MessageEntry] = source.filteredEntries.compactMap { entry in
@@ -6725,7 +6736,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             }
                         }
                         return
-                    }
+                    },
+                    presentationData: self.presentationData
                 )
             }
         }

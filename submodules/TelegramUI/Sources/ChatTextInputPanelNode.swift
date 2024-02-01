@@ -2459,8 +2459,6 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             borderMaskView.layer.cornerRadius = minimalInputHeight / 2.0
             borderView.layer.cornerRadius = minimalInputHeight / 2.0
             borderShimmerView.layer.cornerRadius = minimalInputHeight / 2.0
-            
-            print("borderMaskView", minimalInputHeight / 2.0)
         }
         
         

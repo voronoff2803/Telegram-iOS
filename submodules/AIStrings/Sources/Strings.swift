@@ -10,7 +10,12 @@ import Foundation
 import AppBundle
 
 private func gd(locale: String) -> [String : String] {
-    return NSDictionary(contentsOf: URL(fileURLWithPath: getAppBundle().path(forResource: "AILocalizable", ofType: "strings", inDirectory: nil, forLocalization: locale)!)) as! [String : String]
+    if let path = getAppBundle().path(forResource: "AILocalizable", ofType: "strings", inDirectory: nil, forLocalization: locale) {
+        return NSDictionary(contentsOf: URL(fileURLWithPath: path)) as! [String : String]
+    } else {
+        let path = getAppBundle().path(forResource: "AILocalizable", ofType: "strings", inDirectory: nil, forLocalization: "en")
+        return NSDictionary(contentsOf: URL(fileURLWithPath: path!)) as! [String : String]
+    }
 }
 
 let niceLocales: [String : [String : String]] = [
@@ -122,13 +127,14 @@ public func l(_ key: String, _ locale: String = "en", with args: CVarArg...) -> 
 
 public func getStringsUrl(_ lang: String) -> String {
     //https://github.com/voronoff2803/Telegram-iOS/tree/aiFeatures/translations
-    return "https://raw.githubusercontent.com/voronoff2803/Telegram-iOS/tree/aiFeatures/translations/" + lang + ".lproj/AILocalizable.strings"
+    return "https://raw.githubusercontent.com/voronoff2803/Telegram-iOS/aiFeatures/translations/" + lang + ".lproj/AILocalizable.strings"
 }
 
 
 var niceWebLocales: [String: [String: String]] = [:]
 
 func getWebDict(_ lang: String) -> [String : String]? {
+    print("Failed to download \(getStringsUrl(lang))")
     return NSDictionary(contentsOf: URL(string: getStringsUrl(lang))!) as? [String : String]
 }
 
@@ -147,6 +153,7 @@ public func downloadLocale(_ locale: String) -> Void {
             print("Failed to download \(lang)")
         }
     } catch {
+        print("Failed to download \(error.localizedDescription)")
         return
     }
 }

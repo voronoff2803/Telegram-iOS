@@ -7,6 +7,8 @@
 
 import Foundation
 import AIStrings
+import TelegramPresentationData
+import Markdown
 
 final public class AIManager {
     public struct MessageEntry {
@@ -24,7 +26,7 @@ final public class AIManager {
     public init() {}
     
     lazy var openAI: OpenAI = {
-        let configuration = OpenAI.Configuration(token: "sk-", host: "35.233.105.235", timeoutInterval: 60.0)
+        let configuration = OpenAI.Configuration(token: "", host: "", timeoutInterval: 60.0)
         let openAI = OpenAI(configuration: configuration)
         
         return openAI
@@ -113,10 +115,17 @@ final public class AIManager {
     }
     
     
+    func replaceSpecialCharacters(in string: String) -> String {
+        var newString = foldMultipleLineBreaks(string)
+        
+        return newString
+    }
+    
     public func generateSummary(
         messages: [MessageEntry],
         resultUpdate: @escaping (String) -> (),
-        completion: @escaping (Error?) -> ()
+        completion: @escaping (Error?) -> (),
+        presentationData: PresentationData
     ) {
         var charCount = 0
         
@@ -126,13 +135,16 @@ final public class AIManager {
             if message.text.isEmpty {
                 continue
             }
-            var messageText = message.text
+            var messageText = replaceSpecialCharacters(in: message.text)
             
             if let name = message.name, !name.isEmpty {
-                messageText = "'\(name)': \(messageText)"
+                messageText = "\(replaceSpecialCharacters(in: name)): \(replaceSpecialCharacters(in: messageText))"
             }
             
-            let chatQuery = Chat(role: message.myMessage ? .assistant : .user, content : messageText)
+            let chatQuery = Chat(
+                role: message.myMessage ? .assistant : .user,
+                content : messageText
+            )
             
             charCount += messageText.count
             if charCount > 1024 {
@@ -143,18 +155,21 @@ final public class AIManager {
         
         chatMessages = chatMessages.reversed()
         
-        chatMessages.append(Chat(role: .system, content: "Prompt.Summary".localized))
+        let locale = presentationData.strings.baseLanguageCode
+        chatMessages.append(Chat(role: .system, content: l("Prompt.Summary", locale)))
 
         let query = ChatQuery(model: .gpt3_5Turbo, messages: chatMessages)
         
         var message = ""
+        
+        print("AIREQ: ")
+        query.messages.forEach({ print("\(String(describing: $0.name)): \(String(describing: $0.content))")})
                 
         self.openAI.chatsStream(query: query) { partialResult in
             switch partialResult {
             case .success(let result):
                 if let delta = result.choices.first?.delta.content {
                     message += delta
-                    
                     resultUpdate(message)
                 }
             case .failure(let error):

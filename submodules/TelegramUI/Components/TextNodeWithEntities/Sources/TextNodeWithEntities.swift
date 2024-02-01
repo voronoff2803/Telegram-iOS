@@ -380,6 +380,7 @@ public class ImmediateTextNodeWithEntities: TextNode {
         self.constrainedSize = constrainedSize
         
         let makeLayout = TextNode.asyncLayout(self)
+        
         let (layout, apply) = makeLayout(TextNodeLayoutArguments(attributedString: self.processedAttributedText(), backgroundColor: nil, maximumNumberOfLines: self.maximumNumberOfLines, truncationType: self.truncationType, constrainedSize: constrainedSize, alignment: self.textAlignment, verticalAlignment: self.verticalAlignment, lineSpacing: self.lineSpacing, cutout: self.cutout, insets: self.insets, textShadowColor: self.textShadowColor, textStroke: self.textStroke, displaySpoilers: self.displaySpoilers))
         
         let _ = apply()
@@ -511,6 +512,8 @@ public class ImmediateTextNodeWithEntities: TextNode {
         super.didLoad()
         
         self.updateInteractiveActions()
+        
+        print("res 3", self.processedAttributedText() as Any)
     }
     
     private func updateInteractiveActions() {

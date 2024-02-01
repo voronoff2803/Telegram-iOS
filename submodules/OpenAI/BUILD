@@ -7,6 +7,8 @@ swift_library(
     srcs = glob(["Sources/**/*.swift"]),
     deps = [
         "//submodules/AIStrings:AIStrings",
+        "//submodules/TelegramPresentationData:TelegramPresentationData",
+        "//submodules/RevenueCat:RevenueCat"
     ],
     visibility = ["//visibility:public"],
 )

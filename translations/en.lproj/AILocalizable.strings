@@ -1,9 +1,0 @@
-/* 
-  Localizable.strings
-  Telegram
-
-  Created by Alexey Voronov on 25.12.2023.
-  
-*/
-
-"Prompt.Summary" = "Using the context of the conversation, write a short summary of the dialog. Respond using Markdown. The summary should be in the same language as most of the dialog messages. Respond using the same language as most of the dialog messages content!"

@@ -15,6 +15,7 @@ import TelegramUniversalVideoContent
 import WallpaperBackgroundNode
 import ChatControllerInteraction
 import ChatMessageBubbleContentNode
+import ShimmerEffect
 
 private let messageFont = Font.regular(14.0)
 private let messageBoldFont = Font.semibold(14.0)
@@ -96,6 +97,11 @@ public final class ChatSummaryItemNode: ListViewItemNode {
     public let textNode: TextNode
     private var linkHighlightingNode: LinkHighlightingNode?
     
+    private var shimmerView: ShimmerEffectForegroundView?
+    private var borderView: UIView?
+    private var borderMaskView: UIView?
+    private var borderShimmerView: ShimmerEffectForegroundView?
+    
     private let fetchDisposable = MetaDisposable()
     
     public var currentTextAndEntities: (String, [MessageTextEntity])?
@@ -108,6 +114,16 @@ public final class ChatSummaryItemNode: ListViewItemNode {
     private var absolutePosition: (CGRect, CGSize)?
     
     private var item: ChatSummaryItem?
+    
+    var gloss: Bool = false {
+        didSet {
+            guard gloss != oldValue else { return }
+            
+            DispatchQueue.main.async {
+                self.setupGloss()
+            }
+        }
+    }
     
     public init() {
         self.offsetContainer = ASDisplayNode()
@@ -133,6 +149,83 @@ public final class ChatSummaryItemNode: ListViewItemNode {
     
     deinit {
         self.fetchDisposable.dispose()
+    }
+    
+    func updateShimmerParameters() {
+        guard let shimmerView = self.shimmerView, let borderShimmerView = self.borderShimmerView else {
+            return
+        }
+        
+        guard let color = self.theme?.theme.chat.inputPanel.actionControlForegroundColor else { return }
+        let alpha: CGFloat
+        let borderAlpha: CGFloat
+        let compositingFilter: String?
+        if color.lightness > 0.5 {
+            alpha = 0.5
+            borderAlpha = 0.75
+            compositingFilter = "overlayBlendMode"
+        } else {
+            alpha = 0.2
+            borderAlpha = 0.3
+            compositingFilter = nil
+        }
+        
+        shimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(alpha), gradientSize: 50.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        borderShimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(borderAlpha), gradientSize: 60.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        
+        
+        
+        //shimmerView.layer.compositingFilter = compositingFilter
+        borderShimmerView.layer.compositingFilter = compositingFilter
+    }
+    
+    private func setupGloss() {
+        if self.gloss {
+            if self.shimmerView == nil {
+                let shimmerView = ShimmerEffectForegroundView()
+                self.shimmerView = shimmerView
+                
+                let borderView = UIView()
+                borderView.isUserInteractionEnabled = false
+                self.borderView = borderView
+                
+                let borderMaskView = UIView()
+                borderMaskView.layer.borderWidth = 1.0 + UIScreenPixel
+                borderMaskView.layer.borderColor = UIColor.white.cgColor
+                borderView.mask = borderMaskView
+                self.borderMaskView = borderMaskView
+                
+                let borderShimmerView = ShimmerEffectForegroundView()
+                self.borderShimmerView = borderShimmerView
+                borderView.addSubview(borderShimmerView)
+                
+                self.offsetContainer.view.insertSubview(shimmerView, aboveSubview: self.backgroundNode.view)
+                self.offsetContainer.view.insertSubview(borderView, aboveSubview: self.backgroundNode.view)
+                
+                self.updateShimmerParameters()
+                
+                self.shimmerView?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.5)
+            }
+        } else if self.shimmerView != nil {
+            self.shimmerView?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.5) { _ in
+                self.shimmerView?.removeFromSuperview()
+                self.borderView?.removeFromSuperview()
+                self.borderMaskView?.removeFromSuperview()
+                self.borderShimmerView?.removeFromSuperview()
+                
+                self.shimmerView = nil
+                self.borderView = nil
+                self.borderMaskView = nil
+                self.borderShimmerView = nil
+            }
+        }
+        
+        
+//        if let presentationInterfaceState = self.presentationInterfaceState {
+//            if let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, metrics, isSecondary, isMediaInputExpanded) = self.validLayout {
+//                let _ = self.updateLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, additionalSideInsets: additionalSideInsets, maxHeight: maxHeight, isSecondary: isSecondary, transition: .immediate, interfaceState: presentationInterfaceState, metrics: metrics, isMediaInputExpanded: isMediaInputExpanded)
+//            }
+//        }
     }
     
     private func setup(context: AccountContext, videoFile: TelegramMediaFile?) {
@@ -189,6 +282,8 @@ public final class ChatSummaryItemNode: ListViewItemNode {
             }
         }
         self.view.addGestureRecognizer(recognizer)
+        
+        gloss = true
     }
     
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
@@ -321,6 +416,23 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                     strongSelf.backgroundNode.frame = backgroundFrame
                     strongSelf.titleNode.frame = titleFrame
                     strongSelf.textNode.frame = textFrame
+                    
+                    if let shimmerView = strongSelf.shimmerView, let borderView = strongSelf.borderView, let borderMaskView = strongSelf.borderMaskView, let borderShimmerView = strongSelf.borderShimmerView {
+                        shimmerView.frame = backgroundFrame
+                        borderView.frame = backgroundFrame
+                        borderMaskView.frame = CGRect(origin: CGPoint(), size: backgroundFrame.size)
+                        borderShimmerView.frame = CGRect(origin: CGPoint(), size: backgroundFrame.size)
+                        
+                        let size = CGSize(width: itemLayout.size.width, height: 1000.0)
+                        
+                        shimmerView.updateAbsoluteRect(CGRect(origin: .zero, size: size), within: size)
+                        borderShimmerView.updateAbsoluteRect(CGRect(origin: .zero, size: size), within: size)
+                        
+                        shimmerView.layer.cornerRadius = 17.0
+                        borderMaskView.layer.cornerRadius = 17.0
+                        borderView.layer.cornerRadius = 17.0
+                        borderShimmerView.layer.cornerRadius = 17.0
+                    }
                     
                     if item.controllerInteraction.presentationContext.backgroundNode?.hasExtraBubbleBackground() == true {
                         if strongSelf.backgroundContent == nil, let backgroundContent = item.controllerInteraction.presentationContext.backgroundNode?.makeBubbleBackground(for: .free) {
@@ -605,6 +717,7 @@ private final class VideoDecoration: UniversalVideoDecoration {
         if let backgroundNode = self.backgroundNode {
             transition.updateFrame(node: backgroundNode, frame: bounds)
         }
+        
         if let foregroundNode = self.foregroundNode {
             transition.updateFrame(node: foregroundNode, frame: bounds)
         }

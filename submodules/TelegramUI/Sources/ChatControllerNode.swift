@@ -3310,6 +3310,8 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
             
             var effectivePresentationInterfaceState = self.chatPresentationInterfaceState
             if let textInputPanelNode = self.textInputPanelNode {
+                let a = textInputPanelNode.inputTextState.inputText
+                print(a)
                 effectivePresentationInterfaceState = effectivePresentationInterfaceState.updatedInterfaceState { $0.withUpdatedEffectiveInputState(textInputPanelNode.inputTextState) }
             }
             
