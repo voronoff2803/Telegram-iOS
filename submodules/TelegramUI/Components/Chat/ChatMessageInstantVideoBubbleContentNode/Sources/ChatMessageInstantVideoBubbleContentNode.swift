@@ -144,11 +144,11 @@ public class ChatMessageInstantVideoBubbleContentNode: ChatMessageBubbleContentN
             }
         }
         
-        self.interactiveFileNode.dateAndStatusNode.reactionSelected = { [weak self] _, value in
+        self.interactiveFileNode.dateAndStatusNode.reactionSelected = { [weak self] _, value, sourceView in
             guard let strongSelf = self, let item = strongSelf.item else {
                 return
             }
-            item.controllerInteraction.updateMessageReaction(item.message, .reaction(value), false)
+            item.controllerInteraction.updateMessageReaction(item.topMessage, .reaction(value), false, sourceView)
         }
         
         self.interactiveFileNode.dateAndStatusNode.openReactionPreview = { [weak self] gesture, sourceNode, value in
@@ -201,21 +201,25 @@ public class ChatMessageInstantVideoBubbleContentNode: ChatMessageBubbleContentN
             }
             
             let statusType: ChatMessageDateAndStatusType?
-            switch preparePosition {
-            case .linear(_, .None), .linear(_, .Neighbour(true, _, _)):
-                if incoming {
-                    statusType = .BubbleIncoming
-                } else {
-                    if item.message.flags.contains(.Failed) {
-                        statusType = .BubbleOutgoing(.Failed)
-                    } else if (item.message.flags.isSending && !item.message.isSentOrAcknowledged) || item.attributes.updatingMedia != nil {
-                        statusType = .BubbleOutgoing(.Sending)
-                    } else {
-                        statusType = .BubbleOutgoing(.Sent(read: item.read))
-                    }
-                }
-            default:
+            if case .customChatContents = item.associatedData.subject {
                 statusType = nil
+            } else {
+                switch preparePosition {
+                case .linear(_, .None), .linear(_, .Neighbour(true, _, _)):
+                    if incoming {
+                        statusType = .BubbleIncoming
+                    } else {
+                        if item.message.flags.contains(.Failed) {
+                            statusType = .BubbleOutgoing(.Failed)
+                        } else if (item.message.flags.isSending && !item.message.isSentOrAcknowledged) || item.attributes.updatingMedia != nil {
+                            statusType = .BubbleOutgoing(.Sending)
+                        } else {
+                            statusType = .BubbleOutgoing(.Sent(read: item.read))
+                        }
+                    }
+                default:
+                    statusType = nil
+                }
             }
             
             let automaticDownload = shouldDownloadMediaAutomatically(settings: item.controllerInteraction.automaticMediaDownloadSettings, peerType: item.associatedData.automaticDownloadPeerType, networkType: item.associatedData.automaticDownloadNetworkType, authorPeerId: item.message.author?.id, contactsPeerIds: item.associatedData.contactsPeerIds, media: selectedFile!)

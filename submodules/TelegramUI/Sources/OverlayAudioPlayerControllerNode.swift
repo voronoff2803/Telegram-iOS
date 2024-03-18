@@ -78,7 +78,7 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, UIGestu
         }, openPeerMention: { _, _ in
         }, openMessageContextMenu: { _, _, _, _, _, _ in
         }, openMessageReactionContextMenu: { _, _, _, _ in
-        }, updateMessageReaction: { _, _, _ in
+        }, updateMessageReaction: { _, _, _, _ in
         }, activateMessagePinch: { _ in
         }, openMessageContextActions: { _, _, _, _ in
         }, navigateToMessage: { _, _, _ in
@@ -172,6 +172,8 @@ final class OverlayAudioPlayerControllerNode: ViewControllerTracingNode, UIGestu
         }, displayGiveawayParticipationStatus: { _ in
         }, openPremiumStatusInfo: { _, _, _, _ in
         }, openRecommendedChannelContextMenu: { _, _, _ in
+        }, openGroupBoostInfo: { _, _ in
+        }, openStickerEditor: {
         }, requestMessageUpdate: { _, _ in
         }, cancelInteractiveKeyboardGestures: {
         }, dismissTextInput: {

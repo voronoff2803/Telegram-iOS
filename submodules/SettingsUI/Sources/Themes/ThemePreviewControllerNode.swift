@@ -376,6 +376,7 @@ final class ThemePreviewControllerNode: ASDisplayNode, UIScrollViewDelegate {
         }, openChatFolderUpdates: {}, hideChatFolderUpdates: {
         }, openStories: { _, _ in
         }, dismissNotice: { _ in
+        }, editPeer: { _ in
         })
 
         func makeChatListItem(
@@ -433,6 +434,7 @@ final class ThemePreviewControllerNode: ASDisplayNode, UIScrollViewDelegate {
                     hasUnseenMentions: false,
                     hasUnseenReactions: false,
                     draftState: nil,
+                    mediaDraftContentType: nil,
                     inputActivities: hasInputActivity ? [(author, .typingText)] : [],
                     promoInfo: nil,
                     ignoreUnreadBadge: false,
@@ -443,7 +445,8 @@ final class ThemePreviewControllerNode: ASDisplayNode, UIScrollViewDelegate {
                     autoremoveTimeout: nil,
                     storyState: nil,
                     requiresPremiumForMessaging: false,
-                    displayAsTopicList: false
+                    displayAsTopicList: false,
+                    tags: []
                 )),
                 editing: false,
                 hasActiveRevealControls: false,

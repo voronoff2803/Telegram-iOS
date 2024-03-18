@@ -9,6 +9,16 @@ import ChatBotStartInputPanelNode
 import ChatChannelSubscriberInputPanelNode
 import ChatMessageSelectionInputPanelNode
 
+func canBypassRestrictions(chatPresentationInterfaceState: ChatPresentationInterfaceState) -> Bool {
+    guard let boostsToUnrestrict = chatPresentationInterfaceState.boostsToUnrestrict else {
+        return false
+    }
+    if let appliedBoosts = chatPresentationInterfaceState.appliedBoosts, appliedBoosts >= boostsToUnrestrict {
+        return true
+    }
+    return false
+}
+
 func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatInputPanelNode?, currentSecondaryPanel: ChatInputPanelNode?, textInputPanelNode: ChatTextInputPanelNode?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> (primary: ChatInputPanelNode?, secondary: ChatInputPanelNode?) {
     if let renderedPeer = chatPresentationInterfaceState.renderedPeer, renderedPeer.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
         return (nil, nil)
@@ -250,7 +260,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 }
             }
                         
-            if case .group = channel.info, isMember && !channel.hasPermission(.sendSomething) && !channel.flags.contains(.isGigagroup) {
+            if case .group = channel.info, isMember && !channel.hasPermission(.sendSomething) && !canBypassRestrictions(chatPresentationInterfaceState: chatPresentationInterfaceState) && !channel.flags.contains(.isGigagroup) {
                 if let currentPanel = (currentPanel as? ChatRestrictedInputPanelNode) ?? (currentSecondaryPanel as? ChatRestrictedInputPanelNode) {
                     return (currentPanel, nil)
                 } else {
@@ -358,7 +368,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil {
                     displayBotStartPanel = true
                 }
-            } else if let chatHistoryState = chatPresentationInterfaceState.chatHistoryState, case .loaded(true) = chatHistoryState {
+            } else if let chatHistoryState = chatPresentationInterfaceState.chatHistoryState, case .loaded(true, _) = chatHistoryState {
                 if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil {
                     displayBotStartPanel = true
                 }
@@ -376,7 +386,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                 return (panel, nil)
             }
         } else {
-            if let _ = chatPresentationInterfaceState.recordedMediaPreview {
+            if let _ = chatPresentationInterfaceState.interfaceState.mediaDraftState {
                 if let currentPanel = (currentPanel as? ChatRecordingPreviewInputPanelNode) ?? (currentSecondaryPanel as? ChatRecordingPreviewInputPanelNode) {
                     return (currentPanel, nil)
                 } else {
@@ -388,6 +398,24 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
             }
             
             displayInputTextPanel = true
+        }
+    }
+    
+    if case let .customChatContents(customChatContents) = chatPresentationInterfaceState.subject {
+        switch customChatContents.kind {
+        case .quickReplyMessageInput:
+            displayInputTextPanel = true
+        }
+        
+        if let chatHistoryState = chatPresentationInterfaceState.chatHistoryState, case .loaded(_, true) = chatHistoryState {
+            if let currentPanel = (currentPanel as? ChatRestrictedInputPanelNode) ?? (currentSecondaryPanel as? ChatRestrictedInputPanelNode) {
+                return (currentPanel, nil)
+            } else {
+                let panel = ChatRestrictedInputPanelNode()
+                panel.context = context
+                panel.interfaceInteraction = interfaceInteraction
+                return (panel, nil)
+            }
         }
     }
     

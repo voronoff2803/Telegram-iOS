@@ -434,10 +434,10 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
     override public func setupItem(_ item: ChatMessageItem, synchronousLoad: Bool) {
         super.setupItem(item, synchronousLoad: synchronousLoad)
         
-        if item.message.id.namespace == Namespaces.Message.Local || item.message.id.namespace == Namespaces.Message.ScheduledLocal {
+        if item.message.id.namespace == Namespaces.Message.Local || item.message.id.namespace == Namespaces.Message.ScheduledLocal || item.message.id.namespace == Namespaces.Message.QuickReplyLocal {
             self.wasPending = true
         }
-        if self.wasPending && (item.message.id.namespace != Namespaces.Message.Local && item.message.id.namespace != Namespaces.Message.ScheduledLocal) {
+        if self.wasPending && (item.message.id.namespace != Namespaces.Message.Local && item.message.id.namespace != Namespaces.Message.ScheduledLocal && item.message.id.namespace != Namespaces.Message.QuickReplyLocal) {
             self.didChangeFromPendingToSent = true
         }
                 
@@ -481,7 +481,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             
             var emojiFile: TelegramMediaFile?
             var emojiString: String?
-            if messageIsElligibleForLargeCustomEmoji(item.message) || messageIsElligibleForLargeEmoji(item.message) {
+            if messageIsEligibleForLargeCustomEmoji(item.message) || messageIsEligibleForLargeEmoji(item.message) {
                 emojiString = item.message.text
             }
             
@@ -818,8 +818,6 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         
                         if !isBroadcastChannel {
                             hasAvatar = true
-                        } else if case .feed = item.chatLocation {
-                            hasAvatar = true
                         }
                     }
                 } else if incoming {
@@ -844,8 +842,8 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                 } else if incoming {
                     hasAvatar = true
                 }
-            case .feed:
-                hasAvatar = true
+            case .customChatContents:
+                hasAvatar = false
             }
             
             if hasAvatar {
@@ -859,7 +857,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
             var needsShareButton = false
             if case .pinnedMessages = item.associatedData.subject {
                 needsShareButton = true
-            } else if isFailed || Namespaces.Message.allScheduled.contains(item.message.id.namespace) {
+            } else if isFailed || Namespaces.Message.allNonRegular.contains(item.message.id.namespace) {
                 needsShareButton = false
             } else if item.message.id.peerId.isRepliesOrSavedMessages(accountPeerId: item.context.account.peerId) {
                 for attribute in item.content.firstMessage.attributes {
@@ -1445,6 +1443,9 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     let dateAndStatusFrame = CGRect(origin: CGPoint(x: max(displayLeftInset, updatedImageFrame.maxX - dateAndStatusSize.width - 4.0), y: updatedImageFrame.maxY - dateAndStatusSize.height - 4.0 + imageBottomPadding), size: dateAndStatusSize)
                     animation.animator.updateFrame(layer: strongSelf.dateAndStatusNode.layer, frame: dateAndStatusFrame, completion: nil)
                     dateAndStatusApply(animation)
+                    if case .customChatContents = item.associatedData.subject {
+                        strongSelf.dateAndStatusNode.isHidden = true
+                    }
 
                     if needsReplyBackground {
                         if strongSelf.replyBackgroundContent == nil, let backgroundContent = item.controllerInteraction.presentationContext.backgroundNode?.makeBubbleBackground(for: .free) {
@@ -1683,11 +1684,11 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         }
                         if reactionButtonsNode !== strongSelf.reactionButtonsNode {
                             strongSelf.reactionButtonsNode = reactionButtonsNode
-                            reactionButtonsNode.reactionSelected = { value in
+                            reactionButtonsNode.reactionSelected = { value, sourceView in
                                 guard let strongSelf = weakSelf.value, let item = strongSelf.item else {
                                     return
                                 }
-                                item.controllerInteraction.updateMessageReaction(item.message, .reaction(value), false)
+                                item.controllerInteraction.updateMessageReaction(item.message, .reaction(value), false, sourceView)
                             }
                             reactionButtonsNode.openReactionPreview = { gesture, sourceView, value in
                                 guard let strongSelf = weakSelf.value, let item = strongSelf.item else {
@@ -1780,7 +1781,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                         f()
                     case let .openContextMenu(openContextMenu):
                         if canAddMessageReactions(message: item.message) {
-                            item.controllerInteraction.updateMessageReaction(item.message, .default, false)
+                            item.controllerInteraction.updateMessageReaction(item.message, .default, false, nil)
                         } else {
                             item.controllerInteraction.openMessageContextMenu(openContextMenu.tapMessage, openContextMenu.selectAll, self, openContextMenu.subFrame, nil, nil)
                         }
@@ -1789,7 +1790,7 @@ public class ChatMessageAnimatedStickerItemNode: ChatMessageItemView {
                     item.controllerInteraction.clickThroughMessage()
                 } else if case .doubleTap = gesture {
                     if canAddMessageReactions(message: item.message) {
-                        item.controllerInteraction.updateMessageReaction(item.message, .default, false)
+                        item.controllerInteraction.updateMessageReaction(item.message, .default, false, nil)
                     }
                 }
             }

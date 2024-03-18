@@ -33,6 +33,7 @@ import ChatHistoryEntry
 import ChatMessageItemCommon
 import TelegramStringFormatting
 import AnimatedCountLabelNode
+import AudioWaveform
 
 private struct FetchControls {
     let fetch: (Bool) -> Void
@@ -352,7 +353,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: arguments.context.currentAppConfiguration.with { $0 })
         
         let transcriptionText = self.forcedAudioTranscriptionText ?? transcribedText(message: message)
-        if transcriptionText == nil {
+        if transcriptionText == nil && !arguments.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
             if premiumConfiguration.audioTransciptionTrialCount > 0 {
                 if !arguments.associatedData.isPremium {
                     if self.presentAudioTranscriptionTooltip(finished: false) {
@@ -474,7 +475,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         strongSelf.transcribeDisposable?.dispose()
                         strongSelf.transcribeDisposable = nil
                         
-                        if let arguments = strongSelf.arguments, !arguments.associatedData.isPremium {
+                        if let arguments = strongSelf.arguments, !arguments.associatedData.isPremium && !arguments.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
                             Queue.mainQueue().after(0.1, {
                                 let _ = strongSelf.presentAudioTranscriptionTooltip(finished: true)
                             })
@@ -754,7 +755,9 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                 var updatedAudioTranscriptionState: AudioTranscriptionButtonComponent.TranscriptionState?
                 
                 var displayTranscribe = false
-                if arguments.message.id.peerId.namespace != Namespaces.Peer.SecretChat && !isViewOnceMessage && !arguments.presentationData.isPreview {
+                if Namespaces.Message.allNonRegular.contains(arguments.message.id.namespace) {
+                    displayTranscribe = false
+                } else if arguments.message.id.peerId.namespace != Namespaces.Peer.SecretChat && !isViewOnceMessage && !arguments.presentationData.isPreview {
                     let premiumConfiguration = PremiumConfiguration.with(appConfiguration: arguments.context.currentAppConfiguration.with { $0 })
                     if arguments.associatedData.isPremium {
                         displayTranscribe = true
@@ -770,6 +773,8 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         } else if arguments.incoming && isConsumed == false && arguments.associatedData.alwaysDisplayTranscribeButton.displayForNotConsumed {
                             displayTranscribe = true
                         }
+                    } else if arguments.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
+                        displayTranscribe = true
                     }
                 }
                 
@@ -941,7 +946,7 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                         replyCount: dateReplies,
                         isPinned: arguments.isPinned && !arguments.associatedData.isInPinnedListMode,
                         hasAutoremove: arguments.message.isSelfExpiring,
-                        canViewReactionList: canViewMessageReactionList(message: arguments.message, isInline: arguments.associatedData.isInline),
+                        canViewReactionList: canViewMessageReactionList(message: arguments.topMessage, isInline: arguments.associatedData.isInline),
                         animationCache: arguments.controllerInteraction.presentationContext.animationCache,
                         animationRenderer: arguments.controllerInteraction.presentationContext.animationRenderer
                     ))
@@ -1324,10 +1329,16 @@ public final class ChatMessageInteractiveFileNode: ASDisplayNode {
                                         strongSelf.view.addSubview(audioTranscriptionButton)
                                         added = true
                                     }
+                                    let buttonTheme: AudioTranscriptionButtonComponent.Theme
+                                    if let customTintColor = arguments.customTintColor {
+                                        buttonTheme = .custom(customTintColor.withMultipliedAlpha(0.1), customTintColor)
+                                    } else {
+                                        buttonTheme = .bubble(arguments.incoming ? arguments.presentationData.theme.theme.chat.message.incoming : arguments.presentationData.theme.theme.chat.message.outgoing)
+                                    }
                                     let audioTranscriptionButtonSize = audioTranscriptionButton.update(
                                         transition: animation.isAnimated ? .easeInOut(duration: 0.3) : .immediate,
                                         component: AnyComponent(AudioTranscriptionButtonComponent(
-                                            theme: .bubble(arguments.incoming ? arguments.presentationData.theme.theme.chat.message.incoming : arguments.presentationData.theme.theme.chat.message.outgoing),
+                                            theme: buttonTheme,
                                             transcriptionState: effectiveAudioTranscriptionState,
                                             pressed: {
                                                 guard let strongSelf = self else {

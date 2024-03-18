@@ -464,7 +464,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     break
                 }
             }
-            if item.message.id.namespace == Namespaces.Message.Local || item.message.id.namespace == Namespaces.Message.ScheduledLocal {
+            if item.message.id.namespace == Namespaces.Message.Local || item.message.id.namespace == Namespaces.Message.ScheduledLocal || item.message.id.namespace == Namespaces.Message.QuickReplyLocal {
                 notConsumed = true
             }
             
@@ -578,11 +578,11 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                 reactions: dateReactionsAndPeers.reactions,
                 reactionPeers: dateReactionsAndPeers.peers,
                 displayAllReactionPeers: item.message.id.peerId.namespace == Namespaces.Peer.CloudUser,
-                areReactionsTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId),
+                areReactionsTags: item.topMessage.areReactionsTags(accountPeerId: item.context.account.peerId),
                 replyCount: dateReplies,
                 isPinned: item.message.tags.contains(.pinned) && !item.associatedData.isInPinnedListMode && !isReplyThread,
                 hasAutoremove: item.message.isSelfExpiring,
-                canViewReactionList: canViewMessageReactionList(message: item.message, isInline: item.associatedData.isInline),
+                canViewReactionList: canViewMessageReactionList(message: item.topMessage, isInline: item.associatedData.isInline),
                 animationCache: item.controllerInteraction.presentationContext.animationCache,
                 animationRenderer: item.controllerInteraction.presentationContext.animationRenderer
             ))
@@ -841,6 +841,8 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             } else {
                                 displayTranscribe = false
                             }
+                        } else if item.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
+                            displayTranscribe = true
                         }
                     }
                     
@@ -945,6 +947,10 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                             }
                         }
                         animation.animator.updateFrame(layer: strongSelf.dateAndStatusNode.layer, frame: dateAndStatusFrame, completion: nil)
+                    }
+                    
+                    if case .customChatContents = item.associatedData.subject {
+                        strongSelf.dateAndStatusNode.isHidden = true
                     }
                     
                     if let videoNode = strongSelf.videoNode {
@@ -1805,7 +1811,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: item.context.currentAppConfiguration.with { $0 })
         
         let transcriptionText = transcribedText(message: item.message)
-        if transcriptionText == nil {
+        if transcriptionText == nil && !item.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
             if premiumConfiguration.audioTransciptionTrialCount > 0 {
                 if !item.associatedData.isPremium {
                     if self.presentAudioTranscriptionTooltip(finished: false) {
@@ -1818,7 +1824,6 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                         self.hapticFeedback = HapticFeedback()
                     }
                     self.hapticFeedback?.impact(.medium)
-                    
                     
                     let tipController = UndoOverlayController(presentationData: presentationData, content: .universal(animation: "anim_voiceToText", scale: 0.065, colors: [:], title: nil, text: presentationData.strings.Message_AudioTranscription_SubscribeToPremium, customUndoText: presentationData.strings.Message_AudioTranscription_SubscribeToPremiumAction, timeout: nil), elevatedLayout: false, position: .top, animateInAsReplacement: false, action: { action in
                         if case .undo = action {
@@ -1874,7 +1879,7 @@ public class ChatMessageInteractiveInstantVideoNode: ASDisplayNode {
                     strongSelf.transcribeDisposable?.dispose()
                     strongSelf.transcribeDisposable = nil
                     
-                    if let item = strongSelf.item, !item.associatedData.isPremium {
+                    if let item = strongSelf.item, !item.associatedData.isPremium && !item.associatedData.alwaysDisplayTranscribeButton.providedByGroupBoost {
                         Queue.mainQueue().after(0.1, {
                             let _ = strongSelf.presentAudioTranscriptionTooltip(finished: true)
                         })

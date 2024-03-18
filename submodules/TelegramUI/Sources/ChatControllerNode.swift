@@ -188,7 +188,7 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
     private let inputContextOverTextPanelContainer: ChatControllerTitlePanelNodeContainer
     private var overlayContextPanelNode: ChatInputContextPanelNode?
     
-    private var inputNode: ChatInputNode?
+    private(set) var inputNode: ChatInputNode?
     private var disappearingNode: ChatInputNode?
     
     private(set) var textInputPanelNode: ChatTextInputPanelNode?
@@ -271,10 +271,12 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
     
     private var derivedLayoutState: ChatControllerNodeDerivedLayoutState?
     
+    private var loadMoreSearchResultsDisposable: Disposable?
+    
     private var isLoadingValue: Bool = false
     private var isLoadingEarlier: Bool = false
     private func updateIsLoading(isLoading: Bool, earlier: Bool, animated: Bool) {
-        var useLoadingPlaceholder = self.chatLocation.peerId?.namespace != Namespaces.Peer.SecretChat
+        var useLoadingPlaceholder = self.chatLocation.peerId?.namespace != Namespaces.Peer.CloudUser && self.chatLocation.peerId?.namespace != Namespaces.Peer.SecretChat
         if case let .replyThread(message) = self.chatLocation, message.peerId == self.context.account.peerId {
             useLoadingPlaceholder = true
         }
@@ -588,6 +590,12 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                 }
                 source = .custom(messages: messages, messageId: MessageId(peerId: PeerId(0), namespace: 0, id: 0), quote: nil, loadMore: nil)
             }
+        } else if case .customChatContents = chatLocation {
+            if case let .customChatContents(customChatContents) = subject {
+                source = .customView(historyView: customChatContents.historyView)
+            } else {
+                source = .custom(messages: .single(([], 0, false)), messageId: nil, quote: nil, loadMore: nil)
+            }
         } else {
             source = .default
         }
@@ -883,6 +891,7 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
         self.displayVideoUnmuteTipDisposable?.dispose()
         self.inputMediaNodeDataDisposable?.dispose()
         self.inlineSearchResultsReadyDisposable?.dispose()
+        self.loadMoreSearchResultsDisposable?.dispose()
     }
     
     override func didLoad() {
@@ -1630,6 +1639,8 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
             isSelectionEnabled = false
         } else if self.chatPresentationInterfaceState.inputTextPanelState.mediaRecordingState != nil {
             isSelectionEnabled = false
+        } else if case .customChatContents = self.chatLocation {
+            isSelectionEnabled = false
         }
         self.historyNode.isSelectionGestureEnabled = isSelectionEnabled
                 
@@ -1877,7 +1888,7 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
             overlayNavigationBar.updateLayout(size: barFrame.size, transition: transition)
         }
         
-        var listInsets = UIEdgeInsets(top: containerInsets.bottom + contentBottomInset, left: containerInsets.right, bottom: containerInsets.top, right: containerInsets.left)
+        var listInsets = UIEdgeInsets(top: containerInsets.bottom + contentBottomInset, left: containerInsets.right, bottom: containerInsets.top + 6.0, right: containerInsets.left)
         let listScrollIndicatorInsets = UIEdgeInsets(top: containerInsets.bottom + inputPanelsHeight, left: containerInsets.right, bottom: containerInsets.top, right: containerInsets.left)
         
         var childContentInsets: UIEdgeInsets = containerInsets
@@ -2476,7 +2487,11 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
             } else if let historyFilter = self.chatPresentationInterfaceState.historyFilter {
                 mappedContents = .tag(historyFilter.customTag)
             } else if let search = self.chatPresentationInterfaceState.search, self.alwaysShowSearchResultsAsList {
-                mappedContents = .search(query: search.query, includeSavedPeers: self.alwaysShowSearchResultsAsList)
+                if !search.query.isEmpty {
+                    mappedContents = .search(query: search.query, includeSavedPeers: self.alwaysShowSearchResultsAsList)
+                } else {
+                    mappedContents = .empty
+                }
             } else if case .peer(self.context.account.peerId) = self.chatPresentationInterfaceState.chatLocation {
                 mappedContents = .tag(MemoryBuffer())
             } else {
@@ -2505,17 +2520,86 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                         guard let self else {
                             return
                         }
-                        self.controller?.navigateToMessage(
-                            from: nil,
-                            to: .index(message.index),
-                            scrollPosition: .center(.bottom),
-                            rememberInStack: false,
-                            forceInCurrentChat: true,
-                            animated: true
-                        )
-                        self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
-                            return state.updatedDisplayHistoryFilterAsList(false)
-                        })
+                        
+                        if let historyFilter = self.chatPresentationInterfaceState.historyFilter, let reaction = ReactionsMessageAttribute.reactionFromMessageTag(tag: historyFilter.customTag), let peerId = self.chatLocation.peerId, historyFilter.isActive {
+                            let _ = (self.context.engine.messages.searchMessages(
+                                location: .peer(peerId: peerId, fromId: nil, tags: nil, reactions: [reaction], threadId: self.chatLocation.threadId, minDate: nil, maxDate: nil),
+                                query: "",
+                                state: nil,
+                                centerId: message.id
+                            )
+                            |> take(1)
+                            |> deliverOnMainQueue).startStandalone(next: { [weak self] results, searchState in
+                                guard let self else {
+                                    return
+                                }
+                                
+                                let messageIndices = results.messages.map({ $0.index }).sorted()
+                                var currentIndex = messageIndices.last
+                                for index in messageIndices {
+                                    if index.id >= message.id {
+                                        currentIndex = index
+                                        break
+                                    }
+                                }
+                                
+                                self.controller?.updateChatPresentationInterfaceState(animated: false, interactive: false, { state in
+                                    guard var filter = state.historyFilter, let reaction = ReactionsMessageAttribute.reactionFromMessageTag(tag: filter.customTag) else {
+                                        return state
+                                    }
+                                    filter.isActive = false
+                                    return state.updatedHistoryFilter(filter).updatedSearch(ChatSearchData(
+                                        query: "",
+                                        domain: .tag(reaction),
+                                        domainSuggestionContext: .none,
+                                        resultsState: ChatSearchResultsState(
+                                            messageIndices: messageIndices,
+                                            currentId: currentIndex?.id,
+                                            state: searchState,
+                                            totalCount: results.totalCount,
+                                            completed: results.completed
+                                        )
+                                    ))
+                                })
+                                
+                                let _ = (self.historyNode.isReady
+                                |> filter { $0 }
+                                |> take(1)
+                                |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
+                                    guard let self else {
+                                        return
+                                    }
+                                    
+                                    self.controller?.navigateToMessage(
+                                        from: nil,
+                                        to: .index(message.index),
+                                        scrollPosition: .center(.bottom),
+                                        rememberInStack: false,
+                                        forceInCurrentChat: true,
+                                        animated: true
+                                    )
+                                    self.controller?.alwaysShowSearchResultsAsList = false
+                                    self.alwaysShowSearchResultsAsList = false
+                                    self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                                        return state.updatedDisplayHistoryFilterAsList(false)
+                                    })
+                                })
+                            })
+                        } else {
+                            self.controller?.navigateToMessage(
+                                from: nil,
+                                to: .index(message.index),
+                                scrollPosition: .center(.bottom),
+                                rememberInStack: false,
+                                forceInCurrentChat: true,
+                                animated: true
+                            )
+                            self.controller?.alwaysShowSearchResultsAsList = false
+                            self.alwaysShowSearchResultsAsList = false
+                            self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                                return state.updatedDisplayHistoryFilterAsList(false)
+                            })
+                        }
                     },
                     peerSelected: { [weak self] peer in
                         guard let self else {
@@ -2572,7 +2656,7 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                             chatLocationContextHolder: Atomic(value: nil),
                             scheduled: false,
                             fixedCombinedReadStates: nil,
-                            tag: tag.length == 0 ? nil : .customTag(tag),
+                            tag: tag.length == 0 ? nil : .customTag(tag, nil),
                             appendMessagesFromTheSameGroup: false,
                             additionalData: []
                         )
@@ -2614,6 +2698,51 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                             }
                         }
                         return foundLocalPeers
+                    },
+                    loadMoreSearchResults: { [weak self] in
+                        guard let self, let controller = self.controller else {
+                            return
+                        }
+                        guard let currentSearchState = controller.searchState, let currentResultsState = controller.presentationInterfaceState.search?.resultsState else {
+                            return
+                        }
+                        
+                        self.loadMoreSearchResultsDisposable?.dispose()
+                        self.loadMoreSearchResultsDisposable = (self.context.engine.messages.searchMessages(location: currentSearchState.location, query: currentSearchState.query, state: currentResultsState.state)
+                        |> deliverOnMainQueue).startStrict(next: { [weak self] results, updatedState in
+                            guard let self, let controller = self.controller else {
+                                return
+                            }
+                            
+                            controller.searchResult.set(.single((results, updatedState, currentSearchState.location)))
+                            
+                            var navigateIndex: MessageIndex?
+                            controller.updateChatPresentationInterfaceState(animated: true, interactive: true, { current in
+                                if let data = current.search {
+                                    let messageIndices = results.messages.map({ $0.index }).sorted()
+                                    var currentIndex = messageIndices.last
+                                    if let previousResultId = data.resultsState?.currentId {
+                                        for index in messageIndices {
+                                            if index.id >= previousResultId {
+                                                currentIndex = index
+                                                break
+                                            }
+                                        }
+                                    }
+                                    navigateIndex = currentIndex
+                                    return current.updatedSearch(data.withUpdatedResultsState(ChatSearchResultsState(messageIndices: messageIndices, currentId: currentIndex?.id, state: updatedState, totalCount: results.totalCount, completed: results.completed)))
+                                } else {
+                                    return current
+                                }
+                            })
+                            if let navigateIndex = navigateIndex {
+                                switch controller.chatLocation {
+                                case .peer, .replyThread, .customChatContents:
+                                    controller.navigateToMessage(from: nil, to: .index(navigateIndex), forceInCurrentChat: true)
+                                }
+                            }
+                            controller.updateItemNodesSearchTextHighlightStates()
+                        })
                     }
                 )),
                 environment: {},
@@ -2654,6 +2783,14 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                     })
                 }
             }
+            
+            if self.alwaysShowSearchResultsAsList {
+                transition.updateAlpha(node: self.historyNode, alpha: 0.0)
+                transition.updateAlpha(node: self.backgroundNode, alpha: 0.0)
+            } else {
+                transition.updateAlpha(node: self.historyNode, alpha: 1.0)
+                transition.updateAlpha(node: self.backgroundNode, alpha: 1.0)
+            }
         } else {
             if let inlineSearchResults = self.inlineSearchResults {
                 self.inlineSearchResults = nil
@@ -2670,6 +2807,9 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                 inlineSearchResultsReadyDisposable.dispose()
             }
             self.inlineSearchResultsReady = false
+            
+            transition.updateAlpha(node: self.historyNode, alpha: 1.0)
+            transition.updateAlpha(node: self.backgroundNode, alpha: 1.0)
         }
 
         let listBottomInset = self.historyNode.insets.top
@@ -3621,6 +3761,17 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                 strongSelf.interfaceInteraction?.updateInputModeAndDismissedButtonKeyboardMessageId({ state in
                     return (.media(mode: .other, expanded: nil, focused: false), state.interfaceState.messageActionsState.closedButtonKeyboardMessageId)
                 })
+                
+                if let emojiPackTooltipController = strongSelf.controller?.emojiPackTooltipController {
+                    strongSelf.controller?.emojiPackTooltipController = nil
+                    emojiPackTooltipController.dismiss()
+                    
+                    Queue.mainQueue().after(0.1) {
+                        if let inputNode = strongSelf.inputNode as? ChatEntityKeyboardInputNode {
+                            inputNode.scrollToGroupEmoji()
+                        }
+                    }
+                }
             })
         }
     }
@@ -3657,6 +3808,8 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                 
                 let effectiveInputText = effectivePresentationInterfaceState.interfaceState.composeInputState.inputText
                 
+                let peerSpecificEmojiPack = (self.controller?.peerView?.cachedData as? CachedChannelData)?.emojiPack
+                
                 var inlineStickers: [MediaId: Media] = [:]
                 var firstLockedPremiumEmoji: TelegramMediaFile?
                 var bubbleUpEmojiOrStickersetsById: [Int64: ItemCollectionId] = [:]
@@ -3667,7 +3820,15 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
                             if let packId = value.interactivelySelectedFromPackId {
                                 bubbleUpEmojiOrStickersetsById[file.fileId.id] = packId
                             }
-                            if file.isPremiumEmoji && !self.chatPresentationInterfaceState.isPremium && self.chatPresentationInterfaceState.chatLocation.peerId != self.context.account.peerId {
+                            
+                            var isPeerSpecific = false
+                            for attribute in file.attributes {
+                                if case let .CustomEmoji(_, _, _, packReference) = attribute, case let .id(id, _) = packReference {
+                                    isPeerSpecific = id == peerSpecificEmojiPack?.id.id
+                                }
+                            }
+                            
+                            if file.isPremiumEmoji && !self.chatPresentationInterfaceState.isPremium && self.chatPresentationInterfaceState.chatLocation.peerId != self.context.account.peerId && !isPeerSpecific {
                                 if firstLockedPremiumEmoji == nil {
                                     firstLockedPremiumEmoji = file
                                 }
@@ -4012,7 +4173,7 @@ class ChatControllerNode: ASDisplayNode, UIScrollViewDelegate {
         if self.chatPresentationInterfaceState.inputTextPanelState.mediaRecordingState != nil {
             return false
         }
-        if self.chatPresentationInterfaceState.recordedMediaPreview != nil {
+        if self.chatPresentationInterfaceState.interfaceState.mediaDraftState != nil {
             return false
         }
         if let inputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode {

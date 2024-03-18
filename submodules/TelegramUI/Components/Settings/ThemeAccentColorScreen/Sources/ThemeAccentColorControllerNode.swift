@@ -870,6 +870,7 @@ final class ThemeAccentColorControllerNode: ASDisplayNode, UIScrollViewDelegate 
         }, openChatFolderUpdates: {}, hideChatFolderUpdates: {
         }, openStories: { _, _ in
         }, dismissNotice: { _ in
+        }, editPeer: { _ in
         })
         let chatListPresentationData = ChatListPresentationData(theme: self.presentationData.theme, fontSize: self.presentationData.listsFontSize, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameSortOrder: self.presentationData.nameSortOrder, nameDisplayOrder: self.presentationData.nameDisplayOrder, disableAnimations: true)
 
@@ -928,6 +929,7 @@ final class ThemeAccentColorControllerNode: ASDisplayNode, UIScrollViewDelegate 
                     hasUnseenMentions: false,
                     hasUnseenReactions: false,
                     draftState: nil,
+                    mediaDraftContentType: nil,
                     inputActivities: hasInputActivity ? [(author, .typingText)] : [],
                     promoInfo: nil,
                     ignoreUnreadBadge: false,
@@ -938,7 +940,8 @@ final class ThemeAccentColorControllerNode: ASDisplayNode, UIScrollViewDelegate 
                     autoremoveTimeout: nil,
                     storyState: nil,
                     requiresPremiumForMessaging: false,
-                    displayAsTopicList: false
+                    displayAsTopicList: false,
+                    tags: []
                 )),
                 editing: false,
                 hasActiveRevealControls: false,

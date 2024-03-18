@@ -236,10 +236,32 @@ private func mergedResult(_ state: SearchMessagesState) -> SearchMessagesResult 
     return SearchMessagesResult(messages: messages, readStates: readStates, threadInfo: threadInfo, totalCount: state.main.totalCount + (state.additional?.totalCount ?? 0), completed: state.main.completed && (state.additional?.completed ?? true))
 }
 
-func _internal_searchMessages(account: Account, location: SearchMessagesLocation, query: String, state: SearchMessagesState?, limit: Int32 = 100) -> Signal<(SearchMessagesResult, SearchMessagesState), NoError> {
-    if case let .peer(peerId, fromId, tags, reactions, threadId, minDate, maxDate) = location, fromId == nil, tags == nil, let reactions, !reactions.isEmpty, threadId == nil, minDate == nil, maxDate == 0 {
-        let _ = peerId
-        print("short cirquit")
+func _internal_searchMessages(account: Account, location: SearchMessagesLocation, query: String, state: SearchMessagesState?, centerId: MessageId?, limit: Int32 = 100) -> Signal<(SearchMessagesResult, SearchMessagesState), NoError> {
+    if case let .peer(peerId, fromId, tags, reactions, threadId, minDate, maxDate) = location, fromId == nil, tags == nil, peerId == account.peerId, let reactions, let reaction = reactions.first, (minDate == nil || minDate == 0), (maxDate == nil || maxDate == 0) {
+        return account.postbox.transaction { transaction -> (SearchMessagesResult, SearchMessagesState) in
+            let messages = transaction.getMessagesWithCustomTag(peerId: peerId, namespace: Namespaces.Message.Cloud, threadId: threadId, customTag: ReactionsMessageAttribute.messageTag(reaction: reaction), from: MessageIndex.upperBound(peerId: peerId, namespace: Namespaces.Message.Cloud), includeFrom: false, to: MessageIndex.lowerBound(peerId: peerId, namespace: Namespaces.Message.Cloud), limit: 500)
+            
+            return (
+                SearchMessagesResult(
+                    messages: messages,
+                    readStates: [:],
+                    threadInfo: [:],
+                    totalCount: Int32(messages.count),
+                    completed: true
+                ),
+                SearchMessagesState(
+                    main: SearchMessagesPeerState(
+                        messages: messages,
+                        readStates: [:],
+                        threadInfo: [:],
+                        totalCount: Int32(messages.count),
+                        completed: true,
+                        nextRate: nil
+                    ),
+                    additional: nil
+                )
+            )
+        }
     }
     
     let remoteSearchResult: Signal<(Api.messages.Messages?, Api.messages.Messages?), NoError>
@@ -562,12 +584,18 @@ func _internal_downloadMessage(accountPeerId: PeerId, postbox: Postbox, network:
 }
 
 func fetchRemoteMessage(accountPeerId: PeerId, postbox: Postbox, source: FetchMessageHistoryHoleSource, message: MessageReference) -> Signal<Message?, NoError> {
-    guard case let .message(peer, _, id, _, _, _) = message.content else {
+    guard case let .message(peer, _, id, _, _, _, threadId) = message.content else {
         return .single(nil)
     }
     let signal: Signal<Api.messages.Messages, MTRpcError>
     if id.namespace == Namespaces.Message.ScheduledCloud {
         signal = source.request(Api.functions.messages.getScheduledMessages(peer: peer.inputPeer, id: [id.id]))
+    } else if id.namespace == Namespaces.Message.QuickReplyCloud {
+        if let threadId {
+            signal = source.request(Api.functions.messages.getQuickReplyMessages(flags: 1 << 0, shortcutId: Int32(clamping: threadId), id: [id.id], hash: 0))
+        } else {
+            signal = .never()
+        }
     } else if id.peerId.namespace == Namespaces.Peer.CloudChannel {
         if let channel = peer.inputChannel {
             signal = source.request(Api.functions.channels.getMessages(channel: channel, id: [Api.InputMessage.inputMessageID(id: id.id)]))

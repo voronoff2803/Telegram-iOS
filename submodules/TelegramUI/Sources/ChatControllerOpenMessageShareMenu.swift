@@ -31,7 +31,7 @@ func chatShareToSavedMessagesAdditionalView(_ chatController: ChatControllerImpl
                 return
             }
             
-            let _ = (chatController.context.account.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: chatController.context.account.peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: 45, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .not(Namespaces.Message.allScheduled), orderStatistics: [])
+            let _ = (chatController.context.account.postbox.aroundMessageHistoryViewForLocation(.peer(peerId: chatController.context.account.peerId, threadId: nil), anchor: .upperBound, ignoreMessagesInTimestampRange: nil, count: 45, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: .not(Namespaces.Message.allNonRegular), orderStatistics: [])
             |> map { view, _, _ -> [EngineMessage.Id] in
                 let messageIds = correlationIds.compactMap { correlationId in
                     return chatController.context.engine.messages.synchronouslyLookupCorrelationId(correlationId: correlationId)
@@ -204,7 +204,7 @@ extension ChatControllerImpl {
                 
                 let reactionItems: Signal<[ReactionItem], NoError>
                 if savedMessages {
-                    reactionItems = tagMessageReactions(context: self.context)
+                    reactionItems = tagMessageReactions(context: self.context, subPeerId: self.chatLocation.threadId.flatMap(EnginePeer.Id.init))
                 } else {
                     reactionItems = .single([])
                 }

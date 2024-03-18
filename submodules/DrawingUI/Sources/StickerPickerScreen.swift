@@ -192,6 +192,7 @@ private final class StickerSelectionComponent: Component {
                 insertText: { _ in
                 },
                 backwardsDeleteText: {},
+                openStickerEditor: {},
                 presentController: { [weak self] c, a in
                     if let self, let controller = self.component?.getController() {
                         controller.present(c, in: .window(.root), with: a)
@@ -1115,6 +1116,7 @@ public class StickerPickerScreen: ViewController {
                                         groupId: "search",
                                         title: nil,
                                         subtitle: nil,
+                                        badge: nil,
                                         actionButtonTitle: nil,
                                         isFeatured: false,
                                         isPremiumLocked: false,
@@ -1169,6 +1171,7 @@ public class StickerPickerScreen: ViewController {
                                 groupId: "search",
                                 title: nil,
                                 subtitle: nil,
+                                badge: nil,
                                 actionButtonTitle: nil,
                                 isFeatured: false,
                                 isPremiumLocked: false,
@@ -1199,6 +1202,7 @@ public class StickerPickerScreen: ViewController {
                                         groupId: "search",
                                         title: nil,
                                         subtitle: nil,
+                                        badge: nil,
                                         actionButtonTitle: nil,
                                         isFeatured: false,
                                         isPremiumLocked: false,
@@ -1440,6 +1444,7 @@ public class StickerPickerScreen: ViewController {
                                 groupId: "search",
                                 title: nil,
                                 subtitle: nil,
+                                badge: nil,
                                 actionButtonTitle: nil,
                                 isFeatured: false,
                                 isPremiumLocked: false,
@@ -1470,6 +1475,7 @@ public class StickerPickerScreen: ViewController {
                                         groupId: "search",
                                         title: nil,
                                         subtitle: nil,
+                                        badge: nil,
                                         actionButtonTitle: nil,
                                         isFeatured: false,
                                         isPremiumLocked: false,

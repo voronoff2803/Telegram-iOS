@@ -227,6 +227,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, UIScrollView
         }, openChatFolderUpdates: {}, hideChatFolderUpdates: {
         }, openStories: { _, _ in
         }, dismissNotice: { _ in
+        }, editPeer: { _ in
         })
 
         let chatListPresentationData = ChatListPresentationData(theme: self.presentationData.theme, fontSize: self.presentationData.listsFontSize, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameSortOrder: self.presentationData.nameSortOrder, nameDisplayOrder: self.presentationData.nameDisplayOrder, disableAnimations: true)
@@ -286,6 +287,7 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, UIScrollView
                     hasUnseenMentions: false,
                     hasUnseenReactions: false,
                     draftState: nil,
+                    mediaDraftContentType: nil,
                     inputActivities: hasInputActivity ? [(author, .typingText)] : [],
                     promoInfo: nil,
                     ignoreUnreadBadge: false,
@@ -296,7 +298,8 @@ private final class TextSizeSelectionControllerNode: ASDisplayNode, UIScrollView
                     autoremoveTimeout: nil,
                     storyState: nil,
                     requiresPremiumForMessaging: false,
-                    displayAsTopicList: false
+                    displayAsTopicList: false,
+                    tags: []
                 )),
                 editing: false,
                 hasActiveRevealControls: false,

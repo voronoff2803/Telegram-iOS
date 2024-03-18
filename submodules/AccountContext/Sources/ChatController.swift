@@ -18,13 +18,16 @@ public final class ChatMessageItemAssociatedData: Equatable {
     public struct DisplayTranscribeButton: Equatable {
         public let canBeDisplayed: Bool
         public let displayForNotConsumed: Bool
+        public let providedByGroupBoost: Bool
         
         public init(
             canBeDisplayed: Bool,
-            displayForNotConsumed: Bool
+            displayForNotConsumed: Bool,
+            providedByGroupBoost: Bool
         ) {
             self.canBeDisplayed = canBeDisplayed
             self.displayForNotConsumed = displayForNotConsumed
+            self.providedByGroupBoost = providedByGroupBoost
         }
     }
     
@@ -77,7 +80,7 @@ public final class ChatMessageItemAssociatedData: Equatable {
         isPremium: Bool,
         accountPeer: EnginePeer?,
         forceInlineReactions: Bool = false,
-        alwaysDisplayTranscribeButton: DisplayTranscribeButton = DisplayTranscribeButton(canBeDisplayed: false, displayForNotConsumed: false),
+        alwaysDisplayTranscribeButton: DisplayTranscribeButton = DisplayTranscribeButton(canBeDisplayed: false, displayForNotConsumed: false, providedByGroupBoost: false),
         topicAuthorId: EnginePeer.Id? = nil,
         hasBots: Bool = false,
         translateToLanguage: String? = nil,
@@ -741,6 +744,7 @@ public enum ChatControllerSubject: Equatable {
     case scheduledMessages
     case pinnedMessages(id: EngineMessage.Id?)
     case messageOptions(peerIds: [EnginePeer.Id], ids: [EngineMessage.Id], info: MessageOptionsInfo)
+    case customChatContents(contents: ChatCustomContentsProtocol)
     
     public static func ==(lhs: ChatControllerSubject, rhs: ChatControllerSubject) -> Bool {
         switch lhs {
@@ -764,6 +768,12 @@ public enum ChatControllerSubject: Equatable {
             }
         case let .messageOptions(lhsPeerIds, lhsIds, lhsInfo):
             if case let .messageOptions(rhsPeerIds, rhsIds, rhsInfo) = rhs, lhsPeerIds == rhsPeerIds, lhsIds == rhsIds, lhsInfo == rhsInfo {
+                return true
+            } else {
+                return false
+            }
+        case let .customChatContents(lhsValue):
+            if case let .customChatContents(rhsValue) = rhs, lhsValue === rhsValue {
                 return true
             } else {
                 return false
@@ -793,11 +803,30 @@ public enum ChatControllerPresentationMode: Equatable {
     case inline(NavigationController?)
 }
 
+public enum ChatInputTextCommand: Equatable {
+    case command(PeerCommand)
+    case shortcut(ShortcutMessageList.Item)
+}
+
+public struct ChatInputQueryCommandsResult: Equatable {
+    public var commands: [ChatInputTextCommand]
+    public var accountPeer: EnginePeer?
+    public var hasShortcuts: Bool
+    public var query: String
+    
+    public init(commands: [ChatInputTextCommand], accountPeer: EnginePeer?, hasShortcuts: Bool, query: String) {
+        self.commands = commands
+        self.accountPeer = accountPeer
+        self.hasShortcuts = hasShortcuts
+        self.query = query
+    }
+}
+
 public enum ChatPresentationInputQueryResult: Equatable {
     case stickers([FoundStickerItem])
     case hashtags([String])
     case mentions([EnginePeer])
-    case commands([PeerCommand])
+    case commands(ChatInputQueryCommandsResult)
     case emojis([(String, TelegramMediaFile?, String)], NSRange)
     case contextRequestResult(EnginePeer?, ChatContextResultCollection?)
     
@@ -938,6 +967,7 @@ public protocol ChatController: ViewController {
     var purposefulAction: (() -> Void)? { get set }
     
     var stateUpdated: ((ContainedViewLayoutTransition) -> Void)? { get set }
+    var customDismissSearch: (() -> Void)? { get set }
     
     var selectedMessageIds: Set<EngineMessage.Id>? { get }
     var presentationInterfaceStateSignal: Signal<Any, NoError> { get }
@@ -1046,7 +1076,30 @@ public enum ChatHistoryListSource {
     }
     
     case `default`
-    case custom(messages: Signal<([Message], Int32, Bool), NoError>, messageId: MessageId, quote: Quote?, loadMore: (() -> Void)?)
+    case custom(messages: Signal<([Message], Int32, Bool), NoError>, messageId: MessageId?, quote: Quote?, loadMore: (() -> Void)?)
+    case customView(historyView: Signal<(MessageHistoryView, ViewUpdateType), NoError>)
+}
+
+public enum ChatQuickReplyShortcutType {
+    case generic
+    case greeting
+    case away
+}
+
+public enum ChatCustomContentsKind: Equatable {
+    case quickReplyMessageInput(shortcut: String, shortcutType: ChatQuickReplyShortcutType)
+}
+
+public protocol ChatCustomContentsProtocol: AnyObject {
+    var kind: ChatCustomContentsKind { get }
+    var historyView: Signal<(MessageHistoryView, ViewUpdateType), NoError> { get }
+    var messageLimit: Int? { get }
+    
+    func enqueueMessages(messages: [EnqueueMessage])
+    func deleteMessages(ids: [EngineMessage.Id])
+    func editMessage(id: EngineMessage.Id, text: String, media: RequestEditMessageMedia, entities: TextEntitiesMessageAttribute?, webpagePreviewAttribute: WebpagePreviewMessageAttribute?, disableUrlPreview: Bool)
+    
+    func quickReplyUpdateShortcut(value: String)
 }
 
 public enum ChatHistoryListDisplayHeaders {
@@ -1065,7 +1118,7 @@ public protocol ChatControllerInteractionProtocol: AnyObject {
 
 public enum ChatHistoryNodeHistoryState: Equatable {
     case loading
-    case loaded(isEmpty: Bool)
+    case loaded(isEmpty: Bool, hasReachedLimits: Bool)
 }
 
 public protocol ChatHistoryListNode: ListView {
