@@ -260,19 +260,25 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
             controller.updateCameraState({ $0.updatedRecording(pressing ? .holding : .handsFree).updatedDuration(initialDuration) }, transition: .spring(duration: 0.4))
         
             controller.node.withReadyCamera(isFirstTime: !controller.node.cameraIsActive) {
-                self.resultDisposable.set((camera.startRecording()
-                |> deliverOnMainQueue).start(next: { [weak self] recordingData in
-                    let duration = initialDuration + recordingData.duration
-                    if let self, let controller = self.getController() {
-                        controller.updateCameraState({ $0.updatedDuration(duration) }, transition: .easeInOut(duration: 0.1))
-                        if isFirstRecording {
-                            controller.node.setupLiveUpload(filePath: recordingData.filePath)
+                Queue.mainQueue().after(0.15) {
+                    self.resultDisposable.set((camera.startRecording()
+                    |> deliverOnMainQueue).start(next: { [weak self] recordingData in
+                        let duration = initialDuration + recordingData.duration
+                        if let self, let controller = self.getController() {
+                            controller.updateCameraState({ $0.updatedDuration(duration) }, transition: .easeInOut(duration: 0.1))
+                            if isFirstRecording {
+                                controller.node.setupLiveUpload(filePath: recordingData.filePath)
+                            }
+                            if duration > 59.5 {
+                                controller.onStop()
+                            }
                         }
-                        if duration > 59.5 {
-                            controller.onStop()
+                    }, error: { [weak self] _ in
+                        if let self, let controller = self.getController() {
+                            controller.completion(nil, nil, nil)
                         }
-                    }
-                }))
+                    }))
+                }
             }
             
             if initialDuration > 0.0 {
@@ -621,7 +627,7 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerView = UIView()
             self.previewContainerView.clipsToBounds = true
                         
-            let isDualCameraEnabled = Camera.isDualCameraSupported
+            let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true)
             let isFrontPosition = "".isEmpty
             
             self.mainPreviewView = CameraSimplePreviewView(frame: .zero, main: true, roundVideo: true)
@@ -695,7 +701,7 @@ public class VideoMessageCameraScreen: ViewController {
         func withReadyCamera(isFirstTime: Bool = false, _ f: @escaping () -> Void) {
             let previewReady: Signal<Bool, NoError>
             if #available(iOS 13.0, *) {
-                previewReady = self.cameraState.isDualCameraEnabled ? self.additionalPreviewView.isPreviewing : self.mainPreviewView.isPreviewing |> delay(0.25, queue: Queue.mainQueue())
+                previewReady = self.cameraState.isDualCameraEnabled ? self.additionalPreviewView.isPreviewing : self.mainPreviewView.isPreviewing |> delay(0.3, queue: Queue.mainQueue())
             } else {
                 previewReady = .single(true) |> delay(0.35, queue: Queue.mainQueue())
             }
@@ -792,6 +798,10 @@ public class VideoMessageCameraScreen: ViewController {
         func animateIn() {
             self.animatingIn = true
             
+//            if let chatNode = self.controller?.chatNode {
+//                chatNode.supernode?.view.insertSubview(self.backgroundView, aboveSubview: chatNode.view)
+//            }
+            
             self.backgroundView.alpha = 0.0
             UIView.animate(withDuration: 0.4, animations: {
                 self.backgroundView.alpha = 1.0
@@ -817,6 +827,7 @@ public class VideoMessageCameraScreen: ViewController {
             UIView.animate(withDuration: 0.25, animations: {
                 self.backgroundView.alpha = 0.0
             }, completion: { _ in
+                self.backgroundView.removeFromSuperview()
                 completion()
             })
             
@@ -957,7 +968,7 @@ public class VideoMessageCameraScreen: ViewController {
             
             if let controller = self.controller, let layout = self.validLayout {
                 let insets = layout.insets(options: .input)
-                if point.y > layout.size.height - insets.bottom - controller.inputPanelFrame.height {
+                if point.y > layout.size.height - insets.bottom - controller.inputPanelFrame.0.height {
                     if layout.metrics.isTablet {
                         if point.x < layout.size.width * 0.33 {
                             return result
@@ -1085,6 +1096,7 @@ public class VideoMessageCameraScreen: ViewController {
                     bottom: 44.0,
                     right: layout.safeInsets.right
                 ),
+                additionalInsets: layout.additionalInsets,
                 inputHeight: layout.inputHeight ?? 0.0,
                 metrics: layout.metrics,
                 deviceMetrics: layout.deviceMetrics,
@@ -1102,9 +1114,9 @@ public class VideoMessageCameraScreen: ViewController {
                 self.didAppear()
             }
 
-            var backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: controller.inputPanelFrame.minY))
-            if backgroundFrame.maxY < layout.size.height - 100.0 && (layout.inputHeight ?? 0.0).isZero {
-                backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: layout.size.height - layout.intrinsicInsets.bottom - controller.inputPanelFrame.height))
+            var backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: controller.inputPanelFrame.0.minY))
+            if backgroundFrame.maxY < layout.size.height - 100.0 && (layout.inputHeight ?? 0.0).isZero && !controller.inputPanelFrame.1 {
+                backgroundFrame = CGRect(origin: .zero, size: CGSize(width: layout.size.width, height: layout.size.height - layout.intrinsicInsets.bottom - controller.inputPanelFrame.0.height))
             }
                         
             transition.setPosition(view: self.backgroundView, position: backgroundFrame.center)
@@ -1257,7 +1269,7 @@ public class VideoMessageCameraScreen: ViewController {
 
     private let context: AccountContext
     private let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
-    private let inputPanelFrame: CGRect
+    private let inputPanelFrame: (CGRect, Bool)
     fileprivate var allowLiveUpload: Bool
     fileprivate var viewOnceAvailable: Bool
     
@@ -1401,19 +1413,23 @@ public class VideoMessageCameraScreen: ViewController {
         }
     }
     
+    fileprivate weak var chatNode: ASDisplayNode?
+    
     public init(
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?,
         allowLiveUpload: Bool,
         viewOnceAvailable: Bool,
-        inputPanelFrame: CGRect,
+        inputPanelFrame: (CGRect, Bool),
+        chatNode: ASDisplayNode?,
         completion: @escaping (EnqueueMessage?, Bool?, Int32?) -> Void
     ) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
-        self.inputPanelFrame = inputPanelFrame
         self.allowLiveUpload = allowLiveUpload
         self.viewOnceAvailable = viewOnceAvailable
+        self.inputPanelFrame = inputPanelFrame
+        self.chatNode = chatNode
         self.completion = completion
         
         self.recordingStatus = RecordingStatus(micLevel: self.micLevelValue.get(), duration: self.durationValue.get())
@@ -1434,9 +1450,6 @@ public class VideoMessageCameraScreen: ViewController {
     
     deinit {
         self.audioSessionDisposable?.dispose()
-        if #available(iOS 13.0, *) {
-            try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(false)
-        }
     }
 
     override public func loadDisplayNode() {
@@ -1673,17 +1686,14 @@ public class VideoMessageCameraScreen: ViewController {
     private func requestAudioSession() {
         let audioSessionType: ManagedAudioSessionType
         if self.context.sharedContext.currentMediaInputSettings.with({ $0 }).pauseMusicOnRecording { 
-            audioSessionType = .record(speaker: false, withOthers: false)
+            audioSessionType = .record(speaker: false, video: false, withOthers: false)
         } else {
-            audioSessionType = .recordWithOthers
+            audioSessionType = .record(speaker: false, video: false, withOthers: true)
         }
       
         self.audioSessionDisposable = self.context.sharedContext.mediaManager.audioSession.push(audioSessionType: audioSessionType, activate: { [weak self] _ in
-            if #available(iOS 13.0, *) {
-                try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
-            }
             if let self {
-                Queue.mainQueue().async {
+                Queue.mainQueue().after(0.05) {
                     self.node.setupCamera()
                 }
             }

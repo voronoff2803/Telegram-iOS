@@ -155,6 +155,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
             case wallpaper
             case story
             case addImage
+            case createSticker
         }
         
         case assets(PHAssetCollection?, AssetsMode)
@@ -174,6 +175,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
     private let chatLocation: ChatLocation?
     private let bannedSendPhotos: (Int32, Bool)?
     private let bannedSendVideos: (Int32, Bool)?
+    private let canBoostToUnrestrict: Bool
     private let subject: Subject
     private let saveEditedPhotos: Bool
     
@@ -187,6 +189,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
     public var presentTimerPicker: (@escaping (Int32) -> Void) -> Void = { _ in }
     public var presentWebSearch: (MediaGroupsScreen, Bool) -> Void = { _, _ in }
     public var getCaptionPanelView: () -> TGCaptionPanelView? = { return nil }
+    public var openBoost: () -> Void = { }
     
     public var customSelection: ((MediaPickerScreen, Any) -> Void)? = nil
     
@@ -271,7 +274,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
             self.presentationData = controller.presentationData
             
             var assetType: PHAssetMediaType?
-            if case let .assets(_, mode) = controller.subject, [.wallpaper, .addImage].contains(mode) {
+            if case let .assets(_, mode) = controller.subject, [.wallpaper, .addImage, .createSticker].contains(mode) {
                 assetType = .image
             }
             let mediaAssetsContext = MediaAssetsContext(assetType: assetType)
@@ -430,7 +433,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
             self.gridNode.scrollView.alwaysBounceVertical = true
             self.gridNode.scrollView.showsVerticalScrollIndicator = false
             
-            if case let .assets(_, mode) = controller.subject, [.wallpaper, .story, .addImage].contains(mode) {
+            if case let .assets(_, mode) = controller.subject, [.wallpaper, .story, .addImage, .createSticker].contains(mode) {
                 
             } else {
                 let selectionGesture = MediaPickerGridSelectionGesture<TGMediaSelectableItem>()
@@ -1308,6 +1311,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
                 
                 if let (untilDate, personal) = bannedSendMedia {
                     self.gridNode.isHidden = true
+                    self.controller?.titleView.isEnabled = false
                     
                     let banDescription: String
                     if untilDate != 0 && untilDate != Int32.max {
@@ -1323,7 +1327,10 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
                     if let current = self.placeholderNode {
                         placeholderNode = current
                     } else {
-                        placeholderNode = MediaPickerPlaceholderNode(content: .bannedSendMedia(banDescription))
+                        placeholderNode = MediaPickerPlaceholderNode(content: .bannedSendMedia(text: banDescription, canBoost: controller.canBoostToUnrestrict))
+                        placeholderNode.boostPressed = { [weak controller] in
+                            controller?.openBoost()
+                        }
                         self.containerNode.insertSubnode(placeholderNode, aboveSubnode: self.gridNode)
                         self.placeholderNode = placeholderNode
                         
@@ -1524,8 +1531,9 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
         threadTitle: String?,
         chatLocation: ChatLocation?,
         isScheduledMessages: Bool = false,
-        bannedSendPhotos: (Int32, Bool)?,
-        bannedSendVideos: (Int32, Bool)?,
+        bannedSendPhotos: (Int32, Bool)? = nil,
+        bannedSendVideos: (Int32, Bool)? = nil,
+        canBoostToUnrestrict: Bool = false,
         subject: Subject,
         editingContext: TGMediaEditingContext? = nil,
         selectionContext: TGMediaSelectionContext? = nil,
@@ -1544,6 +1552,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
         self.isScheduledMessages = isScheduledMessages
         self.bannedSendPhotos = bannedSendPhotos
         self.bannedSendVideos = bannedSendVideos
+        self.canBoostToUnrestrict = canBoostToUnrestrict
         self.subject = subject
         self.saveEditedPhotos = saveEditedPhotos
         self.mainButtonState = mainButtonState
@@ -1558,7 +1567,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
                 self.titleView.title = collection.localizedTitle ?? presentationData.strings.Attachment_Gallery
             } else {
                 switch mode {
-                case .default:
+                case .default, .createSticker:
                     self.titleView.title = presentationData.strings.MediaPicker_Recents
                     self.titleView.isEnabled = true
                 case .story:
@@ -1645,7 +1654,9 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
         self.navigationItem.titleView = self.titleView
         
         if case let .assets(collection, mode) = self.subject, mode != .default {
-            if collection == nil {
+            if case .wallpaper = mode {
+                self.navigationItem.leftBarButtonItem = UIBarButtonItem(backButtonAppearanceWithTitle: self.presentationData.strings.Common_Back, target: self, action: #selector(self.backPressed))
+            } else if collection == nil {
                 self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Cancel, style: .plain, target: self, action: #selector(self.cancelPressed))
                 
 //                if mode == .story || mode == .addImage {
@@ -1831,7 +1842,7 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
             guard let self else {
                 return
             }
-            let items = items.filter { $0.count > 0 }
+            let items = items.filter { $0.count > 0 || $0.collection.assetCollectionSubtype == .smartAlbumAllHidden }
             var dismissImpl: (() -> Void)?
             let content: ContextControllerItemsContent = MediaGroupsContextMenuContent(
                 context: self.context,
@@ -2248,15 +2259,15 @@ public final class MediaPickerScreen: ViewController, AttachmentContainable {
         return self.controllerNode.defaultTransitionView()
     }
     
-    fileprivate func transitionView(for identifier: String, snapshot: Bool, hideSource: Bool = false) -> UIView? {
+    public func transitionView(for identifier: String, snapshot: Bool, hideSource: Bool = false) -> UIView? {
         return self.controllerNode.transitionView(for: identifier, snapshot: snapshot, hideSource: hideSource)
     }
     
-    fileprivate func transitionImage(for identifier: String) -> UIImage? {
+    public func transitionImage(for identifier: String) -> UIImage? {
         return self.controllerNode.transitionImage(for: identifier)
     }
     
-    func updateHiddenMediaId(_ id: String?) {
+    public func updateHiddenMediaId(_ id: String?) {
         self.controllerNode.hiddenMediaId.set(.single(id))
     }
     

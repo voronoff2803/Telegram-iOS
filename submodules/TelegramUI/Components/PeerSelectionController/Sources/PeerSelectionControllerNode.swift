@@ -253,6 +253,9 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         self.chatListNode?.disabledPeerSelected = { [weak self] peer, threadId, reason in
             self?.requestOpenDisabledPeer?(peer, threadId, reason)
         }
+        self.mainContainerNode?.disabledPeerSelected = { [weak self] peer, threadId, reason in
+            self?.requestOpenDisabledPeer?(peer, threadId, reason)
+        }
         
         self.chatListNode?.contentOffsetChanged = { [weak self] offset in
             guard let strongSelf = self else {
@@ -586,6 +589,8 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, sendContextResult: { _, _, _, _ in
             return false
         }, sendBotCommand: { _, _ in
+        }, sendShortcut: { _ in
+        }, openEditShortcuts: {
         }, sendBotStart: { _ in
         }, botSwitchChatWithPayload: { _, _ in
         }, beginMediaRecording: { _ in
@@ -729,6 +734,8 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, hideTranslationPanel: {
         }, openPremiumGift: {
         }, openPremiumRequiredForMessaging: {
+        }, openBoostToUnrestrict: {
+        }, updateVideoTrimRange: { _, _, _, _ in
         }, updateHistoryFilter: { _ in
         }, updateDisplayHistoryFilterAsList: { _ in
         }, requestLayout: { _ in

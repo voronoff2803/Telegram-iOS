@@ -97,6 +97,8 @@ public final class ChatRecentActionsController: TelegramBaseController {
         }, sendContextResult: { _, _, _, _ in
             return false
         }, sendBotCommand: { _, _ in
+        }, sendShortcut: { _ in
+        }, openEditShortcuts: {
         }, sendBotStart: { _ in
         }, botSwitchChatWithPayload: { _, _ in
         }, beginMediaRecording: { _ in
@@ -168,6 +170,8 @@ public final class ChatRecentActionsController: TelegramBaseController {
         }, hideTranslationPanel: {
         }, openPremiumGift: {
         }, openPremiumRequiredForMessaging: {
+        }, openBoostToUnrestrict: {
+        }, updateVideoTrimRange: { _, _, _, _ in
         }, updateHistoryFilter: { _ in
         }, updateDisplayHistoryFilterAsList: { _ in
         }, requestLayout: { _ in

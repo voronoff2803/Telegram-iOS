@@ -99,7 +99,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
         
         self.interactiveVideoNode.shouldOpen = { [weak self] in
             if let strongSelf = self {
-                if let item = strongSelf.item, (item.message.id.namespace == Namespaces.Message.Local || item.message.id.namespace == Namespaces.Message.ScheduledLocal) {
+                if let item = strongSelf.item, (item.message.id.namespace == Namespaces.Message.Local || item.message.id.namespace == Namespaces.Message.ScheduledLocal || item.message.id.namespace == Namespaces.Message.QuickReplyLocal) {
                     return false
                 }
                 return !strongSelf.animatingHeight
@@ -321,8 +321,8 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
                         
                         if !isBroadcastChannel {
                             hasAvatar = true
-                        } else if case .feed = item.chatLocation {
-                            hasAvatar = true
+                        } else if case .customChatContents = item.chatLocation {
+                            hasAvatar = false
                         }
                     }
                 } else if incoming {
@@ -341,7 +341,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
             var needsShareButton = false
             if case .pinnedMessages = item.associatedData.subject {
                 needsShareButton = true
-            } else if isFailed || Namespaces.Message.allScheduled.contains(item.message.id.namespace) {
+            } else if isFailed || Namespaces.Message.allNonRegular.contains(item.message.id.namespace) {
                 needsShareButton = false
             }
             else if item.message.id.peerId == item.context.account.peerId {
@@ -830,11 +830,11 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
                             }
                             if reactionButtonsNode !== strongSelf.reactionButtonsNode {
                                 strongSelf.reactionButtonsNode = reactionButtonsNode
-                                reactionButtonsNode.reactionSelected = { value in
+                                reactionButtonsNode.reactionSelected = { value, sourceView in
                                     guard let strongSelf = weakSelf.value, let item = strongSelf.item else {
                                         return
                                     }
-                                    item.controllerInteraction.updateMessageReaction(item.message, .reaction(value), false)
+                                    item.controllerInteraction.updateMessageReaction(item.message, .reaction(value), false, sourceView)
                                 }
                                 reactionButtonsNode.openReactionPreview = { gesture, sourceNode, value in
                                     guard let strongSelf = weakSelf.value, let item = strongSelf.item else {

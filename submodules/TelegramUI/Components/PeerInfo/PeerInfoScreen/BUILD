@@ -138,6 +138,8 @@ swift_library(
         "//submodules/AttachmentUI",
         "//submodules/TelegramUI/Components/Settings/BoostLevelIconComponent",
         "//submodules/Components/MultilineTextComponent",
+        "//submodules/TelegramUI/Components/Settings/PeerNameColorItem",
+        "//submodules/TelegramUI/Components/PlainButtonComponent",
     ],
     visibility = [
         "//visibility:public",

@@ -101,6 +101,7 @@ private var declaredEncodables: Void = {
     declareEncodable(TelegramMediaWebpage.self, f: { TelegramMediaWebpage(decoder: $0) })
     declareEncodable(ViewCountMessageAttribute.self, f: { ViewCountMessageAttribute(decoder: $0) })
     declareEncodable(ForwardCountMessageAttribute.self, f: { ForwardCountMessageAttribute(decoder: $0) })
+    declareEncodable(BoostCountMessageAttribute.self, f: { BoostCountMessageAttribute(decoder: $0) })
     declareEncodable(NotificationInfoMessageAttribute.self, f: { NotificationInfoMessageAttribute(decoder: $0) })
     declareEncodable(TelegramMediaAction.self, f: { TelegramMediaAction(decoder: $0) })
     declareEncodable(TelegramPeerNotificationSettings.self, f: { TelegramPeerNotificationSettings(decoder: $0) })
@@ -207,6 +208,7 @@ private var declaredEncodables: Void = {
     declareEncodable(WebpagePreviewMessageAttribute.self, f: { WebpagePreviewMessageAttribute(decoder: $0) })
     declareEncodable(DerivedDataMessageAttribute.self, f: { DerivedDataMessageAttribute(decoder: $0) })
     declareEncodable(TelegramApplicationIcons.self, f: { TelegramApplicationIcons(decoder: $0) })
+    declareEncodable(OutgoingQuickReplyMessageAttribute.self, f: { OutgoingQuickReplyMessageAttribute(decoder: $0) })
     return
 }()
 

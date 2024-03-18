@@ -863,6 +863,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                         hasUnseenMentions: false,
                         hasUnseenReactions: false,
                         draftState: nil,
+                        mediaDraftContentType: nil,
                         inputActivities: nil,
                         promoInfo: nil,
                         ignoreUnreadBadge: true,
@@ -882,7 +883,8 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                             )
                         },
                         requiresPremiumForMessaging: requiresPremiumForMessaging,
-                        displayAsTopicList: false
+                        displayAsTopicList: false,
+                        tags: []
                     )), editing: false, hasActiveRevealControls: false, selected: false, header: tagMask == nil ? header : nil, enableContextActions: false, hiddenOffset: false, interaction: interaction)
                 }
             case let .addContact(phoneNumber, theme, strings):
@@ -1754,7 +1756,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             
             let foundThreads: Signal<[EngineChatList.Item], NoError>
             if case let .forum(peerId) = location, (key == .topics || key == .chats) {
-                foundThreads = chatListViewForLocation(chatListLocation: location, location: .initial(count: 1000, filter: nil), account: context.account)
+                foundThreads = chatListViewForLocation(chatListLocation: location, location: .initial(count: 1000, filter: nil), account: context.account, shouldLoadCanMessagePeer: true)
                 |> map { view -> [EngineChatList.Item] in
                     var filteredItems: [EngineChatList.Item] = []
                     let queryTokens = stringIndexTokens(finalQuery, transliteration: .combined)
@@ -2322,6 +2324,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 self.interaction.openStories?(id, sourceNode.avatarNode)
             }
         }, dismissNotice: { _ in
+        }, editPeer: { _ in
         })
         chatListInteraction.isSearchMode = true
         
@@ -2334,7 +2337,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
             let gallerySource: GalleryControllerItemSource
             
             if strongSelf.key == .downloads {
-                gallerySource = .peerMessagesAtId(messageId: message.id, chatLocation: .peer(id: message.id.peerId), chatLocationContextHolder: Atomic<ChatLocationContextHolder?>(value: nil))
+                gallerySource = .peerMessagesAtId(messageId: message.id, chatLocation: .peer(id: message.id.peerId), customTag: nil, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>(value: nil))
             } else {
                 gallerySource = .custom(messages: foundMessages |> map { message, a, b in
                     return (message.map { $0._asMessage() }, a, b)
@@ -3687,6 +3690,7 @@ public final class ChatListSearchShimmerNode: ASDisplayNode {
             }, openChatFolderUpdates: {}, hideChatFolderUpdates: {
             }, openStories: { _, _ in
             }, dismissNotice: { _ in
+            }, editPeer: { _ in
             })
             var isInlineMode = false
             if case .topics = key {
@@ -3735,6 +3739,7 @@ public final class ChatListSearchShimmerNode: ASDisplayNode {
                             hasUnseenMentions: false,
                             hasUnseenReactions: false,
                             draftState: nil,
+                            mediaDraftContentType: nil,
                             inputActivities: nil,
                             promoInfo: nil,
                             ignoreUnreadBadge: false,
@@ -3745,7 +3750,8 @@ public final class ChatListSearchShimmerNode: ASDisplayNode {
                             autoremoveTimeout: nil,
                             storyState: nil,
                             requiresPremiumForMessaging: false,
-                            displayAsTopicList: false
+                            displayAsTopicList: false,
+                            tags: []
                         )), editing: false, hasActiveRevealControls: false, selected: false, header: nil, enableContextActions: false, hiddenOffset: false, interaction: interaction)
                     case .media:
                         return nil

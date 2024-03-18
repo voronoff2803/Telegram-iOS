@@ -81,6 +81,7 @@ public final class ChatInlineSearchResultsListComponent: Component {
     public let loadTagMessages: (MemoryBuffer, MessageIndex?) -> Signal<MessageHistoryView, NoError>?
     public let getSearchResult: () -> Signal<SearchMessagesResult?, NoError>?
     public let getSavedPeers: (String) -> Signal<[(EnginePeer, MessageIndex?)], NoError>?
+    public let loadMoreSearchResults: () -> Void
     
     public init(
         context: AccountContext,
@@ -92,7 +93,8 @@ public final class ChatInlineSearchResultsListComponent: Component {
         peerSelected: @escaping (EnginePeer) -> Void,
         loadTagMessages: @escaping (MemoryBuffer, MessageIndex?) -> Signal<MessageHistoryView, NoError>?,
         getSearchResult: @escaping () -> Signal<SearchMessagesResult?, NoError>?,
-        getSavedPeers: @escaping (String) -> Signal<[(EnginePeer, MessageIndex?)], NoError>?
+        getSavedPeers: @escaping (String) -> Signal<[(EnginePeer, MessageIndex?)], NoError>?,
+        loadMoreSearchResults: @escaping () -> Void
     ) {
         self.context = context
         self.presentation = presentation
@@ -104,6 +106,7 @@ public final class ChatInlineSearchResultsListComponent: Component {
         self.loadTagMessages = loadTagMessages
         self.getSearchResult = getSearchResult
         self.getSavedPeers = getSavedPeers
+        self.loadMoreSearchResults = loadMoreSearchResults
     }
     
     public static func ==(lhs: ChatInlineSearchResultsListComponent, rhs: ChatInlineSearchResultsListComponent) -> Bool {
@@ -283,7 +286,12 @@ public final class ChatInlineSearchResultsListComponent: Component {
             self.component = component
             self.state = state
             
-            self.backgroundColor = component.presentation.theme.list.plainBackgroundColor
+            switch component.contents {
+            case .empty:
+                self.backgroundColor = nil
+            default:
+                break
+            }
             
             self.listNode.frame = CGRect(origin: CGPoint(), size: availableSize)
             let (listDuration, listCurve) = listViewAnimationDurationAndCurve(transition: transition.containedViewLayoutTransition)
@@ -370,6 +378,19 @@ public final class ChatInlineSearchResultsListComponent: Component {
                             }
                         case .search:
                             break
+                        }
+                    }
+                } else if let (currentIndex, disposable) = self.searchContents {
+                    if let loadAroundIndex, loadAroundIndex != currentIndex {
+                        switch component.contents {
+                        case .empty:
+                            break
+                        case .tag:
+                            break
+                        case .search:
+                            self.searchContents = (loadAroundIndex, disposable)
+                            
+                            component.loadMoreSearchResults()
                         }
                     }
                 }
@@ -506,7 +527,7 @@ public final class ChatInlineSearchResultsListComponent: Component {
                                 contentId: .search(query),
                                 entries: entries,
                                 messages: messages,
-                                hasEarlier: false,
+                                hasEarlier: !(result?.completed ?? true),
                                 hasLater: false
                             )
                             if !self.isUpdating {
@@ -612,6 +633,8 @@ public final class ChatInlineSearchResultsListComponent: Component {
                         openStories: { _, _ in
                         },
                         dismissNotice: { _ in
+                        },
+                        editPeer: { _ in
                         }
                     )
                     self.chatListNodeInteraction = chatListNodeInteraction
@@ -741,6 +764,7 @@ public final class ChatInlineSearchResultsListComponent: Component {
                                 hasUnseenMentions: false,
                                 hasUnseenReactions: false,
                                 draftState: nil,
+                                mediaDraftContentType: nil,
                                 inputActivities: nil,
                                 promoInfo: nil,
                                 ignoreUnreadBadge: false,
@@ -751,7 +775,8 @@ public final class ChatInlineSearchResultsListComponent: Component {
                                 autoremoveTimeout: nil,
                                 storyState: nil,
                                 requiresPremiumForMessaging: false,
-                                displayAsTopicList: false
+                                displayAsTopicList: false,
+                                tags: []
                             )),
                             editing: false,
                             hasActiveRevealControls: false,
@@ -801,6 +826,13 @@ public final class ChatInlineSearchResultsListComponent: Component {
                     updateSizeAndInsets: nil,
                     updateOpaqueState: contentsState.id
                 )
+                
+                switch component.contents {
+                case .empty:
+                    self.backgroundColor = nil
+                default:
+                    self.backgroundColor = component.presentation.theme.list.plainBackgroundColor
+                }
             }
             
             return availableSize

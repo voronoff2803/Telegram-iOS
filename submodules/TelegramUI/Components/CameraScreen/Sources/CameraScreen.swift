@@ -1061,7 +1061,7 @@ private final class CameraScreenComponent: CombinedComponent {
                         .disappear(.default(scale: true))
                     )
                     
-                    if !isTablet && Camera.isDualCameraSupported {
+                    if !isTablet && Camera.isDualCameraSupported(forRoundVideo: false) {
                         let dualButton = dualButton.update(
                             component: CameraButton(
                                 content: AnyComponentWithIdentity(
@@ -1513,7 +1513,7 @@ public class CameraScreen: ViewController {
             self.previewBlurView = BlurView()
             self.previewBlurView.isUserInteractionEnabled = false
             
-            var isDualCameraEnabled = Camera.isDualCameraSupported
+            var isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: false)
             if isDualCameraEnabled {
                 if let isDualCameraEnabledValue = UserDefaults.standard.object(forKey: "TelegramStoryCameraIsDualEnabled") as? NSNumber {
                     isDualCameraEnabled = isDualCameraEnabledValue.boolValue
@@ -2384,6 +2384,7 @@ public class CameraScreen: ViewController {
                     bottom: bottomInset,
                     right: layout.safeInsets.right
                 ),
+                additionalInsets: layout.additionalInsets,
                 inputHeight: layout.inputHeight ?? 0.0,
                 metrics: layout.metrics,
                 deviceMetrics: layout.deviceMetrics,
@@ -2766,7 +2767,7 @@ public class CameraScreen: ViewController {
     }
     
     private func requestAudioSession() {
-        self.audioSessionDisposable = self.context.sharedContext.mediaManager.audioSession.push(audioSessionType: .recordWithOthers, activate: { _ in
+        self.audioSessionDisposable = self.context.sharedContext.mediaManager.audioSession.push(audioSessionType: .record(speaker: false, video: true, withOthers: true), activate: { _ in
             if #available(iOS 13.0, *) {
                 try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
             }
