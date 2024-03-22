@@ -940,7 +940,8 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                 messages: [],
                 readState: nil,
                 isRemovedFromTotalUnreadCount: false,
-                draftState: nil,
+                draftState: nil, 
+                mediaDraftContentType: nil,
                 peer: EngineRenderedPeer(peerId: peerId, peers: [:], associatedMedia: [:]),
                 threadInfo: nil,
                 presence: nil,
@@ -957,7 +958,9 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                 forumTopicData: nil,
                 topForumTopicItems: [],
                 revealed: false,
-                storyState: nil
+                storyState: nil,
+                requiresPremiumForMessaging: false,
+                displayAsTopicList: false
             )))
             
             if pinningIndex != 0 {

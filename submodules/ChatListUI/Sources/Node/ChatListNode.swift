@@ -1215,6 +1215,8 @@ public final class ChatListNode: ListView {
                     return PeerId(value)
                 case .ThreadId, .GroupId, .ContactId, .ArchiveIntro, .EmptyIntro, .SectionHeader, .Notice, .additionalCategory:
                     return nil
+                case .aiPinnedChat:
+                    return nil
                 }
             }
         } else {

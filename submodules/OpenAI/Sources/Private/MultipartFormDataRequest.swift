@@ -30,7 +30,7 @@ extension MultipartFormDataRequest: URLRequestBuildable {
         let boundary: String = UUID().uuidString
         request.timeoutInterval = timeoutInterval
         request.httpMethod = method
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(token, forHTTPHeaderField: "App-User-Id")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         if let organizationIdentifier {
             request.setValue(organizationIdentifier, forHTTPHeaderField: "OpenAI-Organization")

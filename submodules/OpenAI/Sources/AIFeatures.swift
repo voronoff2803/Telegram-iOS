@@ -9,6 +9,7 @@ import Foundation
 import AIStrings
 import TelegramPresentationData
 import Markdown
+import RevenueCat
 
 final public class AIManager {
     public struct MessageEntry {
@@ -26,7 +27,8 @@ final public class AIManager {
     public init() {}
     
     lazy var openAI: OpenAI = {
-        let configuration = OpenAI.Configuration(token: "", host: "", timeoutInterval: 60.0)
+        let userId = Purchases.shared.appUserID
+        let configuration = OpenAI.Configuration(token: userId, host: "tgai.aapp.pro", timeoutInterval: 60.0)
         let openAI = OpenAI(configuration: configuration)
         
         return openAI
@@ -68,9 +70,9 @@ final public class AIManager {
         chatMessages = chatMessages.reversed()
         
         chatMessages.append(Chat(role: .system, content: "Using the context of the conversation, respond to messages. Act like a human '\(actorName)'. Respond using Markdown. Answer in user's language as concisely as possible. Keep up the style of conversation. Start your short response with '\(actorName)':"))
-        
+                
         let query = ChatQuery(model: .gpt3_5Turbo, messages: chatMessages)
-        
+                
         var message = ""
         
         var isRemovedName = false
@@ -116,8 +118,8 @@ final public class AIManager {
     
     
     func replaceSpecialCharacters(in string: String) -> String {
-        var newString = foldMultipleLineBreaks(string)
-        
+        //var newString = foldMultipleLineBreaks(string)
+        let newString = string
         return newString
     }
     
@@ -141,6 +143,7 @@ final public class AIManager {
                 messageText = "\(replaceSpecialCharacters(in: name)): \(replaceSpecialCharacters(in: messageText))"
             }
             
+            
             let chatQuery = Chat(
                 role: message.myMessage ? .assistant : .user,
                 content : messageText
@@ -151,6 +154,7 @@ final public class AIManager {
                 break
             }
             chatMessages.append(chatQuery)
+            
         }
         
         chatMessages = chatMessages.reversed()
@@ -158,12 +162,11 @@ final public class AIManager {
         let locale = presentationData.strings.baseLanguageCode
         chatMessages.append(Chat(role: .system, content: l("Prompt.Summary", locale)))
 
+        
         let query = ChatQuery(model: .gpt3_5Turbo, messages: chatMessages)
         
-        var message = ""
         
-        print("AIREQ: ")
-        query.messages.forEach({ print("\(String(describing: $0.name)): \(String(describing: $0.content))")})
+        var message = ""
                 
         self.openAI.chatsStream(query: query) { partialResult in
             switch partialResult {

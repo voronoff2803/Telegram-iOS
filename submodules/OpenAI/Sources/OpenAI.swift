@@ -160,9 +160,10 @@ extension OpenAI {
     
     func performSteamingRequest<ResultType: Codable>(request: any URLRequestBuildable, onResult: @escaping (Result<ResultType, Error>) -> Void, completion: ((Error?) -> Void)?) {
         do {
-            let request = try request.build(token: configuration.token, 
+            let request = try request.build(token: configuration.token,
                                             organizationIdentifier: configuration.organizationIdentifier,
                                             timeoutInterval: configuration.timeoutInterval)
+            
             let session = StreamingSession<ResultType>(urlRequest: request)
             session.onReceiveContent = {_, object in
                 print(object)
@@ -222,10 +223,9 @@ extension OpenAI {
     
     func buildURL(path: String) -> URL {
         var components = URLComponents()
-        components.scheme = "http"
+        components.scheme = "https"
         components.host = configuration.host
         components.path = path
-        components.port = 7999
         return components.url!
     }
 }

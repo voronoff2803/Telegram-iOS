@@ -28,13 +28,15 @@ extension JSONRequest: URLRequestBuildable {
     func build(token: String, organizationIdentifier: String?, timeoutInterval: TimeInterval) throws -> URLRequest {
         var request = URLRequest(url: url, timeoutInterval: timeoutInterval)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(token, forHTTPHeaderField: "App-User-Id")
         if let organizationIdentifier {
             request.setValue(organizationIdentifier, forHTTPHeaderField: "OpenAI-Organization")
         }
         request.httpMethod = method
         if let body = body {
-            request.httpBody = try JSONEncoder().encode(body)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .withoutEscapingSlashes
+            request.httpBody = try encoder.encode(body)
         }
         return request
     }
