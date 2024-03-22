@@ -6910,6 +6910,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     func aiGenerateSummary() {
         guard let source = self.chatDisplayNode.historyNode.historyView else { return }
         
+        
         let messages: [AIManager.MessageEntry] = source.filteredEntries.compactMap { entry in
             switch entry {
             case let .MessageEntry(message, _, myMessage, _, _, _):
@@ -6923,7 +6924,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     }
                 }
                 let text = message.text
-                
+                                
                 if text.isEmpty {
                     return nil
                 }

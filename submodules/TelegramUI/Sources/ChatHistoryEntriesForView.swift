@@ -129,6 +129,8 @@ func chatHistoryEntriesForView(
     var count = 0
     loop: for entry in view.entries {
         var message = entry.message
+        
+        
         var isRead = entry.isRead
         
         if pendingRemovedMessages.contains(message.id) {

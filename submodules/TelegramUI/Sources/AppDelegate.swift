@@ -50,6 +50,10 @@ import AppCenter
 import AppCenterCrashes
 #endif
 
+// MARK: AI SummaryChat
+import OpenAI
+//
+
 private let handleVoipNotifications = false
 
 private var testIsLaunched = false
@@ -325,7 +329,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         testIsLaunched = true
         
         Purchases.logLevel = .debug
-        Purchases.configure(withAPIKey: "")
+        Purchases.configure(withAPIKey: OpenAIConfig.rcApiKey)
         
         let _ = voipTokenPromise.get().start(next: { token in
             self.deviceToken.set(.single(token))

@@ -567,8 +567,6 @@ public class ImmediateTextNodeWithEntities: TextNode {
         super.didLoad()
         
         self.updateInteractiveActions()
-        
-        print("res 3", self.processedAttributedText() as Any)
     }
     
     private func updateInteractiveActions() {
