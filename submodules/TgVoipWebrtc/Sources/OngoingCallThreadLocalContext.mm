@@ -615,26 +615,26 @@ private:
                                 break;
                         }
                     }
-                    if (tgNativeBuffer.deviceRelativeVideoRotation != -1) {
-                        hasDeviceRelativeVideoRotation = true;
-                        switch (tgNativeBuffer.deviceRelativeVideoRotation) {
-                            case webrtc::kVideoRotation_0:
-                                deviceRelativeVideoRotation = OngoingCallVideoOrientation0;
-                                break;
-                            case webrtc::kVideoRotation_90:
-                                deviceRelativeVideoRotation = OngoingCallVideoOrientation90;
-                                break;
-                            case webrtc::kVideoRotation_180:
-                                deviceRelativeVideoRotation = OngoingCallVideoOrientation180;
-                                break;
-                            case webrtc::kVideoRotation_270:
-                                deviceRelativeVideoRotation = OngoingCallVideoOrientation270;
-                                break;
-                            default:
-                                deviceRelativeVideoRotation = OngoingCallVideoOrientation0;
-                                break;
-                        }
-                    }
+//                    if (tgNativeBuffer.deviceRelativeVideoRotation != -1) {
+//                        hasDeviceRelativeVideoRotation = true;
+//                        switch (tgNativeBuffer.deviceRelativeVideoRotation) {
+//                            case webrtc::kVideoRotation_0:
+//                                deviceRelativeVideoRotation = OngoingCallVideoOrientation0;
+//                                break;
+//                            case webrtc::kVideoRotation_90:
+//                                deviceRelativeVideoRotation = OngoingCallVideoOrientation90;
+//                                break;
+//                            case webrtc::kVideoRotation_180:
+//                                deviceRelativeVideoRotation = OngoingCallVideoOrientation180;
+//                                break;
+//                            case webrtc::kVideoRotation_270:
+//                                deviceRelativeVideoRotation = OngoingCallVideoOrientation270;
+//                                break;
+//                            default:
+//                                deviceRelativeVideoRotation = OngoingCallVideoOrientation0;
+//                                break;
+//                        }
+//                    }
                 }
             } else if (videoFrame.video_frame_buffer()->type() == webrtc::VideoFrameBuffer::Type::kNV12) {
                 rtc::scoped_refptr<webrtc::NV12BufferInterface> nv12Buffer(static_cast<webrtc::NV12BufferInterface *>(videoFrame.video_frame_buffer().get()));

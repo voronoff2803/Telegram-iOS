@@ -35,7 +35,11 @@ extension JSONRequest: URLRequestBuildable {
         request.httpMethod = method
         if let body = body {
             let encoder = JSONEncoder()
-            encoder.outputFormatting = .withoutEscapingSlashes
+            
+            if #available(iOS 13.0, *) {
+                encoder.outputFormatting = .withoutEscapingSlashes
+            }
+            
             request.httpBody = try encoder.encode(body)
         }
         return request
