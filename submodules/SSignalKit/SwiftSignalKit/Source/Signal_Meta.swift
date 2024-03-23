@@ -246,3 +246,37 @@ public func deferred<T, E>(_ generator: @escaping() -> Signal<T, E>) -> Signal<T
         })
     }
 }
+
+
+public func debounceThroughAllValues<T, E>(_ signal: Signal<T, E>, timeout: Double) -> Signal<T, E> {
+    return Signal { subscriber in
+        let queue = Queue()
+        var debounceTimer: Timer?
+        var lastValue: T?
+
+        let disposable = signal.start(next: { value in
+            queue.async {
+                lastValue = value
+                debounceTimer?.invalidate()
+                debounceTimer = Timer(timeout: timeout, repeat: false, completion: {
+                    if let lastValue = lastValue {
+                        subscriber.putNext(lastValue)
+                    }
+                    lastValue = nil
+                }, queue: queue)
+                debounceTimer?.start()
+            }
+        }, error: { error in
+            subscriber.putError(error)
+        }, completed: {
+            subscriber.putCompletion()
+        })
+
+        return ActionDisposable {
+            disposable.dispose()
+            queue.async {
+                debounceTimer?.invalidate()
+            }
+        }
+    }
+}

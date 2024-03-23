@@ -166,11 +166,9 @@ extension OpenAI {
             
             let session = StreamingSession<ResultType>(urlRequest: request)
             session.onReceiveContent = {_, object in
-                print(object)
                 onResult(.success(object))
             }
             session.onProcessingError = {_, error in
-                print(error)
                 onResult(.failure(error))
             }
             session.onComplete = { [weak self] object, error in

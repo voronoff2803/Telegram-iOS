@@ -6942,6 +6942,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         if let lastMessageIndex = source.filteredEntries.last?.index {
             DispatchQueue.global().async {
                 self.chatDisplayNode.historyNode.scrollToMessage(index: lastMessageIndex)
+                
+                self.chatDisplayNode.historyNode.aiSummaryItemsPromise.set([
+                    AISummaryChatMessage(id: lastMessageIndex.id, timestamp: lastMessageIndex.timestamp + 1, content: "")
+                ])
+                
                 self.aiManager.generateSummary(
                     messages: messages,
                     resultUpdate: {  [weak self] result in

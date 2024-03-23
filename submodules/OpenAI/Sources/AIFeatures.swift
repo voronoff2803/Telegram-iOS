@@ -28,7 +28,7 @@ final public class AIManager {
     
     lazy var openAI: OpenAI = {
         let userId = Purchases.shared.appUserID
-        let configuration = OpenAI.Configuration(token: userId, host: "tgai.aapp.pro", timeoutInterval: 60.0)
+        let configuration = OpenAI.Configuration(token: userId, host: OpenAIConfig.serviceHost, timeoutInterval: 60.0)
         let openAI = OpenAI(configuration: configuration)
         
         return openAI
@@ -167,13 +167,42 @@ final public class AIManager {
         
         
         var message = ""
+        
+        var isRemovedStart = false
+        let startStr = l("Prompt.Summary.Start", locale)
                 
         self.openAI.chatsStream(query: query) { partialResult in
             switch partialResult {
             case .success(let result):
+                
                 if let delta = result.choices.first?.delta.content {
                     message += delta
-                    resultUpdate(message)
+                    
+                    if !isRemovedStart {
+                        if message.contains(startStr) {
+                            isRemovedStart = true
+                            message = message.replacingOccurrences(of: startStr, with: "")
+                        }
+                    }
+                    
+                    if message.count < 20 {
+                        let symbolsToRemove = ["'", " ", ":", "*", "\\n", "\n"]
+                        
+                        for symbol in symbolsToRemove {
+                            if message.hasPrefix(symbol) {
+                                message = String(message.dropFirst(symbol.count))
+                            }
+                        }
+                    }
+                    
+                    if message.count > 20 && !isRemovedStart {
+                        isRemovedStart = true
+                    }
+                    
+                    if isRemovedStart {
+                        resultUpdate(message)
+                    }
+                    
                 }
             case .failure(let error):
                 completion(error)

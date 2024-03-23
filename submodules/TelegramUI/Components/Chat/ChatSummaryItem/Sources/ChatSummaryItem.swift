@@ -27,20 +27,18 @@ private let messageFixedFont = UIFont(name: "Menlo-Regular", size: 13.0) ?? UIFo
 public final class ChatSummaryItem: ListViewItem {
     fileprivate let title: String
     fileprivate let text: String
-    fileprivate let photo: TelegramMediaImage?
-    fileprivate let video: TelegramMediaFile?
-    fileprivate let controllerInteraction: ChatControllerInteraction
     fileprivate let presentationData: ChatPresentationData
     fileprivate let context: AccountContext
+    fileprivate let controllerInteraction: ChatControllerInteraction
+    fileprivate let isLoading: Bool
     
-    public init(title: String, text: String, photo: TelegramMediaImage?, video: TelegramMediaFile?, controllerInteraction: ChatControllerInteraction, presentationData: ChatPresentationData, context: AccountContext) {
+    public init(title: String, text: String, controllerInteraction: ChatControllerInteraction, presentationData: ChatPresentationData, context: AccountContext, isLoading: Bool = false) {
         self.title = title
         self.text = text
-        self.photo = photo
-        self.video = video
         self.controllerInteraction = controllerInteraction
         self.presentationData = presentationData
         self.context = context
+        self.isLoading = isLoading
     }
     
     public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
@@ -91,8 +89,6 @@ public final class ChatSummaryItemNode: ListViewItemNode {
     
     public let offsetContainer: ASDisplayNode
     public let backgroundNode: ASImageNode
-    public let imageNode: TransformImageNode
-    public var videoNode: UniversalVideoNode?
     public let titleNode: TextNode
     public let textNode: TextNode
     private var linkHighlightingNode: LinkHighlightingNode?
@@ -119,9 +115,7 @@ public final class ChatSummaryItemNode: ListViewItemNode {
         didSet {
             guard gloss != oldValue else { return }
             
-            DispatchQueue.main.async {
-                self.setupGloss()
-            }
+            self.setupGloss()
         }
     }
     
@@ -131,7 +125,6 @@ public final class ChatSummaryItemNode: ListViewItemNode {
         self.backgroundNode = ASImageNode()
         self.backgroundNode.displaysAsynchronously = false
         self.backgroundNode.displayWithoutProcessing = true
-        self.imageNode = TransformImageNode()
         self.textNode = TextNode()
         self.titleNode = TextNode()
         
@@ -141,7 +134,6 @@ public final class ChatSummaryItemNode: ListViewItemNode {
         
         self.addSubnode(self.offsetContainer)
         self.offsetContainer.addSubnode(self.backgroundNode)
-        self.offsetContainer.addSubnode(self.imageNode)
         self.offsetContainer.addSubnode(self.titleNode)
         self.offsetContainer.addSubnode(self.textNode)
         self.wantsTrailingItemSpaceUpdates = true
@@ -228,35 +220,6 @@ public final class ChatSummaryItemNode: ListViewItemNode {
 //        }
     }
     
-    private func setup(context: AccountContext, videoFile: TelegramMediaFile?) {
-        guard self.videoNode == nil, let file = videoFile else {
-            return
-        }
-        
-        let videoContent = NativeVideoContent(
-            id: .message(0, MediaId(namespace: 0, id: Int64.random(in: 0..<Int64.max))),
-            userLocation: .other,
-            fileReference: .standalone(media: file),
-            streamVideo: .none,
-            loopVideo: true,
-            enableSound: false,
-            fetchAutomatically: true,
-            onlyFullSizeThumbnail: false,
-            continuePlayingWithoutSoundOnLostAudioSession: false,
-            storeAfterDownload: nil
-        )
-        let videoNode = UniversalVideoNode(postbox: context.account.postbox, audioSession: context.sharedContext.mediaManager.audioSession, manager: context.sharedContext.mediaManager.universalVideoManager, decoration: VideoDecoration(), content: videoContent, priority: .embedded)
-        videoNode.canAttachContent = true
-        self.videoNode = videoNode
-        
-        let cornerRadius = (self.item?.presentationData.chatBubbleCorners.mainRadius ?? 17.0)
-        (videoNode.decoration as? VideoDecoration)?.updateCorners(ImageCorners(topLeft: .Corner(cornerRadius), topRight: .Corner(cornerRadius), bottomLeft: .Corner(0.0), bottomRight: .Corner(0.0)))
-        
-        self.offsetContainer.addSubnode(videoNode)
-        
-        videoNode.play()
-    }
-    
     override public func didLoad() {
         super.didLoad()
         
@@ -282,8 +245,6 @@ public final class ChatSummaryItemNode: ListViewItemNode {
             }
         }
         self.view.addGestureRecognizer(recognizer)
-        
-        gloss = true
     }
     
     override public func updateAbsoluteRect(_ rect: CGRect, within containerSize: CGSize) {
@@ -299,13 +260,10 @@ public final class ChatSummaryItemNode: ListViewItemNode {
     }
     
     public func asyncLayout() -> (_ item: ChatSummaryItem, _ width: ListViewItemLayoutParams) -> (ListViewItemNodeLayout, (ListViewItemUpdateAnimation) -> Void) {
-        let makeImageLayout = self.imageNode.asyncLayout()
         let makeTitleLayout = TextNode.asyncLayout(self.titleNode)
         let makeTextLayout = TextNode.asyncLayout(self.textNode)
         let currentTextAndEntities = self.currentTextAndEntities
         let currentTheme = self.theme
-        
-        let currentItem = self.item
         
         return { [weak self] item, params in
             self?.item = item
@@ -337,54 +295,22 @@ public final class ChatSummaryItemNode: ListViewItemNode {
             
             let (textLayout, textApply) = makeTextLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: params.width - horizontalEdgeInset * 2.0 - horizontalContentInset * 2.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
             
+            let textWidth = params.width - horizontalEdgeInset * 2.0 - horizontalContentInset * 2.0
             let textSpacing: CGFloat = 1.0
-            let textSize = CGSize(width: max(titleLayout.size.width, textLayout.size.width), height: (titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing) + textLayout.size.height))
+            let textSize = CGSize(width: textWidth, height: (titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing) + textLayout.size.height))
             
-            var mediaUpdated = false
-            if let media = item.photo {
-                if let currentMedia = currentItem?.photo {
-                    mediaUpdated = !media.isSemanticallyEqual(to: currentMedia)
-                } else {
-                    mediaUpdated = true
-                }
-            }
             
-            var updatedImageSignal: Signal<(TransformImageArguments) -> DrawingContext?, NoError>?
-
-            var imageSize = CGSize()
-            var imageDimensions = CGSize()
-            var imageApply: (() -> Void)?
-            let imageInset: CGFloat = 1.0 + UIScreenPixel
-            if let image = item.photo, let dimensions = largestImageRepresentation(image.representations)?.dimensions {
-                imageDimensions = dimensions.cgSize.aspectFitted(CGSize(width: textSize.width + horizontalContentInset * 2.0 - imageInset * 2.0, height: CGFloat.greatestFiniteMagnitude))
-                imageSize = imageDimensions
-                imageSize.height += 4.0
-                
-                let arguments = TransformImageArguments(corners: ImageCorners(topLeft: .Corner(17.0), topRight: .Corner(17.0), bottomLeft: .Corner(0.0), bottomRight: .Corner(0.0)), imageSize: dimensions.cgSize.aspectFilled(imageDimensions), boundingSize: imageDimensions, intrinsicInsets: UIEdgeInsets(), emptyColor: item.presentationData.theme.theme.list.mediaPlaceholderColor)
-                imageApply = makeImageLayout(arguments)
-                
-                if mediaUpdated {
-                    updatedImageSignal = chatMessagePhoto(postbox: item.context.account.postbox, userLocation: .other, photoReference: .standalone(media: image), synchronousLoad: true, highQuality: false)
-                }
-            }
-            if let video = item.video, let dimensions = video.dimensions {
-                imageDimensions = dimensions.cgSize.aspectFitted(CGSize(width: textSize.width + horizontalContentInset * 2.0 - imageInset * 2.0, height: CGFloat.greatestFiniteMagnitude))
-                imageSize = imageDimensions
-                imageSize.height += 4.0
-            }
-            
-            let backgroundFrame = CGRect(origin: CGPoint(x: floor((params.width - textSize.width - horizontalContentInset * 2.0) / 2.0), y: verticalItemInset + 4.0), size: CGSize(width: textSize.width + horizontalContentInset * 2.0, height: imageSize.height + textSize.height + verticalContentInset * 2.0))
+            let backgroundFrame = CGRect(origin: CGPoint(x: floor((params.width - textSize.width - horizontalContentInset * 2.0) / 2.0), y: verticalItemInset + 4.0), size: CGSize(width: textSize.width + horizontalContentInset * 2.0, height: textSize.height + verticalContentInset * 2.0))
             let titleFrame = CGRect(
                 origin: CGPoint(
                     x: backgroundFrame.origin.x + (backgroundFrame.size.width - titleLayout.size.width) / 2,
-                    y: backgroundFrame.origin.y + imageSize.height + verticalContentInset
+                    y: backgroundFrame.origin.y + verticalContentInset
                 ),
                 size: titleLayout.size
             )
-            let textFrame = CGRect(origin: CGPoint(x: backgroundFrame.origin.x + horizontalContentInset, y: backgroundFrame.origin.y + imageSize.height + verticalContentInset + titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing)), size: textLayout.size)
-            let imageFrame = CGRect(origin: CGPoint(x: backgroundFrame.origin.x + imageInset, y: backgroundFrame.origin.y + imageInset), size: imageDimensions)
+            let textFrame = CGRect(origin: CGPoint(x: backgroundFrame.origin.x + horizontalContentInset, y: backgroundFrame.origin.y + verticalContentInset + titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing)), size: textLayout.size)
             
-            let itemLayout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: imageSize.height + textLayout.size.height + verticalItemInset * 2.0 + verticalContentInset * 2.0 + titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing) - 3.0), insets: UIEdgeInsets())
+            let itemLayout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: textLayout.size.height + verticalItemInset * 2.0 + verticalContentInset * 2.0 + titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing) - 3.0), insets: UIEdgeInsets())
             return (itemLayout, { _ in
                 if let strongSelf = self {
                     strongSelf.theme = item.presentationData.theme
@@ -396,26 +322,19 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                     strongSelf.controllerInteraction = item.controllerInteraction
                     strongSelf.currentTextAndEntities = updatedTextAndEntities
                     
-                    if let imageApply = imageApply {
-                        let _ = imageApply()
-                        if let updatedImageSignal = updatedImageSignal {
-                            strongSelf.imageNode.setSignal(updatedImageSignal)
-                            if let image = item.photo {
-                                strongSelf.fetchDisposable.set(chatMessagePhotoInteractiveFetched(context: item.context, userLocation: .other, photoReference: .standalone(media: image), displayAtSize: nil, storeToDownloadsPeerId: nil).startStrict())
-                            }
-                        }
-                        strongSelf.imageNode.isHidden = false
-                    } else {
-                        strongSelf.imageNode.isHidden = true
-                    }
-                    strongSelf.imageNode.frame = imageFrame
-                    
                     let _ = titleApply()
                     let _ = textApply()
                     strongSelf.offsetContainer.frame = CGRect(origin: CGPoint(), size: itemLayout.contentSize)
-                    strongSelf.backgroundNode.frame = backgroundFrame
-                    strongSelf.titleNode.frame = titleFrame
                     strongSelf.textNode.frame = textFrame
+                    strongSelf.titleNode.frame = titleFrame
+                    strongSelf.gloss = item.isLoading
+                    
+                    print("shimmer", item.isLoading)
+                    
+                    UIView.animate(withDuration: 0.2) {
+                        strongSelf.backgroundNode.frame = backgroundFrame
+                    }
+                    
                     
                     if let shimmerView = strongSelf.shimmerView, let borderView = strongSelf.borderView, let borderMaskView = strongSelf.borderMaskView, let borderShimmerView = strongSelf.borderShimmerView {
                         shimmerView.frame = backgroundFrame
@@ -423,10 +342,10 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                         borderMaskView.frame = CGRect(origin: CGPoint(), size: backgroundFrame.size)
                         borderShimmerView.frame = CGRect(origin: CGPoint(), size: backgroundFrame.size)
                         
-                        let size = CGSize(width: itemLayout.size.width, height: 1000.0)
+                        let size = CGSize(width: itemLayout.size.width, height: 400.0)
                         
-                        shimmerView.updateAbsoluteRect(CGRect(origin: .zero, size: size), within: size)
-                        borderShimmerView.updateAbsoluteRect(CGRect(origin: .zero, size: size), within: size)
+                        shimmerView.updateAbsoluteRect(CGRect(origin: CGPoint(x: size.width * 2.0, y: 0.0), size: size), within: CGSize(width: size.width * 6.0, height: size.height))
+                        borderShimmerView.updateAbsoluteRect(CGRect(origin: CGPoint(x: size.width * 2.0, y: 0.0), size: size), within: CGSize(width: size.width * 6.0, height: size.height))
                         
                         shimmerView.layer.cornerRadius = 17.0
                         borderMaskView.layer.cornerRadius = 17.0
@@ -458,12 +377,6 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                         }
                     } else {
                         strongSelf.backgroundNode.isHidden = false
-                    }
-                    
-                    strongSelf.setup(context: item.context, videoFile: item.video)
-                    if let videoNode = strongSelf.videoNode {
-                        videoNode.updateLayout(size: imageFrame.size, transition: .immediate)
-                        videoNode.frame = imageFrame
                     }
                 }
             })
@@ -620,120 +533,5 @@ public final class ChatSummaryItemNode: ListViewItemNode {
             default:
                 break
         }
-    }
-}
-
-private final class VideoDecoration: UniversalVideoDecoration {
-    public let backgroundNode: ASDisplayNode? = nil
-    public let contentContainerNode: ASDisplayNode
-    public let foregroundNode: ASDisplayNode? = nil
-    
-    private var contentNode: (ASDisplayNode & UniversalVideoContentNode)?
-    
-    private var validLayoutSize: CGSize?
-    
-    public init() {
-        self.contentContainerNode = ASDisplayNode()
-    }
-    
-    public func updateContentNode(_ contentNode: (UniversalVideoContentNode & ASDisplayNode)?) {
-        if self.contentNode !== contentNode {
-            let previous = self.contentNode
-            self.contentNode = contentNode
-            
-            if let previous = previous {
-                if previous.supernode === self.contentContainerNode {
-                    previous.removeFromSupernode()
-                }
-            }
-            
-            if let contentNode = contentNode {
-                if contentNode.supernode !== self.contentContainerNode {
-                    self.contentContainerNode.addSubnode(contentNode)
-                    if let validLayoutSize = self.validLayoutSize {
-                        contentNode.frame = CGRect(origin: CGPoint(), size: validLayoutSize)
-                        contentNode.updateLayout(size: validLayoutSize, transition: .immediate)
-                    }
-                }
-            }
-        }
-    }
-    
-    public func updateCorners(_ corners: ImageCorners) {
-        self.contentContainerNode.clipsToBounds = true
-        if isRoundEqualCorners(corners) {
-            self.contentContainerNode.cornerRadius = corners.topLeft.radius
-        } else {
-            let boundingSize: CGSize = CGSize(width: max(corners.topLeft.radius, corners.bottomLeft.radius) + max(corners.topRight.radius, corners.bottomRight.radius), height: max(corners.topLeft.radius, corners.topRight.radius) + max(corners.bottomLeft.radius, corners.bottomRight.radius))
-            let size: CGSize = CGSize(width: boundingSize.width + corners.extendedEdges.left + corners.extendedEdges.right, height: boundingSize.height + corners.extendedEdges.top + corners.extendedEdges.bottom)
-            let arguments = TransformImageArguments(corners: corners, imageSize: size, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets())
-            guard let context = DrawingContext(size: size, clear: true) else {
-                return
-            }
-            context.withContext { ctx in
-                ctx.setFillColor(UIColor.black.cgColor)
-                ctx.fill(arguments.drawingRect)
-            }
-            addCorners(context, arguments: arguments)
-            
-            if let maskImage = context.generateImage() {
-                let mask = CALayer()
-                mask.contents = maskImage.cgImage
-                mask.contentsScale = maskImage.scale
-                mask.contentsCenter = CGRect(x: max(corners.topLeft.radius, corners.bottomLeft.radius) / maskImage.size.width, y: max(corners.topLeft.radius, corners.topRight.radius) / maskImage.size.height, width: (maskImage.size.width - max(corners.topLeft.radius, corners.bottomLeft.radius) - max(corners.topRight.radius, corners.bottomRight.radius)) / maskImage.size.width, height: (maskImage.size.height - max(corners.topLeft.radius, corners.topRight.radius) - max(corners.bottomLeft.radius, corners.bottomRight.radius)) / maskImage.size.height)
-                
-                self.contentContainerNode.layer.mask = mask
-                self.contentContainerNode.layer.mask?.frame = self.contentContainerNode.bounds
-            }
-        }
-    }
-    
-    public func updateClippingFrame(_ frame: CGRect, completion: (() -> Void)?) {
-        self.contentContainerNode.layer.animate(from: NSValue(cgRect: self.contentContainerNode.bounds), to: NSValue(cgRect: frame), keyPath: "bounds", timingFunction: kCAMediaTimingFunctionSpring, duration: 0.25, removeOnCompletion: false, completion: { _ in
-        })
-
-        if let maskLayer = self.contentContainerNode.layer.mask {
-            maskLayer.animate(from: NSValue(cgRect: self.contentContainerNode.bounds), to: NSValue(cgRect: frame), keyPath: "bounds", timingFunction: kCAMediaTimingFunctionSpring, duration: 0.25, removeOnCompletion: false, completion: { _ in
-            })
-            
-            maskLayer.animate(from: NSValue(cgPoint: maskLayer.position), to: NSValue(cgPoint: CGPoint(x: frame.midX, y: frame.midY)), keyPath: "position", timingFunction: kCAMediaTimingFunctionSpring, duration: 0.25, removeOnCompletion: false, completion: { _ in
-            })
-        }
-        
-        if let contentNode = self.contentNode {
-            contentNode.layer.animate(from: NSValue(cgPoint: contentNode.layer.position), to: NSValue(cgPoint: CGPoint(x: frame.midX, y: frame.midY)), keyPath: "position", timingFunction: kCAMediaTimingFunctionSpring, duration: 0.25, removeOnCompletion: false, completion: { _ in
-                completion?()
-            })
-        }
-    }
-    
-    public func updateContentNodeSnapshot(_ snapshot: UIView?) {
-    }
-    
-    public func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) {
-        self.validLayoutSize = size
-        
-        let bounds = CGRect(origin: CGPoint(), size: size)
-        if let backgroundNode = self.backgroundNode {
-            transition.updateFrame(node: backgroundNode, frame: bounds)
-        }
-        
-        if let foregroundNode = self.foregroundNode {
-            transition.updateFrame(node: foregroundNode, frame: bounds)
-        }
-        transition.updateFrame(node: self.contentContainerNode, frame: bounds)
-        if let maskLayer = self.contentContainerNode.layer.mask {
-            transition.updateFrame(layer: maskLayer, frame: bounds)
-        }
-        if let contentNode = self.contentNode {
-            transition.updateFrame(node: contentNode, frame: CGRect(origin: CGPoint(), size: size))
-            contentNode.updateLayout(size: size, transition: transition)
-        }
-    }
-    
-    public func setStatus(_ status: Signal<MediaPlayerStatus?, NoError>) {
-    }
-    
-    public func tap() {
     }
 }

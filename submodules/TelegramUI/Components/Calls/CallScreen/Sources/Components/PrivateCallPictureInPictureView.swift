@@ -190,19 +190,17 @@ final class PrivateCallPictureInPictureView: UIView {
             mappedTransition = .immediate
         }
         
-        if let videoMetrics = self.videoMetrics,
-           let windowScene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-
-            let interfaceOrientation = windowScene.interfaceOrientation
-            let resolvedRotationAngle = resolveVideoRotationAngle(angle: videoMetrics.rotationAngle, followsDeviceOrientation: videoMetrics.followsDeviceOrientation, interfaceOrientation: interfaceOrientation)
-
+       
+        if let videoMetrics = self.videoMetrics {
+            let resolvedRotationAngle = resolveVideoRotationAngle(angle: videoMetrics.rotationAngle, followsDeviceOrientation: videoMetrics.followsDeviceOrientation, interfaceOrientation: UIApplication.shared.statusBarOrientation)
+            
             var rotatedResolution = videoMetrics.resolution
             var videoIsRotated = false
             if resolvedRotationAngle == Float.pi * 0.5 || resolvedRotationAngle == Float.pi * 3.0 / 2.0 {
                 rotatedResolution = CGSize(width: rotatedResolution.height, height: rotatedResolution.width)
                 videoIsRotated = true
             }
-
+            
             var videoSize = rotatedResolution.aspectFitted(size)
             let boundingAspectRatio = size.width / size.height
             let videoAspectRatio = videoSize.width / videoSize.height
@@ -210,20 +208,20 @@ final class PrivateCallPictureInPictureView: UIView {
             if isFillingBounds {
                 videoSize = rotatedResolution.aspectFilled(size)
             }
-
+            
             let rotatedBoundingSize = videoIsRotated ? CGSize(width: size.height, height: size.width) : size
             let rotatedVideoSize = videoIsRotated ? CGSize(width: videoSize.height, height: videoSize.width) : videoSize
-
+            
             let videoFrame = rotatedVideoSize.centered(around: CGPoint(x: rotatedBoundingSize.width * 0.5, y: rotatedBoundingSize.height * 0.5))
-
+            
             let apply: () -> Void = {
                 self.videoContainerView.center = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
                 self.videoContainerView.bounds = CGRect(origin: CGPoint(), size: rotatedBoundingSize)
-                self.videoContainerView.transform = CGAffineTransform(rotationAngle: CGFloat(resolvedRotationAngle))
+                self.videoContainerView.transform = CGAffineTransformMakeRotation(CGFloat(resolvedRotationAngle))
                 
                 self.sampleBufferView.center = videoFrame.center
                 self.sampleBufferView.bounds = CGRect(origin: CGPoint(), size: videoFrame.size)
-
+                
                 if let sublayers = self.sampleBufferView.layer.sublayers {
                     if sublayers.count > 1, !sublayers[0].bounds.isEmpty {
                         sublayers[0].position = CGPoint(x: videoFrame.width * 0.5, y: videoFrame.height * 0.5)
@@ -231,7 +229,7 @@ final class PrivateCallPictureInPictureView: UIView {
                     }
                 }
             }
-
+            
             if !mappedTransition.animation.isImmediate {
                 apply()
             } else {

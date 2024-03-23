@@ -7,6 +7,7 @@
 
 import Foundation
 
-struct OpenAIConfig {
-    static let rcApiKey = "appl_vlSYBiSmzPkcxWrIcuZdqTtgmvI"
+public struct OpenAIConfig {
+    public static let rcApiKey = "appl_vlSYBiSmzPkcxWrIcuZdqTtgmvI"
+    public static let serviceHost = "tgai.aapp.pro"
 }
