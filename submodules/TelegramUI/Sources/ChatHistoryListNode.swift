@@ -225,7 +225,7 @@ private func mappedInsertEntries(context: AccountContext, chatLocation: ChatLoca
             // MARK: AI SummaryChat
             case let .ChatSummaryEntry(_, _, presentationData):
             return ListViewInsertItem(index: entry.index, previousIndex: entry.previousIndex, item:
-                                        ChatSummaryItem(title: "", text: "\n\n\n", controllerInteraction: controllerInteraction, presentationData: presentationData, context: context, isLoading: true), directionHint: entry.directionHint)
+                                        ChatSummaryItem(title: "", text: "", controllerInteraction: controllerInteraction, presentationData: presentationData, context: context), directionHint: entry.directionHint)
             //
             case let .MessageEntry(message, presentationData, read, location, selection, attributes):
                 let item: ListViewItem
@@ -1524,7 +1524,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         
         let promises = combineLatest(
             // MARK: AI SummaryChat
-            self.aiSummaryItemsPromise.get() |> debounceThroughAllValues(timeout: 0.1),
+            self.aiSummaryItemsPromise.get() |> debounceThroughAllValues(interval: 0.04),
             //
             self.historyAppearsClearedPromise.get(),
             self.pendingUnpinnedAllMessagesPromise.get(),

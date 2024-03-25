@@ -247,35 +247,63 @@ public func deferred<T, E>(_ generator: @escaping() -> Signal<T, E>) -> Signal<T
     }
 }
 
-
-public func debounceThroughAllValues<T, E>(_ signal: Signal<T, E>, timeout: Double) -> Signal<T, E> {
-    return Signal { subscriber in
-        let queue = Queue()
-        var debounceTimer: Timer?
-        var lastValue: T?
-
-        let disposable = signal.start(next: { value in
-            queue.async {
-                lastValue = value
-                debounceTimer?.invalidate()
-                debounceTimer = Timer(timeout: timeout, repeat: false, completion: {
-                    if let lastValue = lastValue {
-                        subscriber.putNext(lastValue)
+public func debounceThroughAllValues<T, E>(interval: Double = 1.0)  -> (Signal<T, E>) -> Signal<T, E> {
+    return { signal in
+        return Signal { subscriber in
+            let queue = Queue.concurrentDefaultQueue()
+            let valuesQueue = Atomic<[T]>(value: [])
+            let disposable = MetaDisposable()
+            var signalCompleted = false
+            
+            disposable.set(signal.start(next: { value in
+                queue.async {
+                    _ = valuesQueue.modify { queue in
+                        var newQueue = queue
+                        newQueue.append(value)
+                        return newQueue
                     }
-                    lastValue = nil
-                }, queue: queue)
-                debounceTimer?.start()
+                }
+            }, error: { error in
+                queue.async {
+                    subscriber.putError(error)
+                }
+            }, completed: {
+                queue.async {
+                    signalCompleted = true
+                    // Directly try to complete if the queue is empty when the signal completes
+                    if valuesQueue.with({ $0.isEmpty }) {
+                        subscriber.putCompletion()
+                    }
+                }
+            }))
+            
+            func emitNextValue() {
+                queue.after(interval) {
+                    var nextValue: T?
+                    _ = valuesQueue.modify { queue in
+                        if !queue.isEmpty {
+                            nextValue = queue.first
+                            return Array(queue.dropFirst())
+                        }
+                        return queue
+                    }
+                    
+                    if let value = nextValue {
+                        subscriber.putNext(value)
+                        emitNextValue()  // Recursively schedule next emission
+                    } else if signalCompleted {
+                        // Check if signal has completed and there are no more values to emit
+                        subscriber.putCompletion()
+                    } else {
+                        emitNextValue()  // Continue to check for new values
+                    }
+                }
             }
-        }, error: { error in
-            subscriber.putError(error)
-        }, completed: {
-            subscriber.putCompletion()
-        })
-
-        return ActionDisposable {
-            disposable.dispose()
-            queue.async {
-                debounceTimer?.invalidate()
+            
+            emitNextValue() // Start the emission process
+            
+            return ActionDisposable {
+                disposable.dispose()
             }
         }
     }

@@ -1815,10 +1815,8 @@ public final class ChatListNode: ListView {
         let chatListViewUpdate = self.chatListLocation.get()
         |> distinctUntilChanged
         |> mapToSignal { listLocation -> Signal<(ChatListNodeViewUpdate, ChatListFilter?), NoError> in
-            print("chatListViewUpdate location", listLocation)
             return chatListViewForLocation(chatListLocation: location, location: listLocation, account: context.account, shouldLoadCanMessagePeer: shouldLoadCanMessagePeer)
             |> map { update in
-                print("chatListViewUpdate view")
                 return (update, listLocation.filter)
             }
         }

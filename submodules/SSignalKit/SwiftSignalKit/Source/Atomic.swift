@@ -6,7 +6,7 @@ public enum AtomicLockError: Error {
 
 public final class Atomic<T> {
     private var lock: pthread_mutex_t
-    private var value: T
+    var value: T
     
     public init(value: T) {
         self.lock = pthread_mutex_t()
@@ -54,4 +54,12 @@ public final class Atomic<T> {
         
         return previous
     }
+    
+    public func mutate(_ f: (inout T) -> Void) {
+        pthread_mutex_lock(&self.lock)
+        f(&self.value)
+        pthread_mutex_unlock(&self.lock)
+    }
 }
+
+

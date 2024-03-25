@@ -45,8 +45,17 @@ import TelegramNotices
 import AnimatedCountLabelNode
 import TelegramStringFormatting
 
+// MARK: AI Features
+import AIStrings
+//
+
 private let accessoryButtonFont = Font.medium(14.0)
 private let counterFont = Font.with(size: 14.0, design: .regular, traits: [.monospacedNumbers])
+
+public enum ChatTextInputAiButtonMode: Int32 {
+    case idle = 0
+    case loading = 1
+}
 
 private final class AccessoryItemIconButtonNode: HighlightTrackingButtonNode {
     private var item: ChatTextInputAccessoryItem
@@ -555,7 +564,10 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
     let sendAsAvatarContainerNode: ContextControllerSourceNode
     private let sendAsAvatarNode: AvatarNode
     
+    // MARK: AI Features
     private let aiButton: HighlightableButtonNode
+    private let aiButtonAnimationView: ComponentView<Empty>
+    //
     
     let attachmentButton: HighlightableButtonNode
     let attachmentButtonDisabledNode: HighlightableButtonNode
@@ -865,8 +877,10 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         self.sendAsAvatarContainerNode.animateScale = false
         self.sendAsAvatarNode = AvatarNode(font: avatarPlaceholderFont(size: 16.0))
         
-        //self.aiButton = HighlightableButtonNode(pointerStyle: .circle(36.0))
+        // MARK: AI Features
         self.aiButton = HighlightableButtonNode()
+        self.aiButtonAnimationView = ComponentView<Empty>()
+        //
         
         self.attachmentButton = HighlightableButtonNode(pointerStyle: .circle(36.0))
         self.attachmentButton.accessibilityLabel = presentationInterfaceState.strings.VoiceOver_AttachMedia
@@ -1159,6 +1173,61 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         self.currentEmojiSuggestion?.disposable.dispose()
     }
     
+    private func updateAiButtonAnimation(previousMode: ChatTextInputAiButtonMode) {
+        let image: UIImage?
+        let theme = self.hidesOnLock ? defaultDarkColorPresentationTheme : self.theme
+        switch self.mode {
+            case .idle:
+                self.icon = PresentationResourcesChat.chatInputPanelAiButtonImage(theme) // Assuming you have a method to get the Ai button image
+                image = nil // Set to nil or a specific image if required
+            case .loading:
+                self.icon = PresentationResourcesChat.chatInputPanelAiActiveButtonImage(theme) // Assuming you have a method to get the active Ai button image
+                image = nil // Set to nil or a specific image if required
+        }
+        
+        let size = self.bounds.size
+        let iconSize = image?.size ?? size
+
+        let animationFrame = CGRect(origin: CGPoint(x: (size.width - iconSize.width) / 2.0, y: (size.height - iconSize.height) / 2.0), size: iconSize)
+        
+        var animationName: String = ""
+        if previousMode != self.mode {
+            switch (previousMode, self.mode) {
+                case (.idle, .loading):
+                    animationName = "anim_AiToProcess"
+                case (.loading, .idle):
+                    animationName = "anim_ProcessToAi"
+                default:
+                    break // Handle other cases or default state if necessary
+            }
+        } else if self.mode == .loading {
+            animationName = "anim_Process"
+        }
+
+        if !animationName.isEmpty {
+            let _ = self.animationView.update(
+                transition: .immediate,
+                component: AnyComponent(LottieComponent(
+                    content: LottieComponent.AppBundleContent(name: animationName),
+                    color: self.useDarkTheme ? .white : self.theme.chat.inputPanel.panelControlColor.blitOver(self.theme.chat.inputPanel.inputBackgroundColor, alpha: 1.0)
+                )),
+                environment: {},
+                containerSize: animationFrame.size
+            )
+
+            if let view = self.animationView.view as? LottieComponent.View {
+                view.isUserInteractionEnabled = false
+                if view.superview == nil {
+                    self.insertSubview(view, at: 0)
+                    self.updateShadow()
+                }
+                view.frame = animationFrame
+                view.playOnce()
+            }
+        }
+    }
+
+    
     private func setupGloss() {
         if self.gloss {
             if self.shimmerView == nil {
@@ -1213,7 +1282,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             return
         }
         
-        guard let color = self.theme?.chat.inputPanel.actionControlForegroundColor else { return }
+        guard let color = self.theme?.chat.inputPanel.mediaRecordingControl.buttonColor.withMultiplied(hue: 0.9, saturation: 1.0, brightness: 1.0) else { return }
         let alpha: CGFloat
         let borderAlpha: CGFloat
         let compositingFilter: String?
@@ -1227,8 +1296,8 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             compositingFilter = nil
         }
         
-        shimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(alpha), gradientSize: 50.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
-        borderShimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(borderAlpha), gradientSize: 60.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        shimmerView.update(backgroundColor:  UIColor.blue, foregroundColor: UIColor.red, gradientSize: 50.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        borderShimmerView.update(backgroundColor: UIColor.blue, foregroundColor: UIColor.red, gradientSize: 60.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
         
         
         
@@ -4539,20 +4608,84 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
         
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         
+        let locale = presentationData.strings.baseLanguageCode
+        
         guard let controller = self.interfaceInteraction?.chatController() as? ChatControllerImpl else {
             return
         }
         
+        let source: ContextContentSource = .reference(AIButtonReferenceContentSource(controller: controller, sourceView: aiButton.view))
         //QuoteSelected
         
+        func buidCuntextMenuItem(
+            label: String,
+            iconName: String,
+            leftIconName: String? = nil,
+            action: ((ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void) -> Void)?
+        ) -> ContextMenuItem {
+            return .action(ContextMenuActionItem(text: label, icon: { theme in
+                if let leftIconName = leftIconName {
+                    return generateTintedImage(image: UIImage(bundleImageName: leftIconName), color: theme.contextMenu.primaryColor)
+                } else {
+                    return nil
+                }
+            }, additionalLeftIcon: { theme in
+                generateTintedImage(image: UIImage(bundleImageName: iconName), color: theme.contextMenu.primaryColor)
+            }, iconPosition: .right, action: action))
+        }
+        
         let items: [ContextMenuItem] = [
-            .action(ContextMenuActionItem(text: "Generate a summary", icon: { theme in
+            buidCuntextMenuItem(label: l("AI.Action.GenerateSummary", locale), iconName: "Chat/Context Menu/QuoteSelected", action: { (controllerProtocol, _) in
+                self.aiGenerateSummary()
+                controllerProtocol.dismiss(completion: nil)
+            }),
+            buidCuntextMenuItem(label: l("AI.Action.ContinueWriting", locale), iconName: "Chat/Context Menu/Play", action: { (controllerProtocol, _) in
+                self.aiGenerateSummary()
+                controllerProtocol.dismiss(completion: nil)
+            }),
+            buidCuntextMenuItem(label: l("AI.Action.GenerateMessage", locale), iconName: "Chat/Context Menu/MessageBubble", leftIconName: "Chat/Context Menu/Arrow", action: { (controllerProtocol, _) in
+                self.aiGenerateSummary()
+                controllerProtocol.dismiss(completion: nil)
+            }),
+            .separator,
+            buidCuntextMenuItem(label: l("AI.Action.ChangeTone", locale), iconName: "Chat/Context Menu/ApplyTheme", leftIconName: "Chat/Context Menu/Arrow", action: { (controllerProtocol, _) in
+                self.aiGenerateSummary()
+                controllerProtocol.dismiss(completion: nil)
+            }),
+            buidCuntextMenuItem(label: l("AI.Action.ImproveWriting", locale), iconName: "Chat/Context Menu/ThumbsDown", action: { (controllerProtocol, _) in
+                self.aiGenerateSummary()
+                controllerProtocol.dismiss(completion: nil)
+            }),
+            buidCuntextMenuItem(label: l("AI.Action.FixGrammar", locale), iconName: "Chat/Context Menu/Check", action: { (controllerProtocol, _) in
+                self.aiGenerateSummary()
+                controllerProtocol.dismiss(completion: nil)
+            })
+            ]
+        
+        let contextController = ContextController(presentationData: presentationData,
+                                                  source: source,
+                                                  items: .single(ContextController.Items(content: .list(items))))
+        
+        controller.present(contextController, in: .current)
+    }
+    
+    func generateAnswer(source: ContextContentSource) {
+        guard let context = self.context else { return }
+        
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        
+        guard let controller = self.interfaceInteraction?.chatController() as? ChatControllerImpl else {
+            return
+        }
+        
+        let items: [ContextMenuItem] = [
+            .action(ContextMenuActionItem(text: "1 Style", icon: { theme in
                 generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/QuoteSelected"), color: theme.contextMenu.primaryColor)
             }, action: { (controllerProtocol, _) in
                 self.aiGenerateSummary()
                 controllerProtocol.dismiss(completion: nil)
             })),
-            .action(ContextMenuActionItem(text: "Generate a message", icon: { theme in
+            .action(ContextMenuActionItem(text: "2 Style", icon: { theme in
                 generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
             }, action: { (controllerProtocol, _) in
                 self.aiGenerateMessage()
@@ -4560,14 +4693,11 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             }))
             ]
         
-        let source: ContextContentSource = .reference(AIButtonReferenceContentSource(controller: controller, sourceView: aiButton.view))
-        
         let contextController = ContextController(presentationData: presentationData,
                                                   source: source,
                                                   items: .single(ContextController.Items(content: .list(items))))
         
         controller.present(contextController, in: .current)
-        print("sendAsAvatarButtonPressed")
     }
 
     

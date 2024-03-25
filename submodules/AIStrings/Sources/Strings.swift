@@ -124,36 +124,36 @@ public func l(_ key: String, _ locale: String = "en") -> String {
 public func l(_ key: String, _ locale: String = "en", with args: CVarArg...) -> String {
     return String(format: l(key, locale), args)
 }
-
-public func getStringsUrl(_ lang: String) -> String {
-    //https://github.com/voronoff2803/Telegram-iOS/tree/aiFeatures/translations
-    return "https://raw.githubusercontent.com/voronoff2803/Telegram-iOS/aiFeatures/translations/" + lang + ".lproj/AILocalizable.strings"
-}
+//
+//public func getStringsUrl(_ lang: String) -> String {
+//    //https://github.com/voronoff2803/Telegram-iOS/tree/aiFeatures/translations
+//    return "https://raw.githubusercontent.com/voronoff2803/Telegram-iOS/aiFeatures/translations/" + lang + ".lproj/AILocalizable.strings"
+//}
 
 
 var niceWebLocales: [String: [String: String]] = [:]
 
-func getWebDict(_ lang: String) -> [String : String]? {
-    print("Failed to download \(getStringsUrl(lang))")
-    return NSDictionary(contentsOf: URL(string: getStringsUrl(lang))!) as? [String : String]
-}
+//func getWebDict(_ lang: String) -> [String : String]? {
+//    print("Failed to download \(getStringsUrl(lang))")
+//    return NSDictionary(contentsOf: URL(string: getStringsUrl(lang))!) as? [String : String]
+//}
 
-public func downloadLocale(_ locale: String) -> Void {
-    print("Downloading \(locale)")
-    do {
-        var lang = locale
-        let rawSuffix = "-raw"
-        if lang.hasSuffix(rawSuffix) {
-            lang = String(lang.dropLast(rawSuffix.count))
-        }
-        if let localeDict = try getWebDict(lang) {
-            niceWebLocales[lang] = localeDict
-            print("Successfully downloaded locale \(lang)")
-        } else {
-            print("Failed to download \(lang)")
-        }
-    } catch {
-        print("Failed to download \(error.localizedDescription)")
-        return
-    }
-}
+//public func downloadLocale(_ locale: String) -> Void {
+//    print("Downloading \(locale)")
+//    do {
+//        var lang = locale
+//        let rawSuffix = "-raw"
+//        if lang.hasSuffix(rawSuffix) {
+//            lang = String(lang.dropLast(rawSuffix.count))
+//        }
+//        if let localeDict = try getWebDict(lang) {
+//            niceWebLocales[lang] = localeDict
+//            print("Successfully downloaded locale \(lang)")
+//        } else {
+//            print("Failed to download \(lang)")
+//        }
+//    } catch {
+//        print("Failed to download \(error.localizedDescription)")
+//        return
+//    }
+//}

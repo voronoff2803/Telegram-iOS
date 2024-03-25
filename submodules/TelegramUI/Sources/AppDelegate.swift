@@ -317,12 +317,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private var alertActions: (primary: (() -> Void)?, other: (() -> Void)?)?
     
     private let deviceToken = Promise<Data?>(nil)
-    
-    private func fetchLocale(lang: String) {
-        //#if !targetEnvironment(simulator)
-        downloadLocale(lang)
-        //#endif
-    }
         
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         precondition(!testIsLaunched)
@@ -1856,19 +1850,6 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         self.resetBadge()
         
         self.maybeCheckForUpdates()
-        
-        // MARK: AI fetch
-        let _ = (self.context.get()
-                 |> take(1)
-                 |> deliverOnMainQueue).start(next: { context in
-            if let context = context {
-                Queue().async {
-                    let presentationData = context.context.sharedContext.currentPresentationData.with({ $0 })
-                    self.fetchLocale(lang: presentationData.strings.baseLanguageCode)
-                }
-            }
-        })
-        //
         
         SharedDisplayLinkDriver.shared.updateForegroundState(self.isActiveValue)
     }

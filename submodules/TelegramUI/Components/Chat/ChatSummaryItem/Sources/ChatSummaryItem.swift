@@ -30,15 +30,13 @@ public final class ChatSummaryItem: ListViewItem {
     fileprivate let presentationData: ChatPresentationData
     fileprivate let context: AccountContext
     fileprivate let controllerInteraction: ChatControllerInteraction
-    fileprivate let isLoading: Bool
     
-    public init(title: String, text: String, controllerInteraction: ChatControllerInteraction, presentationData: ChatPresentationData, context: AccountContext, isLoading: Bool = false) {
+    public init(title: String, text: String, controllerInteraction: ChatControllerInteraction, presentationData: ChatPresentationData, context: AccountContext) {
         self.title = title
         self.text = text
         self.controllerInteraction = controllerInteraction
         self.presentationData = presentationData
         self.context = context
-        self.isLoading = isLoading
     }
     
     public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
@@ -126,6 +124,7 @@ public final class ChatSummaryItemNode: ListViewItemNode {
         self.backgroundNode.displaysAsynchronously = false
         self.backgroundNode.displayWithoutProcessing = true
         self.textNode = TextNode()
+        
         self.titleNode = TextNode()
         
         super.init(layerBacked: false, dynamicBounce: true, rotated: true)
@@ -143,32 +142,62 @@ public final class ChatSummaryItemNode: ListViewItemNode {
         self.fetchDisposable.dispose()
     }
     
+//    override public func animateAdded(_ currentTimestamp: Double, duration: Double) {
+//        self.layer.animateAlpha(from: 0.0, to: 1.0, duration: duration)
+//        
+//        let maskLayer = CAGradientLayer()
+//        maskLayer.startPoint = CGPoint(x: 0.0, y: 0.5)
+//        maskLayer.endPoint = CGPoint(x: 1.0, y: 0.5)
+//        maskLayer.colors = [UIColor.clear.cgColor, UIColor.black.cgColor]
+//        maskLayer.locations = [0.0, 0.0]
+//        maskLayer.frame = self.bounds
+//        self.layer.mask = maskLayer
+//        
+//        let animation = CABasicAnimation(keyPath: "locations")
+//        animation.fromValue = [0.0, 0.0]
+//        animation.toValue = [0.0, 1.0]
+//        animation.duration = duration
+//        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+//        animation.delegate = self
+//        maskLayer.add(animation, forKey: "locationAnimation")
+//    }
+//    
+//    override public func animateInsertion(_ currentTimestamp: Double, duration: Double, short: Bool) {
+//        self.layer.animateAlpha(from: 0.0, to: 1.0, duration: duration)
+//        
+//        let maskLayer = CAGradientLayer()
+//        maskLayer.startPoint = CGPoint(x: 0.0, y: 0.5)
+//        maskLayer.endPoint = CGPoint(x: 1.0, y: 0.5)
+//        maskLayer.colors = [UIColor.clear.cgColor, UIColor.black.cgColor]
+//        maskLayer.locations = [0.0, 0.0]
+//        maskLayer.frame = self.bounds
+//        self.layer.mask = maskLayer
+//        
+//        let animation = CABasicAnimation(keyPath: "locations")
+//        animation.fromValue = [0.0, 0.0]
+//        animation.toValue = [0.0, 1.0]
+//        animation.duration = duration
+//        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+//        animation.delegate = self
+//        maskLayer.add(animation, forKey: "locationAnimation")
+//    }
+    
     func updateShimmerParameters() {
         guard let shimmerView = self.shimmerView, let borderShimmerView = self.borderShimmerView else {
             return
         }
         
-        guard let color = self.theme?.theme.chat.inputPanel.actionControlForegroundColor else { return }
+        let color = theme?.theme.rootController.navigationBar.accentTextColor ?? .white
         let alpha: CGFloat
         let borderAlpha: CGFloat
-        let compositingFilter: String?
-        if color.lightness > 0.5 {
-            alpha = 0.5
-            borderAlpha = 0.75
-            compositingFilter = "overlayBlendMode"
-        } else {
-            alpha = 0.2
-            borderAlpha = 0.3
-            compositingFilter = nil
-        }
         
-        shimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(alpha), gradientSize: 50.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
-        borderShimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(borderAlpha), gradientSize: 60.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        shimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(0.3), gradientSize: 50.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        borderShimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(1.0), gradientSize: 60.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
         
         
         
         //shimmerView.layer.compositingFilter = compositingFilter
-        borderShimmerView.layer.compositingFilter = compositingFilter
+        //borderShimmerView.layer.compositingFilter = compositingFilter
     }
     
     private func setupGloss() {
@@ -182,7 +211,7 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                 self.borderView = borderView
                 
                 let borderMaskView = UIView()
-                borderMaskView.layer.borderWidth = 1.0 + UIScreenPixel
+                borderMaskView.layer.borderWidth = 2.0
                 borderMaskView.layer.borderColor = UIColor.white.cgColor
                 borderView.mask = borderMaskView
                 self.borderMaskView = borderMaskView
@@ -196,10 +225,10 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                 
                 self.updateShimmerParameters()
                 
-                self.shimmerView?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.5)
+                self.shimmerView?.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
             }
         } else if self.shimmerView != nil {
-            self.shimmerView?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.5) { _ in
+            self.shimmerView?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.8) { _ in
                 self.shimmerView?.removeFromSuperview()
                 self.borderView?.removeFromSuperview()
                 self.borderMaskView?.removeFromSuperview()
@@ -211,13 +240,6 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                 self.borderShimmerView = nil
             }
         }
-        
-        
-//        if let presentationInterfaceState = self.presentationInterfaceState {
-//            if let (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, metrics, isSecondary, isMediaInputExpanded) = self.validLayout {
-//                let _ = self.updateLayout(width: width, leftInset: leftInset, rightInset: rightInset, bottomInset: bottomInset, additionalSideInsets: additionalSideInsets, maxHeight: maxHeight, isSecondary: isSecondary, transition: .immediate, interfaceState: presentationInterfaceState, metrics: metrics, isMediaInputExpanded: isMediaInputExpanded)
-//            }
-//        }
     }
     
     override public func didLoad() {
@@ -268,6 +290,8 @@ public final class ChatSummaryItemNode: ListViewItemNode {
         return { [weak self] item, params in
             self?.item = item
             
+            let itemText = (item.text == "") ? "\n\n" : item.text
+            
             var updatedBackgroundImage: UIImage?
             if currentTheme != item.presentationData.theme {
                 updatedBackgroundImage = PresentationResourcesChat.chatInfoItemBackgroundImage(item.presentationData.theme.theme, wallpaper: !item.presentationData.theme.wallpaper.isEmpty)
@@ -275,25 +299,25 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                         
             var updatedTextAndEntities: (String, [MessageTextEntity])
             if let (text, entities) = currentTextAndEntities {
-                if text == item.text {
+                if text == itemText {
                     updatedTextAndEntities = (text, entities)
                 } else {
-                    updatedTextAndEntities = (item.text, generateTextEntities(item.text, enabledTypes: .all))
+                    updatedTextAndEntities = (itemText, generateTextEntities(itemText, enabledTypes: .all))
                 }
             } else {
-                updatedTextAndEntities = (item.text, generateTextEntities(item.text, enabledTypes: .all))
+                updatedTextAndEntities = (itemText, generateTextEntities(itemText, enabledTypes: .all))
             }
             
             let attributedText = stringWithAppliedEntities(updatedTextAndEntities.0, entities: updatedTextAndEntities.1, baseColor: item.presentationData.theme.theme.chat.message.infoPrimaryTextColor, linkColor: item.presentationData.theme.theme.chat.message.infoLinkTextColor, baseFont: messageFont, linkFont: messageFont, boldFont: messageBoldFont, italicFont: messageItalicFont, boldItalicFont: messageBoldItalicFont, fixedFont: messageFixedFont, blockQuoteFont: messageFont, message: nil, adjustQuoteFontSize: true)
             
             let horizontalEdgeInset: CGFloat = 10.0 + params.leftInset
-            let horizontalContentInset: CGFloat = 12.0
+            let horizontalContentInset: CGFloat = 16.0
             let verticalItemInset: CGFloat = 10.0
-            let verticalContentInset: CGFloat = 8.0
+            let verticalContentInset: CGFloat = 12.0
             
             let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.title, font: messageBoldFont, textColor: item.presentationData.theme.theme.chat.message.infoPrimaryTextColor), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: params.width - horizontalEdgeInset * 2.0 - horizontalContentInset * 2.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
             
-            let (textLayout, textApply) = makeTextLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: params.width - horizontalEdgeInset * 2.0 - horizontalContentInset * 2.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
+            let (textLayout, textApply) = makeTextLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: params.width - horizontalEdgeInset * 2.0 - horizontalContentInset * 2.0, height: CGFloat.greatestFiniteMagnitude), alignment: .left, cutout: nil, insets: UIEdgeInsets()))
             
             let textWidth = params.width - horizontalEdgeInset * 2.0 - horizontalContentInset * 2.0
             let textSpacing: CGFloat = 1.0
@@ -308,7 +332,7 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                 ),
                 size: titleLayout.size
             )
-            let textFrame = CGRect(origin: CGPoint(x: backgroundFrame.origin.x + horizontalContentInset, y: backgroundFrame.origin.y + verticalContentInset + titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing)), size: textLayout.size)
+            let textFrame = CGRect(origin: CGPoint(x: backgroundFrame.origin.x + horizontalContentInset, y: backgroundFrame.origin.y + verticalContentInset + titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing)), size: CGSize(width: textWidth, height: textLayout.size.height))
             
             let itemLayout = ListViewItemNodeLayout(contentSize: CGSize(width: params.width, height: textLayout.size.height + verticalItemInset * 2.0 + verticalContentInset * 2.0 + titleLayout.size.height + (titleLayout.size.width.isZero ? 0.0 : textSpacing) - 3.0), insets: UIEdgeInsets())
             return (itemLayout, { _ in
@@ -322,25 +346,30 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                     strongSelf.controllerInteraction = item.controllerInteraction
                     strongSelf.currentTextAndEntities = updatedTextAndEntities
                     
-                    let _ = titleApply()
-                    let _ = textApply()
-                    strongSelf.offsetContainer.frame = CGRect(origin: CGPoint(), size: itemLayout.contentSize)
-                    strongSelf.textNode.frame = textFrame
-                    strongSelf.titleNode.frame = titleFrame
-                    strongSelf.gloss = item.isLoading
+                    strongSelf.gloss = item.text == ""
                     
-                    print("shimmer", item.isLoading)
                     
-                    UIView.animate(withDuration: 0.2) {
-                        strongSelf.backgroundNode.frame = backgroundFrame
+                    DispatchQueue.main.async {
+                        let _ = titleApply()
+                        let _ = textApply()
+                        
+                        strongSelf.textNode.frame = CGRect(x: textFrame.origin.x, y: textFrame.origin.y, width: textFrame.size.width, height:  textFrame.size.height)
                     }
                     
+                    UIView.animate(withDuration: 0.18) {
+                        strongSelf.backgroundNode.frame = backgroundFrame
+                    }
+                    strongSelf.offsetContainer.frame = CGRect(origin: CGPoint(), size: itemLayout.contentSize)
+                        
+                    strongSelf.titleNode.frame = titleFrame
                     
                     if let shimmerView = strongSelf.shimmerView, let borderView = strongSelf.borderView, let borderMaskView = strongSelf.borderMaskView, let borderShimmerView = strongSelf.borderShimmerView {
-                        shimmerView.frame = backgroundFrame
-                        borderView.frame = backgroundFrame
-                        borderMaskView.frame = CGRect(origin: CGPoint(), size: backgroundFrame.size)
-                        borderShimmerView.frame = CGRect(origin: CGPoint(), size: backgroundFrame.size)
+                        UIView.animate(withDuration: 0.18) {
+                            shimmerView.frame = backgroundFrame
+                            borderView.frame = backgroundFrame
+                            borderMaskView.frame = CGRect(origin: CGPoint(), size: backgroundFrame.size)
+                            borderShimmerView.frame = CGRect(origin: CGPoint(), size: backgroundFrame.size)
+                        }
                         
                         let size = CGSize(width: itemLayout.size.width, height: 400.0)
                         
@@ -368,7 +397,14 @@ public final class ChatSummaryItemNode: ListViewItemNode {
                     if let backgroundContent = strongSelf.backgroundContent {
                         strongSelf.backgroundNode.isHidden = true
                         backgroundContent.cornerRadius = item.presentationData.chatBubbleCorners.mainRadius
-                        backgroundContent.frame = backgroundFrame
+                        if backgroundContent.frame != .zero {
+                            UIView.animate(withDuration: 0.18) {
+                                backgroundContent.frame = backgroundFrame
+                            }
+                        } else {
+                            backgroundContent.frame = backgroundFrame
+                        }
+                        
                         if let (rect, containerSize) = strongSelf.absolutePosition {
                             var backgroundFrame = backgroundContent.frame
                             backgroundFrame.origin.x += rect.minX
@@ -393,10 +429,12 @@ public final class ChatSummaryItemNode: ListViewItemNode {
     
     override public func animateAdded(_ currentTimestamp: Double, duration: Double) {
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: duration * 0.5)
+        self.layer.animateScale(from: 0.1, to: 1.0, duration: duration)
     }
     
     override public func animateInsertion(_ currentTimestamp: Double, duration: Double, short: Bool) {
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: duration * 0.5)
+        self.layer.animateScale(from: 0.1, to: 1.0, duration: duration)
     }
     
     override public func animateRemoved(_ currentTimestamp: Double, duration: Double) {
@@ -535,3 +573,4 @@ public final class ChatSummaryItemNode: ListViewItemNode {
         }
     }
 }
+

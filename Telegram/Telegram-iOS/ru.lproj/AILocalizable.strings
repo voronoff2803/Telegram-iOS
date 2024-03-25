@@ -1,2 +1,8 @@
 "Prompt.Summary" = "Используя контекст разговора, напишите краткое резюме диалога. Отвечайте, используя Markdown. Резюме должно быть на том же языке, что и большинство сообщений диалога. Начни ответ с фразы: 'Резюме диалога:'";
 "Prompt.Summary.Start" = "Резюме диалога:";
+"AI.Action.GenerateMessage" = "Генирировать сообщение";
+"AI.Action.GenerateSummary" = "Генирировать резюме";
+"AI.Action.ImproveWriting" = "Улучшить текст";
+"AI.Action.FixGrammar" = "Исправить ошибки";
+"AI.Action.ContinueWriting" = "Продолжить текст";
+"AI.Action.ChangeTone" = "Изменить тон текста";

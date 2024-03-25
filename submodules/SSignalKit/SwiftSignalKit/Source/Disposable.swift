@@ -147,6 +147,10 @@ public final class MetaDisposable : Disposable {
             disposable.dispose()
         }
     }
+    
+    public var isDisposed: Bool {
+        return disposed
+    }
 }
 
 public final class DisposableSet : Disposable {
