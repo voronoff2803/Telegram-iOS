@@ -1524,7 +1524,7 @@ public final class ChatHistoryListNodeImpl: ListView, ChatHistoryNode, ChatHisto
         
         let promises = combineLatest(
             // MARK: AI SummaryChat
-            self.aiSummaryItemsPromise.get() |> debounceThroughAllValues(interval: 0.02),
+            self.aiSummaryItemsPromise.get(),
             //
             self.historyAppearsClearedPromise.get(),
             self.pendingUnpinnedAllMessagesPromise.get(),
