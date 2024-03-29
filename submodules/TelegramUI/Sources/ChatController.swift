@@ -6947,6 +6947,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     AISummaryChatMessage(id: lastMessageIndex.id, timestamp: lastMessageIndex.timestamp + 1, content: "")
                 ])
                 
+                self.chatDisplayNode.textInputPanelNode?.aiButtonMode = .loading
+                
                 self.aiManager.generateSummary(
                     messages: messages,
                     resultUpdate: {  [weak self] result in
@@ -6957,6 +6959,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     },
                     completion: { [weak self] error in
                         guard let strongSelf = self else { return }
+                        
+                        strongSelf.chatDisplayNode.textInputPanelNode?.aiButtonMode = .idle
                         
                         DispatchQueue.main.async {
                             //strongSelf.stopGenerationAnimation()
