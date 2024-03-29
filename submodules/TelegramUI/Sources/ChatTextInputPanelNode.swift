@@ -1183,71 +1183,49 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
     
     private func updateAiButtonAnimation(previousMode: ChatTextInputAiButtonMode) {
         guard let theme = self.theme else { return }
-        switch self.aiButtonMode {
-            case .idle:
-                self.aiButton.imageNode.alpha = 1.0
-                break
-            case .loading:
-                self.aiButton.imageNode.alpha = 0.0
-                break
-        }
-
-        let size = aiButton.bounds.size
+        
+        let animationName = "anim_Process"
         let iconSize = CGSize(width: 30, height: 30)
+        let animationFrame = CGRect(
+            origin: CGPoint(
+                x: floor((aiButton.bounds.width - iconSize.width) / 2.0),
+                y: floor((aiButton.bounds.height -  iconSize.height) / 2.0)),
+            size: iconSize
+        )
         
-        let animationFrame = CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: floor((size.height - iconSize.height) / 2.0)), size: iconSize)
+        let animationComponent: AnyComponent<Empty>
         
-        print("res:", animationFrame)
-        
-        var animationName: String = ""
-        if previousMode != self.aiButtonMode {
-            switch (previousMode, self.aiButtonMode) {
-                case (.idle, .loading):
-                    animationName = "anim_AiToProcess"
-                case (.loading, .idle):
-                    animationName = "anim_ProcessToAi"
-                default:
-                    break // Handle other cases or default state if necessary
-            }
-        } else if self.aiButtonMode == .loading {
-            animationName = "anim_Process"
-        }
-
-        if !animationName.isEmpty {
-            let _ = self.aiButtonAnimationView.update(
+        switch self.aiButtonMode {
+        case .idle:
+            break
+        case .loading:
+            animationComponent = AnyComponent(LottieComponent(
+                content: LottieComponent.AppBundleContent(name: animationName),
+                color: theme.chat.inputPanel.mediaRecordingControl.buttonColor,
+                loop: true
+            ))
+            
+            let _ = aiButtonAnimationView.update(
                 transition: .immediate,
-                component: AnyComponent(LottieComponent(
-                    content: LottieComponent.AppBundleContent(name: animationName),
-                    color: theme.chat.inputPanel.mediaRecordingControl.buttonColor
-                )),
+                component: animationComponent,
                 environment: {},
                 containerSize: animationFrame.size
             )
-
-            if let view = self.aiButtonAnimationView.view as? LottieComponent.View {
-                view.isUserInteractionEnabled = false
+        }
+        
+        if let view = aiButtonAnimationView.view as? LottieComponent.View {
+            switch self.aiButtonMode {
+            case .idle:
+                aiButton.imageNode.alpha = 1.0
+                aiButton.view.isUserInteractionEnabled = true
+                view.removeFromSuperview()
+            case .loading:
+                aiButton.imageNode.alpha = 0.0
+                aiButton.view.isUserInteractionEnabled = false
                 if view.superview == nil {
-                    self.aiButton.view.insertSubview(view, at: 0)
+                    aiButton.view.insertSubview(view, at: 0)
                 }
                 view.frame = animationFrame
-                view.playOnce()
-                view.playOnce(delay: 0.0, force: false) {
-                    if (previousMode == .idle && self.aiButtonMode == .loading) {
-                        animationName = "anim_Process"
-                        let _ = self.aiButtonAnimationView.update(
-                            transition: .immediate,
-                            component: AnyComponent(LottieComponent(
-                                content: LottieComponent.AppBundleContent(name: animationName),
-                                color: theme.chat.inputPanel.mediaRecordingControl.buttonColor,
-                                loop: true
-                            )),
-                            environment: {},
-                            containerSize: animationFrame.size
-                        )
-                        
-                        view.playOnce()
-                    }
-                }
             }
         }
     }

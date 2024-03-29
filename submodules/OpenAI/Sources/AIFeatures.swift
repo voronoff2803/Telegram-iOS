@@ -165,69 +165,41 @@ final public class AIManager {
         
         let query = ChatQuery(model: .gpt3_5Turbo, messages: chatMessages)
         
-        
-        var message = ""
-        
-        var isRemovedStart = false
         let startStr = l("Prompt.Summary.Start", locale)
-        
-        let example = "Давно выяснено, что при оценке дизайна и композиции читаемый текст мешает сосредоточиться. Lorem Ipsum используют потому, что тот обеспечивает более или менее стандартное заполнение шаблона"
-
-        for i in 0..<(example.count) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 + Double(i) * 0.01) {
-                let substring = example.prefix(i + 1)
-                resultUpdate(String(substring))
                 
-                if i == example.count - 1 {
-                    completion(nil)
+        self.openAI.chats(query: query) { result in
+            switch result {
+            case .success(let result):
+                if let message = result.choices.first?.message.content {
+                    
+                    resultUpdate(AIManager.cleanTextFromStart(message, startStr: startStr))
+                }
+                completion(nil)
+            case .failure(let error):
+                completion(error)
+            }
+        }
+    }
+    
+    static func cleanTextFromStart(_ text: String, startStr: String) -> String {
+        let patterns = ["**\(startStr)**", "*\(startStr)*", "\(startStr)"]
+        var result = text
+
+        for pattern in patterns {
+            if let range = result.range(of: pattern) {
+                if range.lowerBound == result.startIndex {
+                    result = result.replacingOccurrences(of: pattern, with: "", range: range)
                 }
             }
         }
-                
-//        self.openAI.chatsStream(query: query) { partialResult in
-//            switch partialResult {
-//            case .success(let result):
-//                
-//                if let delta = result.choices.first?.delta.content {
-//                    message += delta
-//                    
-//                    if !isRemovedStart {
-//                        if message.contains(startStr) {
-//                            isRemovedStart = true
-//                            message = message.replacingOccurrences(of: startStr, with: "")
-//                        }
-//                    }
-//                    
-//                    if message.count < 20 {
-//                        let symbolsToRemove = ["'", " ", ":", "*", "\\n", "\n"]
-//                        
-//                        for symbol in symbolsToRemove {
-//                            if message.hasPrefix(symbol) {
-//                                message = String(message.dropFirst(symbol.count))
-//                            }
-//                        }
-//                        
-//                        for symbol in symbolsToRemove {
-//                            if message.hasSuffix(symbol) {
-//                                message = String(message.dropLast(symbol.count))
-//                            }
-//                        }
-//                    }
-//                    
-//                    if message.count > 20 && !isRemovedStart {
-//                        isRemovedStart = true
-//                    }
-//                    
-//                    if isRemovedStart {
-//                        resultUpdate(message)
-//                    }
-//                    
-//                }
-//            case .failure(let error):
-//                completion(error)
-//            }
-//        } completion: { error in
-//            completion(error)
-//        }
+
+        // Remove newline if it's now at the start of the text
+        for _ in 0...2 {
+            if let newlineRange = result.range(of: "\n"), newlineRange.lowerBound == result.startIndex {
+                result.removeSubrange(newlineRange)
+            }
+        }
+
+        return result
     }
 }
