@@ -6904,16 +6904,53 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             )
         }
     }
-    
+        
     // MARK: AI Generate Feature
-    
+
+    func getLastMessages(lastMessage: Message, count: Int = 128, completion: @escaping ([Message]) -> ()) {
+        let chatLocation = chatDisplayNode.chatLocation
+        let anchorIndex = HistoryViewInputAnchor.upperBound
+        let location = context.chatLocationInput(for: chatLocation, contextHolder: Atomic(value: nil))
+        let tag = self.chatDisplayNode.historyNode.tag
+        
+        let _ = (context.account.postbox.aroundMessageHistoryViewForLocation(
+            location,
+            anchor: anchorIndex,
+            ignoreMessagesInTimestampRange: nil,
+            count: count,
+            clipHoles: false,
+            ignoreRelatedChats: false,
+            fixedCombinedReadStates: nil,
+            topTaggedMessageIdNamespaces: [],
+            tag: tag,
+            appendMessagesFromTheSameGroup: true,
+            namespaces: MessageIdNamespaces.all,
+            orderStatistics: []) |> take(1) |> deliverOnMainQueue)
+        .start(next: { next in
+            let view = next.0
+            let messages = view.entries.map{$0.message}
+            completion(messages)
+        })
+    }
+
     func aiGenerateSummary() {
-        guard let source = self.chatDisplayNode.historyNode.historyView else { return }
+        guard let source = chatDisplayNode.historyNode.historyView,
+              let lastMessageEntry = source.filteredEntries.reversed().first(where: { entry in
+                  if case .MessageEntry = entry {
+                      return true
+                  } else {
+                      return false
+                  }
+              }),
+              case .MessageEntry(let lastMessage, _, _, _, _, _) = lastMessageEntry
+        else { return }
         
         
-        let messages: [AIManager.MessageEntry] = source.filteredEntries.compactMap { entry in
-            switch entry {
-            case let .MessageEntry(message, _, myMessage, _, _, _):
+        
+        let myPeerId = context.account.peerId
+        
+        getLastMessages(lastMessage: lastMessage) { messagesOrig in
+            let messages: [AIManager.MessageEntry] = messagesOrig.compactMap { message in
                 var name: String? = nil
                 if let indexName = message.author?.indexName {
                     switch indexName {
@@ -6924,22 +6961,20 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     }
                 }
                 let text = message.text
-                                
+                
                 if text.isEmpty {
                     return nil
                 }
                 
+                let myMessage = (message.author?.id == myPeerId)
+                
                 return AIManager.MessageEntry(myMessage: myMessage, name: name, text: text)
-            default:
-                return nil
             }
-        }
-        
-        guard !messages.isEmpty else { return }
-        
-        //self.startGenerationAnimation()
-        
-        if let lastMessageIndex = source.filteredEntries.last?.index {
+            
+            guard !messages.isEmpty, let lastMessageIndex = messagesOrig.last?.index else {
+                return
+            }
+            
             DispatchQueue.global().async {
                 self.chatDisplayNode.historyNode.scrollToMessage(index: lastMessageIndex)
                 
@@ -6951,30 +6986,26 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 
                 self.aiManager.generateSummary(
                     messages: messages,
-                    resultUpdate: {  [weak self] result in
-                        guard let strongSelf = self else { return }
-                        strongSelf.chatDisplayNode.historyNode.aiSummaryItemsPromise.set([
+                    resultUpdate: { [weak self] result in
+                        self?.chatDisplayNode.historyNode.aiSummaryItemsPromise.set([
                             AISummaryChatMessage(id: lastMessageIndex.id, timestamp: lastMessageIndex.timestamp + 1, content: result)
                         ])
                     },
                     completion: { [weak self] error in
-                        guard let strongSelf = self else { return }
+                        self?.chatDisplayNode.textInputPanelNode?.aiButtonMode = .idle
                         
-                        strongSelf.chatDisplayNode.textInputPanelNode?.aiButtonMode = .idle
-                        
-                        DispatchQueue.main.async {
-                            //strongSelf.stopGenerationAnimation()
-                            if let errorText = error?.localizedDescription {
-                                strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                        if let errorText = error?.localizedDescription {
+                            DispatchQueue.main.async {
+                                self?.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: self!.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: self!.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                             }
                         }
-                        return
                     },
                     presentationData: self.presentationData
                 )
             }
         }
     }
+    
     
     func themeAndStringsUpdated() {
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
@@ -10929,7 +10960,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 strongSelf.slowmodeTooltipController = nil
                 slowmodeTooltipController.dismiss()
             }
-            let slowmodeTooltipController = ChatSlowmodeHintController(presentationData: strongSelf.presentationData, slowmodeState: 
+            let slowmodeTooltipController = ChatSlowmodeHintController(presentationData: strongSelf.presentationData, slowmodeState:
                 slowmodeState)
             slowmodeTooltipController.presentationArguments = TooltipControllerPresentationArguments(sourceNodeAndRect: {
                 if let strongSelf = self {
@@ -14201,7 +14232,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }
         |> deliverOnMainQueue).startStandalone(next: { [weak self] settings in
             if let strongSelf = self, let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer {
-                strongSelf.chatDisplayNode.dismissInput()                
+                strongSelf.chatDisplayNode.dismissInput()
                 let controller = mediaPasteboardScreen(
                     context: strongSelf.context,
                     updatedPresentationData: strongSelf.updatedPresentationData,
@@ -16677,7 +16708,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     if let themeController = strongSelf.themeScreen {
                         strongSelf.themeScreen = nil
                         themeController.dimTapped()
-                    }                    
+                    }
                     let dismissControllers = { [weak self] in
                         if let self, let navigationController = self.navigationController as? NavigationController {
                             let controllers = navigationController.viewControllers.filter({ controller in

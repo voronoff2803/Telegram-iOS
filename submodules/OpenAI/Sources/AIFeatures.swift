@@ -150,7 +150,7 @@ final public class AIManager {
             )
             
             charCount += messageText.count
-            if charCount > 1024 {
+            if charCount > 8_192 {
                 break
             }
             chatMessages.append(chatQuery)
@@ -182,7 +182,7 @@ final public class AIManager {
     }
     
     static func cleanTextFromStart(_ text: String, startStr: String) -> String {
-        let patterns = ["**\(startStr)**", "*\(startStr)*", "\(startStr)"]
+        let patterns = ["**\(startStr)** ", "*\(startStr)* ", "\(startStr) ", "**\(startStr)**", "*\(startStr)*", "\(startStr)", "\n\n\n", "\n\n", "\n"]
         var result = text
 
         for pattern in patterns {
@@ -190,13 +190,6 @@ final public class AIManager {
                 if range.lowerBound == result.startIndex {
                     result = result.replacingOccurrences(of: pattern, with: "", range: range)
                 }
-            }
-        }
-
-        // Remove newline if it's now at the start of the text
-        for _ in 0...2 {
-            if let newlineRange = result.range(of: "\n"), newlineRange.lowerBound == result.startIndex {
-                result.removeSubrange(newlineRange)
             }
         }
 
