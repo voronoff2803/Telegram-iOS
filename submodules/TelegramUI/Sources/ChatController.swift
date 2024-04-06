@@ -6907,9 +6907,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
     // MARK: AI Generate Feature
 
-    func getLastMessages(lastMessage: Message, count: Int = 128, completion: @escaping ([Message]) -> ()) {
+    func getLastMessages(lastMessage: Message, count: Int = 12, completion: @escaping ([Message]) -> ()) {
+        print("completed", lastMessage.text)
         let chatLocation = chatDisplayNode.chatLocation
-        let anchorIndex = HistoryViewInputAnchor.upperBound
+        let anchorIndex = HistoryViewInputAnchor.message(lastMessage.id)
         let location = context.chatLocationInput(for: chatLocation, contextHolder: Atomic(value: nil))
         let tag = self.chatDisplayNode.historyNode.tag
         
@@ -6934,17 +6935,18 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
 
     func aiGenerateSummary() {
-        guard let source = chatDisplayNode.historyNode.historyView,
-              let lastMessageEntry = source.filteredEntries.reversed().first(where: { entry in
-                  if case .MessageEntry = entry {
-                      return true
-                  } else {
-                      return false
-                  }
-              }),
-              case .MessageEntry(let lastMessage, _, _, _, _, _) = lastMessageEntry
-        else { return }
+        guard let source = chatDisplayNode.historyNode.historyView else { return }
         
+        let filteredMessageEntries = source.filteredEntries.compactMap {
+            if case .MessageEntry(let lastMessage, _, _, _, _, _) = $0 {
+                return lastMessage
+            } else {
+                return nil
+            }
+        }
+        let middleIndex = filteredMessageEntries.count / 2
+        guard let lastMessage = Array(filteredMessageEntries[..<middleIndex]).reversed().first
+        else { return }
         
         
         let myPeerId = context.account.peerId
