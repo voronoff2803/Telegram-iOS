@@ -37,7 +37,8 @@ final public class AIManager {
     public func generateAnswer(
         messages: [MessageEntry],
         resultUpdate: @escaping (String) -> (),
-        completion: @escaping (Error?) -> ()
+        completion: @escaping (Error?) -> (),
+        presentationData: PresentationData
     ) {
         var charCount = 0
         var actorName: String = "John"
@@ -73,46 +74,19 @@ final public class AIManager {
                 
         let query = ChatQuery(model: .gpt3_5Turbo, messages: chatMessages)
                 
-        var message = ""
+        let startStr = "\(actorName)"
         
-        var isRemovedName = false
-        
-        self.openAI.chatsStream(query: query) { partialResult in
-            switch partialResult {
+        self.openAI.chats(query: query) { result in
+            switch result {
             case .success(let result):
-                if let delta = result.choices.first?.delta.content {
-                    message += delta
+                if let message = result.choices.first?.message.content {
                     
-                    if !isRemovedName {
-                        if message.contains("\(actorName)") {
-                            isRemovedName = true
-                            message = message.replacingOccurrences(of: "\(actorName)", with: "")
-                        }
-                    }
-                    
-                    if message.count < 20 {
-                        let symbolsToRemove = ["'", " ", ":"]
-                        
-                        for symbol in symbolsToRemove {
-                            if message.hasPrefix(symbol) {
-                                message = String(message.dropFirst(symbol.count))
-                            }
-                        }
-                    }
-                    
-                    if message.count > 20 && !isRemovedName {
-                        isRemovedName = true
-                    }
-                    
-                    if isRemovedName {
-                        resultUpdate(message)
-                    }
+                    resultUpdate(AIManager.cleanTextFromStart(message, startStr: startStr))
                 }
+                completion(nil)
             case .failure(let error):
                 completion(error)
             }
-        } completion: { error in
-            completion(error)
         }
     }
     
@@ -182,7 +156,7 @@ final public class AIManager {
     }
     
     static func cleanTextFromStart(_ text: String, startStr: String) -> String {
-        let patterns = ["**\(startStr)** ", "*\(startStr)* ", "\(startStr) ", "**\(startStr)**", "*\(startStr)*", "\(startStr)", "\n\n\n", "\n\n", "\n"]
+        let patterns = ["\(startStr)", "**\(startStr)** ", "*\(startStr)* ", "\(startStr) ", "**\(startStr)**", "*\(startStr)*", "\(startStr)", "\n\n\n", "\n\n", "\n", "'", ":"]
         var result = text
 
         for pattern in patterns {

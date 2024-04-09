@@ -6827,28 +6827,29 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     func startGenerationAnimation() {
         self.chatDisplayNode.textInputPanelNode?.gloss = true
+        self.chatDisplayNode.textInputPanelNode?.aiButtonMode = .loading
     }
     
     func stopGenerationAnimation() {
         self.chatDisplayNode.textInputPanelNode?.gloss = false
+        self.chatDisplayNode.textInputPanelNode?.aiButtonMode = .idle
     }
     
     // MARK: AI Generate Feature
     func aiGenerateMessage() {
-        if #available(iOS 15, *) {
-            
-            let controller = PaywallViewController()
-            present(controller, animated: true, completion: nil)
-    
-        }
+        //        if #available(iOS 15, *) {
+        //
+        //            let controller = PaywallViewController()
+        //            present(controller, animated: true, completion: nil)
+        //
+        //        }
+        //
+        //        return
         
-        return
+        let myPeerId = context.account.peerId
         
-        guard let source = self.chatDisplayNode.historyNode.historyView else { return }
-        
-        let messages: [AIManager.MessageEntry] = source.filteredEntries.compactMap { entry in
-            switch entry {
-            case let .MessageEntry(message, _, myMessage, _, _, _):
+        getLastMessages(anchorIndex: HistoryViewInputAnchor.upperBound) { messagesOrig in
+            let messages: [AIManager.MessageEntry] = messagesOrig.compactMap { message in
                 var name: String? = nil
                 if let indexName = message.author?.indexName {
                     switch indexName {
@@ -6864,53 +6865,55 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     return nil
                 }
                 
+                let myMessage = (message.author?.id == myPeerId)
+                
                 return AIManager.MessageEntry(myMessage: myMessage, name: name, text: text)
-            default:
-                return nil
+            }
+            
+            guard !messages.isEmpty else {
+                return
+            }
+            
+            DispatchQueue.global().async {
+                self.startGenerationAnimation()
+                
+                self.aiManager.generateAnswer(
+                    messages: messages,
+                    resultUpdate: {  [weak self] result in
+                        guard let strongSelf = self else { return }
+                        
+                        let text = convertMarkdownToAttributes(NSAttributedString(string: result))
+                        
+                        DispatchQueue.main.async {
+                            strongSelf.updateTextInputState(ChatTextInputState(inputText: text))
+                            if let textView = strongSelf.chatDisplayNode.textInputPanelNode?.textInputNode?.textView {
+                                let range = NSMakeRange(textView.text.count - 1, 0)
+                                textView.scrollRangeToVisible(range)
+                            }
+                        }
+                    },
+                    completion: { [weak self] error in
+                        guard let strongSelf = self else { return }
+                        
+                        DispatchQueue.main.async {
+                            strongSelf.stopGenerationAnimation()
+                            if let errorText = error?.localizedDescription {
+                                strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            }
+                        }
+                        return
+                    },
+                    presentationData: self.presentationData
+                )
             }
         }
-        
-        guard !messages.isEmpty else { return }
-        
-        self.startGenerationAnimation()
-        
-        DispatchQueue.global().async {
-            self.aiManager.generateAnswer(
-                messages: messages,
-                resultUpdate: {  [weak self] result in
-                    guard let strongSelf = self else { return }
-                    
-                    let text = convertMarkdownToAttributes(NSAttributedString(string: result))
-                    
-                    DispatchQueue.main.async {
-                        strongSelf.updateTextInputState(ChatTextInputState(inputText: text))
-                        if let textView = strongSelf.chatDisplayNode.textInputPanelNode?.textInputNode?.textView {
-                            let range = NSMakeRange(textView.text.count - 1, 0)
-                            textView.scrollRangeToVisible(range)
-                        }
-                    }
-                },
-                completion: { [weak self] error in
-                    guard let strongSelf = self else { return }
-                    
-                    DispatchQueue.main.async {
-                        strongSelf.stopGenerationAnimation()
-                        if let errorText = error?.localizedDescription {
-                            strongSelf.present(standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: nil, text: errorText, actions: [TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
-                        }
-                    }
-                    return
-                }
-            )
-        }
     }
+
         
     // MARK: AI Generate Feature
 
-    func getLastMessages(lastMessage: Message, count: Int = 12, completion: @escaping ([Message]) -> ()) {
-        print("completed", lastMessage.text)
+    func getLastMessages(anchorIndex: HistoryViewInputAnchor, count: Int = 12, completion: @escaping ([Message]) -> ()) {
         let chatLocation = chatDisplayNode.chatLocation
-        let anchorIndex = HistoryViewInputAnchor.message(lastMessage.id)
         let location = context.chatLocationInput(for: chatLocation, contextHolder: Atomic(value: nil))
         let tag = self.chatDisplayNode.historyNode.tag
         
@@ -6938,20 +6941,19 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         guard let source = chatDisplayNode.historyNode.historyView else { return }
         
         let filteredMessageEntries = source.filteredEntries.compactMap {
-            if case .MessageEntry(let lastMessage, _, _, _, _, _) = $0 {
-                return lastMessage
+            if case .MessageEntry(let message, _, _, _, _, _) = $0 {
+                return message
             } else {
                 return nil
             }
         }
-        let middleIndex = filteredMessageEntries.count / 2
-        guard let lastMessage = Array(filteredMessageEntries[..<middleIndex]).reversed().first
+        guard let lastMessage = filteredMessageEntries.last
         else { return }
         
         
         let myPeerId = context.account.peerId
         
-        getLastMessages(lastMessage: lastMessage) { messagesOrig in
+        getLastMessages(anchorIndex:  HistoryViewInputAnchor.message(lastMessage.id)) { messagesOrig in
             let messages: [AIManager.MessageEntry] = messagesOrig.compactMap { message in
                 var name: String? = nil
                 if let indexName = message.author?.indexName {

@@ -1285,27 +1285,15 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             return
         }
         
-        guard let color = self.theme?.chat.inputPanel.mediaRecordingControl.buttonColor.withMultiplied(hue: 0.9, saturation: 1.0, brightness: 1.0) else { return }
-        let alpha: CGFloat
-        let borderAlpha: CGFloat
-        let compositingFilter: String?
-        if color.lightness > 0.5 {
-            alpha = 0.5
-            borderAlpha = 0.75
-            compositingFilter = "overlayBlendMode"
-        } else {
-            alpha = 0.2
-            borderAlpha = 0.3
-            compositingFilter = nil
-        }
+        let color = theme?.rootController.navigationBar.accentTextColor ?? .white
         
-        shimmerView.update(backgroundColor:  UIColor.blue, foregroundColor: UIColor.red, gradientSize: 50.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
-        borderShimmerView.update(backgroundColor: UIColor.blue, foregroundColor: UIColor.red, gradientSize: 60.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        shimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(0.3), gradientSize: 50.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
+        borderShimmerView.update(backgroundColor: .clear, foregroundColor: color.withAlphaComponent(1.0), gradientSize: 60.0, globalTimeOffset: false, duration: 1.2, horizontal: true)
         
         
         
         //shimmerView.layer.compositingFilter = compositingFilter
-        borderShimmerView.layer.compositingFilter = compositingFilter
+        //borderShimmerView.layer.compositingFilter = compositingFilter
     }
     
     override func didLoad() {
@@ -4643,11 +4631,11 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
                 controllerProtocol.dismiss(completion: nil)
             }),
             buidCuntextMenuItem(label: l("AI.Action.ContinueWriting", locale), iconName: "Chat/Context Menu/Play", action: { (controllerProtocol, _) in
-                self.aiGenerateSummary()
+                self.generateAnswer(source: source)
                 controllerProtocol.dismiss(completion: nil)
             }),
             buidCuntextMenuItem(label: l("AI.Action.GenerateMessage", locale), iconName: "Chat/Context Menu/MessageBubble", leftIconName: "Chat/Context Menu/Arrow", action: { (controllerProtocol, _) in
-                self.aiGenerateSummary()
+                self.generateAnswer(source: source)
                 controllerProtocol.dismiss(completion: nil)
             }),
             .separator,
@@ -4685,7 +4673,7 @@ class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDelegate, Ch
             .action(ContextMenuActionItem(text: "1 Style", icon: { theme in
                 generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/QuoteSelected"), color: theme.contextMenu.primaryColor)
             }, action: { (controllerProtocol, _) in
-                self.aiGenerateSummary()
+                self.aiGenerateMessage()
                 controllerProtocol.dismiss(completion: nil)
             })),
             .action(ContextMenuActionItem(text: "2 Style", icon: { theme in
