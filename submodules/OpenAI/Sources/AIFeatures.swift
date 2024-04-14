@@ -156,17 +156,30 @@ final public class AIManager {
     }
     
     static func cleanTextFromStart(_ text: String, startStr: String) -> String {
-        let patterns = ["\(startStr)", "**\(startStr)** ", "*\(startStr)* ", "\(startStr) ", "**\(startStr)**", "*\(startStr)*", "\(startStr)", "\n\n\n", "\n\n", "\n", "'", ":"]
-        var result = text
-
-        for pattern in patterns {
-            if let range = result.range(of: pattern) {
-                if range.lowerBound == result.startIndex {
-                    result = result.replacingOccurrences(of: pattern, with: "", range: range)
-                }
-            }
+        // Check if the text is shorter than or equal to 20 characters
+        let rangeLimit = min(20, text.count)
+        
+        // Define the range for the first 20 characters
+        let range = text.startIndex..<text.index(text.startIndex, offsetBy: rangeLimit)
+        let substring = String(text[range])
+        
+        let pattern = "[*'\"]*\\**\(startStr)\\**[:]*[*'\" ]*" // regex pattern
+        
+        // Create a regular expression
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            print("Invalid pattern 1")
+            return text
         }
-
-        return result
+        
+        // Replace matches in the substring
+        var modifiedSubstring = regex.stringByReplacingMatches(in: substring, options: [], range: NSRange(location: 0, length: substring.utf16.count), withTemplate: "")
+        
+        while modifiedSubstring.starts(with: "\n") {
+            modifiedSubstring.removeFirst()
+        }
+        
+        // Reassemble the full string with the modified part
+        let modifiedText = modifiedSubstring + text[range.upperBound...]
+        return modifiedText
     }
 }
