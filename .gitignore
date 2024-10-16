@@ -65,3 +65,4 @@ xcodeproj.bazelrc
 build-input/*
 **/*.pyc
 *.pyc
+build-system/template_minimal_development_configuration.json
