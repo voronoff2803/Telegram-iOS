@@ -5,6 +5,7 @@
 [submodule "build-system/bazel-rules/rules_apple"]
 	path = build-system/bazel-rules/rules_apple
 url=https://github.com/ali-fareed/rules_apple.git
+branch = reproducible-codesign-no-check
 [submodule "build-system/bazel-rules/rules_swift"]
 	path = build-system/bazel-rules/rules_swift
 url=https://github.com/bazelbuild/rules_swift.git
