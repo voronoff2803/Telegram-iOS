@@ -102,7 +102,8 @@ private class LegacyPaintStickerEntity: LegacyPaintEntity {
         self.animated = entity.isAnimated
 
         switch entity.content {
-        case let .file(file, _):
+        case let .file(fileReference, _):
+            let file = fileReference.media
             self.file = file
             if file.isAnimatedSticker || file.isVideoSticker || file.mimeType == "video/webm" {
                 self.source = AnimatedStickerResourceSource(postbox: postbox, resource: file.resource, isVideo: file.isVideoSticker || file.mimeType == "video/webm")
@@ -146,13 +147,7 @@ private class LegacyPaintStickerEntity: LegacyPaintEntity {
         case let .image(image, _):
             self.file = nil
             self.imagePromise.set(.single(image))
-        case .animatedImage:
-            self.file = nil
-        case .video:
-            self.file = nil
-        case .dualVideoReference:
-            self.file = nil
-        case .message:
+        case .animatedImage, .video, .dualVideoReference, .message:
             self.file = nil
         }
     }
@@ -482,16 +477,18 @@ public final class LegacyPaintEntityRenderer: NSObject, TGPhotoPaintEntityRender
         }
         
         func lcm(_ x: Int64, _ y: Int64) -> Int64 {
+            let x = max(x, 1)
+            let y = max(y, 1)
             return x / gcd(x, y) * y
         }
-        
+                
         return combineLatest(durations)
         |> map { durations in
             var result: Double
             let minDuration: Double = 3.0
             if durations.count > 1 {
                 let reduced = durations.reduce(1.0) { lhs, rhs -> Double in
-                    return Double(lcm(Int64(lhs * 10.0), Int64(rhs * 10.0)))
+                    return Double(lcm(Int64(lhs * 100.0), Int64(rhs * 100.0)))
                 }
                 result = min(6.0, Double(reduced) / 10.0)
             } else if let duration = durations.first {
@@ -615,8 +612,17 @@ public final class LegacyPaintStickersContext: NSObject, TGPhotoPaintStickersCon
     }
 }
 
+//Xcode 16
+#if canImport(ContactProvider)
+extension SolidRoundedButtonView: @retroactive TGPhotoSolidRoundedButtonView {
+    public func updateWidth(_ width: CGFloat) {
+        let _ = self.updateLayout(width: width, transition: .immediate)
+    }
+}
+#else
 extension SolidRoundedButtonView: TGPhotoSolidRoundedButtonView {
     public func updateWidth(_ width: CGFloat) {
         let _ = self.updateLayout(width: width, transition: .immediate)
     }
 }
+#endif

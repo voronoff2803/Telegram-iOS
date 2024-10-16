@@ -23,7 +23,7 @@
 
 @interface SharedCallAudioDevice : NSObject
 
-- (instancetype _Nonnull)initWithDisableRecording:(bool)disableRecording;
+- (instancetype _Nonnull)initWithDisableRecording:(bool)disableRecording enableSystemMute:(bool)enableSystemMute;
 
 + (void)setupAudioSession;
 
@@ -242,7 +242,9 @@ typedef NS_ENUM(int32_t, OngoingCallDataSavingWebrtc) {
 @property (nonatomic, copy) void (^ _Nullable signalBarsChanged)(int32_t);
 @property (nonatomic, copy) void (^ _Nullable audioLevelUpdated)(float);
 
-- (instancetype _Nonnull)initWithVersion:(NSString * _Nonnull)version queue:(id<OngoingCallThreadLocalContextQueueWebrtc> _Nonnull)queue
+- (instancetype _Nonnull)initWithVersion:(NSString * _Nonnull)version
+                        customParameters:(NSString * _Nullable)customParameters
+                                   queue:(id<OngoingCallThreadLocalContextQueueWebrtc> _Nonnull)queue
                                    proxy:(VoipProxyServerWebrtc * _Nullable)proxy
                              networkType:(OngoingCallNetworkTypeWebrtc)networkType dataSaving:(OngoingCallDataSavingWebrtc)dataSaving
                             derivedState:(NSData * _Nonnull)derivedState
@@ -410,8 +412,10 @@ typedef NS_ENUM(int32_t, OngoingGroupCallRequestedVideoQuality) {
     videoContentType:(OngoingGroupCallVideoContentType)videoContentType
     enableNoiseSuppression:(bool)enableNoiseSuppression
     disableAudioInput:(bool)disableAudioInput
+    enableSystemMute:(bool)enableSystemMute
     preferX264:(bool)preferX264
     logPath:(NSString * _Nonnull)logPath
+onMutedSpeechActivityDetected:(void (^ _Nullable)(bool))onMutedSpeechActivityDetected
 audioDevice:(SharedCallAudioDevice * _Nullable)audioDevice;
 
 - (void)stop;

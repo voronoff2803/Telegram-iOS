@@ -35,8 +35,8 @@ private final class ShutterButtonContentComponent: Component {
     let shutterState: ShutterButtonState
     let blobState: ShutterBlobView.BlobState
     let highlightedAction: ActionSlot<Bool>
-    let updateOffsetX: ActionSlot<(CGFloat, Transition)>
-    let updateOffsetY: ActionSlot<(CGFloat, Transition)>
+    let updateOffsetX: ActionSlot<(CGFloat, ComponentTransition)>
+    let updateOffsetY: ActionSlot<(CGFloat, ComponentTransition)>
     
     init(
         isTablet: Bool,
@@ -45,8 +45,8 @@ private final class ShutterButtonContentComponent: Component {
         shutterState: ShutterButtonState,
         blobState: ShutterBlobView.BlobState,
         highlightedAction: ActionSlot<Bool>,
-        updateOffsetX: ActionSlot<(CGFloat, Transition)>,
-        updateOffsetY: ActionSlot<(CGFloat, Transition)>
+        updateOffsetX: ActionSlot<(CGFloat, ComponentTransition)>,
+        updateOffsetY: ActionSlot<(CGFloat, ComponentTransition)>
     ) {
         self.isTablet = isTablet
         self.hasAppeared = hasAppeared
@@ -106,11 +106,11 @@ private final class ShutterButtonContentComponent: Component {
                 return
             }
             let scale: CGFloat = isHighlighted ? 0.8 : 1.0
-            let transition = Transition(animation: .curve(duration: 0.3, curve: .easeInOut))
+            let transition = ComponentTransition(animation: .curve(duration: 0.3, curve: .easeInOut))
             transition.setTransform(view: blobView, transform: CATransform3DMakeScale(scale, scale, 1.0))
         }
         
-        func update(component: ShutterButtonContentComponent, availableSize: CGSize, transition: Transition) -> CGSize {
+        func update(component: ShutterButtonContentComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             self.component = component
             
             if component.hasAppeared && self.blobView == nil {
@@ -245,7 +245,7 @@ private final class ShutterButtonContentComponent: Component {
         return View()
     }
 
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
     }
 }
@@ -325,7 +325,7 @@ final class FlipButtonContentComponent: Component {
             self.darkIcon.add(darkAnimation, forKey: "transform.rotation.z")
         }
         
-        func update(component: FlipButtonContentComponent, availableSize: CGSize, transition: Transition) -> CGSize {
+        func update(component: FlipButtonContentComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             self.component = component
             
             component.action.connect { [weak self] _ in
@@ -353,7 +353,7 @@ final class FlipButtonContentComponent: Component {
         return View()
     }
 
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
     }
 }
@@ -404,7 +404,7 @@ final class LockContentComponent: Component {
             preconditionFailure()
         }
         
-        func update(component: LockContentComponent, availableSize: CGSize, transition: Transition) -> CGSize {
+        func update(component: LockContentComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             self.component = component
             
             let size = CGSize(width: 30.0, height: 30.0)
@@ -428,7 +428,7 @@ final class LockContentComponent: Component {
         return View()
     }
 
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
     }
 }
@@ -459,6 +459,7 @@ final class CaptureControlsComponent: Component {
     }
     
     let isTablet: Bool
+    let isSticker: Bool
     let hasAppeared: Bool
     let hasAccess: Bool
     let tintColor: UIColor
@@ -478,6 +479,7 @@ final class CaptureControlsComponent: Component {
     
     init(
         isTablet: Bool,
+        isSticker: Bool,
         hasAppeared: Bool,
         hasAccess: Bool,
         tintColor: UIColor,
@@ -496,6 +498,7 @@ final class CaptureControlsComponent: Component {
         flipAnimationAction: ActionSlot<Void>
     ) {
         self.isTablet = isTablet
+        self.isSticker = isSticker
         self.hasAppeared = hasAppeared
         self.hasAccess = hasAccess
         self.tintColor = tintColor
@@ -516,6 +519,9 @@ final class CaptureControlsComponent: Component {
     
     static func ==(lhs: CaptureControlsComponent, rhs: CaptureControlsComponent) -> Bool {
         if lhs.isTablet != rhs.isTablet {
+            return false
+        }
+        if lhs.isSticker != rhs.isSticker {
             return false
         }
         if lhs.hasAppeared != rhs.hasAppeared {
@@ -593,8 +599,8 @@ final class CaptureControlsComponent: Component {
         private let leftGuide = SimpleLayer()
         private let rightGuide = SimpleLayer()
         
-        private let shutterUpdateOffsetX = ActionSlot<(CGFloat, Transition)>()
-        private let shutterUpdateOffsetY = ActionSlot<(CGFloat, Transition)>()
+        private let shutterUpdateOffsetX = ActionSlot<(CGFloat, ComponentTransition)>()
+        private let shutterUpdateOffsetY = ActionSlot<(CGFloat, ComponentTransition)>()
         
         private let shutterHightlightedAction = ActionSlot<Bool>()
         
@@ -691,13 +697,13 @@ final class CaptureControlsComponent: Component {
         private var shutterOffsetX: CGFloat = 0.0
         private var shutterOffsetY: CGFloat = 0.0
         
-        private func updateShutterOffsetX(_ offsetX: CGFloat, transition: Transition) {
+        private func updateShutterOffsetX(_ offsetX: CGFloat, transition: ComponentTransition) {
             self.shutterOffsetX = offsetX
             self.shutterUpdateOffsetX.invoke((offsetX, transition))
             self.state?.updated(transition: transition)
         }
         
-        private func updateShutterOffsetY(_ offsetY: CGFloat, transition: Transition) {
+        private func updateShutterOffsetY(_ offsetY: CGFloat, transition: ComponentTransition) {
             self.shutterOffsetY = offsetY
             self.shutterUpdateOffsetY.invoke((offsetY, transition))
             self.state?.updated(transition: transition)
@@ -714,8 +720,8 @@ final class CaptureControlsComponent: Component {
                 return bandingStart + (1.0 - (1.0 / ((bandedOffset * coefficient / range) + 1.0))) * range
             }
             
-            var scheduledXOffsetUpdate: (CGFloat, Transition)?
-            var scheduledYOffsetUpdate: (CGFloat, Transition)?
+            var scheduledXOffsetUpdate: (CGFloat, ComponentTransition)?
+            var scheduledYOffsetUpdate: (CGFloat, ComponentTransition)?
             
             let previousPanBlobState = self.panBlobState
             let location = gestureRecognizer.location(in: self)
@@ -760,7 +766,7 @@ final class CaptureControlsComponent: Component {
                         self.panBlobState = .video
                         isBanding = true
                     }
-                    var transition: Transition = .immediate
+                    var transition: ComponentTransition = .immediate
                     if let wasBanding = self.wasBanding, wasBanding != isBanding {
                         //self.hapticFeedback.impact(.light)
                         transition = .spring(duration: 0.35)
@@ -818,7 +824,7 @@ final class CaptureControlsComponent: Component {
                         self.panBlobState = .video
                         isBanding = true
                     }
-                    var transition: Transition = .immediate
+                    var transition: ComponentTransition = .immediate
                     if let wasBanding = self.wasBanding, wasBanding != isBanding {
                         //self.hapticFeedback.impact(.light)
                         transition = .spring(duration: 0.35)
@@ -851,7 +857,7 @@ final class CaptureControlsComponent: Component {
         }
         
         private var animatedOut = false
-        func animateOutToEditor(transition: Transition) {
+        func animateOutToEditor(transition: ComponentTransition) {
             self.animatedOut = true
             
             if let view = self.galleryButtonView.view {
@@ -870,7 +876,7 @@ final class CaptureControlsComponent: Component {
             }
         }
         
-        func animateInFromEditor(transition: Transition) {
+        func animateInFromEditor(transition: ComponentTransition) {
             self.animatedOut = false
 
             if let view = self.galleryButtonView.view {
@@ -889,7 +895,7 @@ final class CaptureControlsComponent: Component {
             }
         }
 
-        func update(component: CaptureControlsComponent, state: State, availableSize: CGSize, transition: Transition) -> CGSize {
+        func update(component: CaptureControlsComponent, state: State, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             let previousShutterState = self.component?.shutterState ?? .generic
             self.component = component
             self.state = state
@@ -911,66 +917,71 @@ final class CaptureControlsComponent: Component {
             } else if case .transition = component.shutterState {
                 isTransitioning = true
             }
-                     
-            let gallerySize: CGSize
-            let galleryCornerRadius: CGFloat
-            if component.isTablet {
-                gallerySize = CGSize(width: 72.0, height: 72.0)
-                galleryCornerRadius = 16.0
-            } else {
-                gallerySize = CGSize(width: 50.0, height: 50.0)
-                galleryCornerRadius = 10.0
-            }
-            let galleryButtonId: String
-            if let (identifier, _) = state.cachedAssetImage, identifier == "" {
-                galleryButtonId = "placeholder"
-            } else {
-                galleryButtonId = "gallery"
-            }
-            let galleryButtonSize = self.galleryButtonView.update(
-                transition: transition,
-                component: AnyComponent(
-                    CameraButton(
-                        content: AnyComponentWithIdentity(
-                            id: galleryButtonId,
-                            component: AnyComponent(
-                                Image(
-                                    image: state.cachedAssetImage?.1,
-                                    size: gallerySize,
-                                    contentMode: .scaleAspectFill
-                                )
-                            )
-                        ),
-                        tag: component.galleryButtonTag,
-                        action: {
-                            component.galleryTapped()
-                        }
-                    )
-                ),
-                environment: {},
-                containerSize: gallerySize
-            )
+                    
             let galleryButtonFrame: CGRect
-            if component.isTablet {
-                galleryButtonFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - galleryButtonSize.width) / 2.0), y: size.height - galleryButtonSize.height - 56.0), size: galleryButtonSize)
-            } else {
-                galleryButtonFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: floorToScreenPixels((size.height - galleryButtonSize.height) / 2.0)), size: galleryButtonSize)
-            }
-            if let galleryButtonView = self.galleryButtonView.view as? CameraButton.View {
-                galleryButtonView.contentView.clipsToBounds = true
-                galleryButtonView.contentView.layer.cornerRadius = galleryCornerRadius
-                if galleryButtonView.superview == nil {
-                    self.addSubview(galleryButtonView)
+            let gallerySize: CGSize
+            if !component.isSticker {
+                let galleryCornerRadius: CGFloat
+                if component.isTablet {
+                    gallerySize = CGSize(width: 72.0, height: 72.0)
+                    galleryCornerRadius = 16.0
+                } else {
+                    gallerySize = CGSize(width: 50.0, height: 50.0)
+                    galleryCornerRadius = 10.0
                 }
-                transition.setBounds(view: galleryButtonView, bounds: CGRect(origin: .zero, size: galleryButtonFrame.size))
-                transition.setPosition(view: galleryButtonView, position: galleryButtonFrame.center)
-                
-                let normalAlpha = component.tintColor.rgb == 0xffffff ? 1.0 : 0.6
-                
-                transition.setScale(view: galleryButtonView, scale: isRecording || isTransitioning ? 0.1 : 1.0)
-                transition.setAlpha(view: galleryButtonView, alpha: isRecording || isTransitioning ? 0.0 : normalAlpha)
+                let galleryButtonId: String
+                if let (identifier, _) = state.cachedAssetImage, identifier == "" {
+                    galleryButtonId = "placeholder"
+                } else {
+                    galleryButtonId = "gallery"
+                }
+                let galleryButtonSize = self.galleryButtonView.update(
+                    transition: transition,
+                    component: AnyComponent(
+                        CameraButton(
+                            content: AnyComponentWithIdentity(
+                                id: galleryButtonId,
+                                component: AnyComponent(
+                                    Image(
+                                        image: state.cachedAssetImage?.1,
+                                        size: gallerySize,
+                                        contentMode: .scaleAspectFill
+                                    )
+                                )
+                            ),
+                            tag: component.galleryButtonTag,
+                            action: {
+                                component.galleryTapped()
+                            }
+                        )
+                    ),
+                    environment: {},
+                    containerSize: gallerySize
+                )
+                if component.isTablet {
+                    galleryButtonFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - galleryButtonSize.width) / 2.0), y: size.height - galleryButtonSize.height - 56.0), size: galleryButtonSize)
+                } else {
+                    galleryButtonFrame = CGRect(origin: CGPoint(x: buttonSideInset, y: floorToScreenPixels((size.height - galleryButtonSize.height) / 2.0)), size: galleryButtonSize)
+                }
+                if let galleryButtonView = self.galleryButtonView.view as? CameraButton.View {
+                    galleryButtonView.contentView.clipsToBounds = true
+                    galleryButtonView.contentView.layer.cornerRadius = galleryCornerRadius
+                    if galleryButtonView.superview == nil {
+                        self.addSubview(galleryButtonView)
+                    }
+                    transition.setBounds(view: galleryButtonView, bounds: CGRect(origin: .zero, size: galleryButtonFrame.size))
+                    transition.setPosition(view: galleryButtonView, position: galleryButtonFrame.center)
+                    
+                    let normalAlpha = component.tintColor.rgb == 0xffffff ? 1.0 : 0.6
+                    
+                    transition.setScale(view: galleryButtonView, scale: isRecording || isTransitioning ? 0.1 : 1.0)
+                    transition.setAlpha(view: galleryButtonView, alpha: isRecording || isTransitioning ? 0.0 : normalAlpha)
+                }
+            } else {
+                galleryButtonFrame = .zero
+                gallerySize = .zero
             }
-                        
+            
             if !component.isTablet && component.hasAccess {
                 let flipButtonOriginX = availableSize.width - 48.0 - buttonSideInset
                 let flipButtonMaskFrame: CGRect = CGRect(origin: CGPoint(x: availableSize.width / 2.0 - (flipButtonOriginX + 22.0) + 6.0 + self.shutterOffsetX, y: 8.0), size: CGSize(width: 32.0, height: 32.0))
@@ -1173,15 +1184,16 @@ final class CaptureControlsComponent: Component {
             
             if let shutterButtonView = self.shutterButtonView.view {
                 if shutterButtonView.superview == nil {
-                    let panGestureRecognizer = UIPanGestureRecognizer(target: self, action: #selector(self.handlePan(_:)))
-                    panGestureRecognizer.delegate = self
-                    shutterButtonView.addGestureRecognizer(panGestureRecognizer)
-                    
-                    let pressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.handlePress(_:)))
-                    pressGestureRecognizer.minimumPressDuration = 0.3
-                    pressGestureRecognizer.delegate = self
-                    shutterButtonView.addGestureRecognizer(pressGestureRecognizer)
-                    
+                    if !component.isSticker {
+                        let panGestureRecognizer = UIPanGestureRecognizer(target: self, action: #selector(self.handlePan(_:)))
+                        panGestureRecognizer.delegate = self
+                        shutterButtonView.addGestureRecognizer(panGestureRecognizer)
+                        
+                        let pressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(self.handlePress(_:)))
+                        pressGestureRecognizer.minimumPressDuration = 0.3
+                        pressGestureRecognizer.delegate = self
+                        shutterButtonView.addGestureRecognizer(pressGestureRecognizer)
+                    }
                     self.addSubview(shutterButtonView)
                 }
                 let alpha: CGFloat = component.hasAccess ? 1.0 : 0.3
@@ -1215,7 +1227,7 @@ final class CaptureControlsComponent: Component {
         return View()
     }
 
-    func update(view: View, availableSize: CGSize, state: State, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: State, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, state: state, availableSize: availableSize, transition: transition)
     }
 }

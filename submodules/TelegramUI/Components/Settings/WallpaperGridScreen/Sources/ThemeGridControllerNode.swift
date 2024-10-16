@@ -418,8 +418,7 @@ final class ThemeGridControllerNode: ASDisplayNode {
                 if let selectedWallpaper, !selectedWallpaper.isEmoticon {
                     entries.append(ThemeGridControllerEntry(index: index, theme: presentationData.theme, wallpaper: selectedWallpaper, channelMode: true, isEditable: false, isSelected: true))
                 } else {
-                    let emojiFile = context.animatedEmojiStickers["❌"]?.first?.file
-                    
+                    let emojiFile = context.animatedEmojiStickersValue["❌"]?.first?.file
                     entries.append(ThemeGridControllerEntry(index: index, theme: presentationData.theme, wallpaper: .color(0), isEmpty: true, emoji: emojiFile, channelMode: true, isEditable: false, isSelected: selectedWallpaper == nil))
                 }
                 index += 1
@@ -441,7 +440,7 @@ final class ThemeGridControllerNode: ASDisplayNode {
                         isSelected = true
                     }
 
-                    let emoji = context.animatedEmojiStickers[themeEmoticon]
+                    let emoji = context.animatedEmojiStickersValue[themeEmoticon]
                     entries.append(ThemeGridControllerEntry(index: index, theme: presentationData.theme, wallpaper: updatedWallpaper, emoji: emoji?.first?.file, channelMode: true, isEditable: false, isSelected: isSelected))
                     index += 1
                 }
@@ -826,7 +825,7 @@ final class ThemeGridControllerNode: ASDisplayNode {
         if let makeGalleryIconLayout, let galleryItem = self.galleryItem as? ItemListPeerActionItem {
             (galleryLayout, galleryApply) = makeGalleryIconLayout(galleryItem, params, ItemListNeighbors(top: isChannel ? .none : .sameSection(alwaysPlain: false), bottom: .sameSection(alwaysPlain: !hasCustomWallpaper)))
         } else if let makeGalleryLayout, let galleryItem = self.galleryItem as? ItemListActionItem {
-            (galleryLayout, galleryApply) = makeGalleryLayout(galleryItem, params, ItemListNeighbors(top: isChannel ? .none : .sameSection(alwaysPlain: false), bottom: .sameSection(alwaysPlain: false)))
+            (galleryLayout, galleryApply) = makeGalleryLayout(galleryItem, params, ItemListNeighbors(top: isChannel ? .none : .sameSection(alwaysPlain: false), bottom: .sameSection(alwaysPlain: true)))
         } else {
             fatalError()
         }

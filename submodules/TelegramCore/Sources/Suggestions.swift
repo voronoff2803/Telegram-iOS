@@ -13,6 +13,10 @@ public enum ServerProvidedSuggestion: String {
     case annualPremium = "PREMIUM_ANNUAL"
     case restorePremium = "PREMIUM_RESTORE"
     case xmasPremiumGift = "PREMIUM_CHRISTMAS"
+    case setupBirthday = "BIRTHDAY_SETUP"
+    case todayBirthdays = "BIRTHDAY_CONTACTS_TODAY"
+    case gracePremium = "PREMIUM_GRACE"
+    case starsSubscriptionLowBalance = "STARS_SUBSCRIPTION_LOW_BALANCE"
 }
 
 private var dismissedSuggestionsPromise = ValuePromise<[AccountRecordId: Set<ServerProvidedSuggestion>]>([:])
@@ -22,7 +26,7 @@ private var dismissedSuggestions: [AccountRecordId: Set<ServerProvidedSuggestion
     }
 }
 
-public func getServerProvidedSuggestions(account: Account) -> Signal<[ServerProvidedSuggestion], NoError> {
+func _internal_getServerProvidedSuggestions(account: Account) -> Signal<[ServerProvidedSuggestion], NoError> {
     let key: PostboxViewKey = .preferences(keys: Set([PreferencesKeys.appConfiguration]))
     return combineLatest(account.postbox.combinedView(keys: [key]), dismissedSuggestionsPromise.get())
     |> map { views, dismissedSuggestionsValue -> [ServerProvidedSuggestion] in
@@ -37,16 +41,38 @@ public func getServerProvidedSuggestions(account: Account) -> Signal<[ServerProv
             return []
         }
         
-        let list = listItems
-        
-        return list.compactMap { item -> ServerProvidedSuggestion? in
+        return listItems.compactMap { item -> ServerProvidedSuggestion? in
             return ServerProvidedSuggestion(rawValue: item)
         }.filter { !dismissedSuggestions.contains($0) }
     }
     |> distinctUntilChanged
 }
 
-public func dismissServerProvidedSuggestion(account: Account, suggestion: ServerProvidedSuggestion) -> Signal<Never, NoError> {
+func _internal_getServerDismissedSuggestions(account: Account) -> Signal<[ServerProvidedSuggestion], NoError> {
+    let key: PostboxViewKey = .preferences(keys: Set([PreferencesKeys.appConfiguration]))
+    return combineLatest(account.postbox.combinedView(keys: [key]), dismissedSuggestionsPromise.get())
+    |> map { views, dismissedSuggestionsValue -> [ServerProvidedSuggestion] in
+        let dismissedSuggestions = dismissedSuggestionsValue[account.id] ?? Set()
+        guard let view = views.views[key] as? PreferencesView else {
+            return []
+        }
+        guard let appConfiguration = view.values[PreferencesKeys.appConfiguration]?.get(AppConfiguration.self) else {
+            return []
+        }
+        var listItems: [String] = []
+        if let data = appConfiguration.data, let listItemsValues = data["dismissed_suggestions"] as? [String] {
+            listItems.append(contentsOf: listItemsValues)
+        }
+        var items = listItems.compactMap { item -> ServerProvidedSuggestion? in
+            return ServerProvidedSuggestion(rawValue: item)
+        }
+        items.append(contentsOf: dismissedSuggestions)
+        return items
+    }
+    |> distinctUntilChanged
+}
+
+func _internal_dismissServerProvidedSuggestion(account: Account, suggestion: ServerProvidedSuggestion) -> Signal<Never, NoError> {
     if let _ = dismissedSuggestions[account.id] {
         dismissedSuggestions[account.id]?.insert(suggestion)
     } else {
@@ -64,7 +90,7 @@ public enum PeerSpecificServerProvidedSuggestion: String {
     case convertToGigagroup = "CONVERT_GIGAGROUP"
 }
 
-public func getPeerSpecificServerProvidedSuggestions(postbox: Postbox, peerId: PeerId) -> Signal<[PeerSpecificServerProvidedSuggestion], NoError> {
+func _internal_getPeerSpecificServerProvidedSuggestions(postbox: Postbox, peerId: PeerId) -> Signal<[PeerSpecificServerProvidedSuggestion], NoError> {
     return postbox.peerView(id: peerId)
     |> map { view in
         if let cachedData = view.cachedData as? CachedChannelData {
@@ -77,7 +103,7 @@ public func getPeerSpecificServerProvidedSuggestions(postbox: Postbox, peerId: P
     |> distinctUntilChanged
 }
 
-public func dismissPeerSpecificServerProvidedSuggestion(account: Account, peerId: PeerId, suggestion: PeerSpecificServerProvidedSuggestion) -> Signal<Never, NoError> {
+func _internal_dismissPeerSpecificServerProvidedSuggestion(account: Account, peerId: PeerId, suggestion: PeerSpecificServerProvidedSuggestion) -> Signal<Never, NoError> {
     return account.postbox.loadedPeerWithId(peerId)
     |> mapToSignal { peer -> Signal<Never, NoError> in
         guard let inputPeer = apiInputPeer(peer) else {

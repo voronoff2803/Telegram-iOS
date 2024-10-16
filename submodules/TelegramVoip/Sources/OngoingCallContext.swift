@@ -742,8 +742,8 @@ public final class OngoingCallContext {
     public final class AudioDevice {
         let impl: SharedCallAudioDevice
         
-        public static func create() -> AudioDevice? {
-            return AudioDevice(impl: SharedCallAudioDevice(disableRecording: false))
+        public static func create(enableSystemMute: Bool) -> AudioDevice? {
+            return AudioDevice(impl: SharedCallAudioDevice(disableRecording: false, enableSystemMute: enableSystemMute))
         }
         
         private init(impl: SharedCallAudioDevice) {
@@ -826,7 +826,7 @@ public final class OngoingCallContext {
         }
     }
 
-    public init(account: Account, callSessionManager: CallSessionManager, callId: CallId, internalId: CallSessionInternalId, proxyServer: ProxyServerSettings?, initialNetworkType: NetworkType, updatedNetworkType: Signal<NetworkType, NoError>, serializedData: String?, dataSaving: VoiceCallDataSaving, key: Data, isOutgoing: Bool, video: OngoingCallVideoCapturer?, connections: CallSessionConnectionSet, maxLayer: Int32, version: String, allowP2P: Bool, enableTCP: Bool, enableStunMarking: Bool, audioSessionActive: Signal<Bool, NoError>, logName: String, preferredVideoCodec: String?, audioDevice: AudioDevice?) {
+    public init(account: Account, callSessionManager: CallSessionManager, callId: CallId, internalId: CallSessionInternalId, proxyServer: ProxyServerSettings?, initialNetworkType: NetworkType, updatedNetworkType: Signal<NetworkType, NoError>, serializedData: String?, dataSaving: VoiceCallDataSaving, key: Data, isOutgoing: Bool, video: OngoingCallVideoCapturer?, connections: CallSessionConnectionSet, maxLayer: Int32, version: String, customParameters: String?, allowP2P: Bool, enableTCP: Bool, enableStunMarking: Bool, audioSessionActive: Signal<Bool, NoError>, logName: String, preferredVideoCodec: String?, audioDevice: AudioDevice?) {
         let _ = setupLogs
         OngoingCallThreadLocalContext.applyServerConfig(serializedData)
         
@@ -945,7 +945,7 @@ public final class OngoingCallContext {
                     }
                     
                     var directConnection: OngoingCallDirectConnection?
-                    if version == "9.0.0" {
+                    if version == "9.0.0" && !"".isEmpty {
                         if #available(iOS 12.0, *) {
                             for connection in filteredConnections {
                                 if connection.username == "reflector" && connection.reflectorId == 1 && !connection.hasTcp && connection.hasTurn {
@@ -958,8 +958,25 @@ public final class OngoingCallContext {
                         directConnection = nil
                     }
                     
+                    #if DEBUG && false
+                    var customParameters = customParameters
+                    if let initialCustomParameters = try? JSONSerialization.jsonObject(with: (customParameters ?? "{}").data(using: .utf8)!) as? [String: Any] {
+                        var customParametersValue: [String: Any]
+                        customParametersValue = initialCustomParameters
+                        customParametersValue["network_standalone_reflectors"] = true as NSNumber
+                        customParametersValue["network_use_mtproto"] = true as NSNumber
+                        customParametersValue["network_skip_initial_ping"] = true as NSNumber
+                        customParameters = String(data: try! JSONSerialization.data(withJSONObject: customParametersValue), encoding: .utf8)!
+                        
+                        if let reflector = filteredConnections.first(where: { $0.username == "reflector" && $0.reflectorId == 1 }) {
+                            filteredConnections = [reflector]
+                        }
+                    }
+                    #endif
+                    
                     let context = OngoingCallThreadLocalContextWebrtc(
                         version: version,
+                        customParameters: customParameters,
                         queue: OngoingCallThreadLocalContextQueueImpl(queue: queue),
                         proxy: voipProxyServer,
                         networkType: ongoingNetworkTypeForTypeWebrtc(initialNetworkType),
@@ -1556,17 +1573,7 @@ private final class CallSignalingConnectionImpl: CallSignalingConnection {
         self.dataReceived = dataReceived
         self.isClosed = isClosed
         
-        #if DEBUG
-        if #available(iOS 15.0, *) {
-            let parameters = NWParameters.quic(alpn: ["tgcalls"])
-            parameters.defaultProtocolStack.internetProtocol = NWProtocolFramer.Options(definition: CustomWrapperProtocol.definition)
-            self.connection = NWConnection(host: self.host, port: self.port, using: parameters)
-        } else {
-            preconditionFailure()
-        }
-        #else
         self.connection = NWConnection(host: self.host, port: self.port, using: .tcp)
-        #endif
         
         self.connection.stateUpdateHandler = { [weak self] state in
             queue.async {

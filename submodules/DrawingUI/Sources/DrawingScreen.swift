@@ -24,6 +24,8 @@ import EntityKeyboard
 import TelegramUIPreferences
 import FastBlur
 import MediaEditor
+import StickerPickerScreen
+import ImageObjectSeparation
 
 public struct DrawingResultData {
     public let data: Data?
@@ -31,7 +33,7 @@ public struct DrawingResultData {
     public let entities: [CodableDrawingEntity]
 }
 
-enum DrawingToolState: Equatable, Codable {
+public enum DrawingToolState: Equatable, Codable {
     private enum CodingKeys: String, CodingKey {
         case type
         case brushState
@@ -47,27 +49,27 @@ enum DrawingToolState: Equatable, Codable {
         case eraser = 5
     }
     
-    struct BrushState: Equatable, Codable {
+    public struct BrushState: Equatable, Codable {
         private enum CodingKeys: String, CodingKey {
             case color
             case size
         }
         
-        let color: DrawingColor
-        let size: CGFloat
+        public let color: DrawingColor
+        public let size: CGFloat
         
-        init(color: DrawingColor, size: CGFloat) {
+        public init(color: DrawingColor, size: CGFloat) {
             self.color = color
             self.size = size
         }
         
-        init(from decoder: Decoder) throws {
+        public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.color = try container.decode(DrawingColor.self, forKey: .color)
             self.size = try container.decode(CGFloat.self, forKey: .size)
         }
 
-        func encode(to encoder: Encoder) throws {
+        public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(self.color, forKey: .color)
             try container.encode(self.size, forKey: .size)
@@ -82,23 +84,23 @@ enum DrawingToolState: Equatable, Codable {
         }
     }
     
-    struct EraserState: Equatable, Codable {
+    public struct EraserState: Equatable, Codable {
         private enum CodingKeys: String, CodingKey {
             case size
         }
         
-        let size: CGFloat
+        public let size: CGFloat
         
-        init(size: CGFloat) {
+        public init(size: CGFloat) {
             self.size = size
         }
         
-        init(from decoder: Decoder) throws {
+        public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.size = try container.decode(CGFloat.self, forKey: .size)
         }
 
-        func encode(to encoder: Encoder) throws {
+        public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(self.size, forKey: .size)
         }
@@ -115,7 +117,7 @@ enum DrawingToolState: Equatable, Codable {
     case blur(EraserState)
     case eraser(EraserState)
     
-    func withUpdatedColor(_ color: DrawingColor) -> DrawingToolState {
+    public func withUpdatedColor(_ color: DrawingColor) -> DrawingToolState {
         switch self {
         case let .pen(state):
             return .pen(state.withUpdatedColor(color))
@@ -130,7 +132,7 @@ enum DrawingToolState: Equatable, Codable {
         }
     }
     
-    func withUpdatedSize(_ size: CGFloat) -> DrawingToolState {
+    public func withUpdatedSize(_ size: CGFloat) -> DrawingToolState {
         switch self {
         case let .pen(state):
             return .pen(state.withUpdatedSize(size))
@@ -147,7 +149,7 @@ enum DrawingToolState: Equatable, Codable {
         }
     }
     
-    var color: DrawingColor? {
+    public var color: DrawingColor? {
         switch self {
         case let .pen(state), let .arrow(state), let .marker(state), let .neon(state):
             return state.color
@@ -156,7 +158,7 @@ enum DrawingToolState: Equatable, Codable {
         }
     }
     
-    var size: CGFloat? {
+    public var size: CGFloat? {
         switch self {
         case let .pen(state), let .arrow(state), let .marker(state), let .neon(state):
             return state.size
@@ -182,7 +184,7 @@ enum DrawingToolState: Equatable, Codable {
         }
     }
     
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let typeValue = try container.decode(Int32.self, forKey: .type)
         if let type = DrawingToolState.Key(rawValue: typeValue) {
@@ -205,7 +207,7 @@ enum DrawingToolState: Equatable, Codable {
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case let .pen(state):
@@ -414,7 +416,7 @@ private final class BlurredGradientComponent: Component {
         private var gradientMask = UIImageView()
         private var gradientForeground = SimpleGradientLayer()
         
-        public func update(component: BlurredGradientComponent, availableSize: CGSize, transition: Transition) -> CGSize {
+        public func update(component: BlurredGradientComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             self.component = component
             
             self.isUserInteractionEnabled = false
@@ -450,7 +452,7 @@ private final class BlurredGradientComponent: Component {
         return View(color: nil, enableBlur: true)
     }
     
-    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
     }
 }
@@ -493,7 +495,7 @@ private final class DrawingScreenComponent: CombinedComponent {
     
     let context: AccountContext
     let sourceHint: DrawingScreen.SourceHint?
-    let existingStickerPickerInputData: Promise<StickerPickerInputData>?
+    let existingStickerPickerInputData: Promise<StickerPickerInput>?
     let isVideo: Bool
     let isAvatar: Bool
     let isInteractingWithEntities: Bool
@@ -529,7 +531,7 @@ private final class DrawingScreenComponent: CombinedComponent {
     init(
         context: AccountContext,
         sourceHint: DrawingScreen.SourceHint?,
-        existingStickerPickerInputData: Promise<StickerPickerInputData>?,
+        existingStickerPickerInputData: Promise<StickerPickerInput>?,
         isVideo: Bool,
         isAvatar: Bool,
         isInteractingWithEntities: Bool,
@@ -682,11 +684,11 @@ private final class DrawingScreenComponent: CombinedComponent {
         
         var lastSize: CGFloat = 0.5
         
-        private let stickerPickerInputData: Promise<StickerPickerInputData>
+        private let stickerPickerInputData: Promise<StickerPickerInput>
             
         init(
             context: AccountContext,
-            existingStickerPickerInputData: Promise<StickerPickerInputData>?,
+            existingStickerPickerInputData: Promise<StickerPickerInput>?,
             updateToolState: ActionSlot<DrawingToolState>,
             insertEntity: ActionSlot<DrawingEntity>,
             deselectEntity: ActionSlot<Void>,
@@ -728,7 +730,7 @@ private final class DrawingScreenComponent: CombinedComponent {
             if let existingStickerPickerInputData {
                 self.stickerPickerInputData = existingStickerPickerInputData
             } else {
-                self.stickerPickerInputData = Promise<StickerPickerInputData>()
+                self.stickerPickerInputData = Promise<StickerPickerInput>()
                 
                 let stickerPickerInputData = self.stickerPickerInputData
                 Queue.concurrentDefaultQueue().after(0.5, {
@@ -762,7 +764,7 @@ private final class DrawingScreenComponent: CombinedComponent {
                     let signal = combineLatest(queue: .mainQueue(),
                                                emojiItems,
                                                stickerItems
-                    ) |> map { emoji, stickers -> StickerPickerInputData in
+                    ) |> map { emoji, stickers -> StickerPickerInput in
                         return StickerPickerInputData(emoji: emoji, stickers: stickers, gifs: nil)
                     }
                     
@@ -1012,7 +1014,7 @@ private final class DrawingScreenComponent: CombinedComponent {
             self.currentMode = .sticker
             
             self.updateEntitiesPlayback.invoke(false)
-            let controller = StickerPickerScreen(context: self.context, inputData: self.stickerPickerInputData.get())
+            let controller = StickerPickerScreen(context: self.context, inputData: self.stickerPickerInputData.get(), forceDark: true, hasInteractiveStickers: false)
             if let presentGallery = self.presentGallery {
                 controller.presentGallery = presentGallery
             }
@@ -1301,12 +1303,12 @@ private final class DrawingScreenComponent: CombinedComponent {
                 )
                 context.add(textSettings
                     .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height - environment.safeInsets.bottom - textSettings.size.height / 2.0 - 89.0 - additionalBottomInset))
-                    .appear(Transition.Appear({ _, view, transition in
+                    .appear(ComponentTransition.Appear({ _, view, transition in
                         if let view = view as? TextSettingsComponent.View, !transition.animation.isImmediate {
                             view.animateIn()
                         }
                     }))
-                    .disappear(Transition.Disappear({ view, transition, completion in
+                    .disappear(ComponentTransition.Disappear({ view, transition, completion in
                         if let view = view as? TextSettingsComponent.View, !transition.animation.isImmediate {
                             view.animateOut(completion: completion)
                         } else {
@@ -1351,11 +1353,11 @@ private final class DrawingScreenComponent: CombinedComponent {
             )
             context.add(swatch1Button
                 .position(CGPoint(x: offsetX, y: context.availableSize.height - environment.safeInsets.bottom - swatch1Button.size.height / 2.0 - 57.0 - additionalBottomInset))
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -1379,11 +1381,11 @@ private final class DrawingScreenComponent: CombinedComponent {
             )
             context.add(swatch2Button
                 .position(CGPoint(x: offsetX, y: context.availableSize.height - environment.safeInsets.bottom - swatch2Button.size.height / 2.0 - 57.0 - additionalBottomInset))
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0, delay: 0.025)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0, delay: 0.025)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -1407,11 +1409,11 @@ private final class DrawingScreenComponent: CombinedComponent {
             )
             context.add(swatch3Button
                 .position(CGPoint(x: offsetX, y: context.availableSize.height - environment.safeInsets.bottom - swatch3Button.size.height / 2.0 - 57.0 - additionalBottomInset))
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0, delay: 0.05)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0, delay: 0.05)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -1435,11 +1437,11 @@ private final class DrawingScreenComponent: CombinedComponent {
             )
             context.add(swatch4Button
                 .position(CGPoint(x: offsetX, y: context.availableSize.height - environment.safeInsets.bottom - swatch4Button.size.height / 2.0 - 57.0 - additionalBottomInset))
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0, delay: 0.075)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0, delay: 0.075)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -1463,11 +1465,11 @@ private final class DrawingScreenComponent: CombinedComponent {
             )
             context.add(swatch5Button
                 .position(CGPoint(x: offsetX, y: context.availableSize.height - environment.safeInsets.bottom - swatch5Button.size.height / 2.0 - 57.0 - additionalBottomInset))
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0, delay: 0.1)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0, delay: 0.1)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -1492,11 +1494,11 @@ private final class DrawingScreenComponent: CombinedComponent {
             )
             context.add(swatch6Button
                 .position(CGPoint(x: offsetX, y: context.availableSize.height - environment.safeInsets.bottom - swatch6Button.size.height / 2.0 - 57.0 - additionalBottomInset))
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0, delay: 0.125)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0, delay: 0.125)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -1520,11 +1522,11 @@ private final class DrawingScreenComponent: CombinedComponent {
             )
             context.add(swatch7Button
                 .position(CGPoint(x: offsetX, y: context.availableSize.height - environment.safeInsets.bottom - swatch7Button.size.height / 2.0 - 57.0 - additionalBottomInset))
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0, delay: 0.15)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0, delay: 0.15)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -1548,11 +1550,11 @@ private final class DrawingScreenComponent: CombinedComponent {
             )
             context.add(swatch8Button
                 .position(CGPoint(x: offsetX, y: context.availableSize.height - environment.safeInsets.bottom - swatch7Button.size.height / 2.0 - 57.0 - additionalBottomInset))
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0, delay: 0.175)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0, delay: 0.175)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -1590,12 +1592,12 @@ private final class DrawingScreenComponent: CombinedComponent {
                 )
                 context.add(tools
                     .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height - environment.safeInsets.bottom - tools.size.height / 2.0 - 78.0 - additionalBottomInset))
-                    .appear(Transition.Appear({ _, view, transition in
+                    .appear(ComponentTransition.Appear({ _, view, transition in
                         if let view = view as? ToolsComponent.View, !transition.animation.isImmediate {
                             view.animateIn(completion: {})
                         }
                     }))
-                    .disappear(Transition.Disappear({ view, transition, completion in
+                    .disappear(ComponentTransition.Disappear({ view, transition, completion in
                         if let view = view as? ToolsComponent.View, !transition.animation.isImmediate {
                             view.animateOut(completion: completion)
                         } else {
@@ -2010,13 +2012,13 @@ private final class DrawingScreenComponent: CombinedComponent {
             }
             context.add(doneButton
                 .position(doneButtonPosition)
-                .appear(Transition.Appear { _, view, transition in
+                .appear(ComponentTransition.Appear { _, view, transition in
                     transition.animateScale(view: view, from: 0.1, to: 1.0)
                     transition.animateAlpha(view: view, from: 0.0, to: 1.0)
                     
                     transition.animatePosition(view: view, from: CGPoint(x: 12.0, y: 0.0), to: CGPoint(), additive: true)
                 })
-                .disappear(Transition.Disappear { view, transition, completion in
+                .disappear(ComponentTransition.Disappear { view, transition, completion in
                     transition.setScale(view: view, scale: 0.1)
                     transition.setAlpha(view: view, alpha: 0.0, completion: { _ in
                         completion()
@@ -2612,13 +2614,13 @@ public class DrawingScreen: ViewController, TGPhotoDrawingInterfaceController, U
             return result
         }
         
-        func requestUpdate(transition: Transition = .immediate) {
+        func requestUpdate(transition: ComponentTransition = .immediate) {
             if let (layout, orientation) = self.validLayout {
                 self.containerLayoutUpdated(layout: layout, orientation: orientation, transition: transition)
             }
         }
         
-        func containerLayoutUpdated(layout: ContainerViewLayout, orientation: UIInterfaceOrientation?, forceUpdate: Bool = false, animateOut: Bool = false, transition: Transition) {
+        func containerLayoutUpdated(layout: ContainerViewLayout, orientation: UIInterfaceOrientation?, forceUpdate: Bool = false, animateOut: Bool = false, transition: ComponentTransition) {
             guard let controller = self.controller else {
                 return
             }
@@ -2753,7 +2755,7 @@ public class DrawingScreen: ViewController, TGPhotoDrawingInterfaceController, U
     private let externalDrawingView: DrawingView?
     private let externalEntitiesView: DrawingEntitiesView?
     private let externalSelectionContainerView: DrawingSelectionContainerView?
-    private let existingStickerPickerInputData: Promise<StickerPickerInputData>?
+    private let existingStickerPickerInputData: Promise<StickerPickerInput>?
     
     public var requestDismiss: () -> Void = {}
     public var requestApply: () -> Void = {}
@@ -2762,7 +2764,7 @@ public class DrawingScreen: ViewController, TGPhotoDrawingInterfaceController, U
     
     public var presentGallery: (() -> Void)?
     
-    public init(context: AccountContext, sourceHint: SourceHint? = nil, size: CGSize, originalSize: CGSize, isVideo: Bool, isAvatar: Bool, drawingView: DrawingView?, entitiesView: (UIView & TGPhotoDrawingEntitiesView)?, selectionContainerView: DrawingSelectionContainerView?, existingStickerPickerInputData: Promise<StickerPickerInputData>? = nil) {
+    public init(context: AccountContext, sourceHint: SourceHint? = nil, size: CGSize, originalSize: CGSize, isVideo: Bool, isAvatar: Bool, drawingView: DrawingView?, entitiesView: (UIView & TGPhotoDrawingEntitiesView)?, selectionContainerView: DrawingSelectionContainerView?, existingStickerPickerInputData: Promise<StickerPickerInput>? = nil) {
         self.context = context
         self.sourceHint = sourceHint
         self.size = size
@@ -2892,13 +2894,13 @@ public class DrawingScreen: ViewController, TGPhotoDrawingInterfaceController, U
         for entity in self.entitiesView.entities {
             if let sticker = entity as? DrawingStickerEntity, case let .file(file, _) = sticker.content {
                 let coder = PostboxEncoder()
-                coder.encodeRootObject(file)
+                coder.encodeRootObject(file.media)
                 stickers.append(coder.makeData())
             } else if let text = entity as? DrawingTextEntity, let subEntities = text.renderSubEntities {
                 for sticker in subEntities {
                     if let sticker = sticker as? DrawingStickerEntity, case let .file(file, _) = sticker.content {
                         let coder = PostboxEncoder()
-                        coder.encodeRootObject(file)
+                        coder.encodeRootObject(file.media)
                         stickers.append(coder.makeData())
                     }
                 }
@@ -2920,7 +2922,7 @@ public class DrawingScreen: ViewController, TGPhotoDrawingInterfaceController, U
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
 
-        (self.displayNode as! Node).containerLayoutUpdated(layout: layout, orientation: self.orientation, transition: Transition(transition))
+        (self.displayNode as! Node).containerLayoutUpdated(layout: layout, orientation: self.orientation, transition: ComponentTransition(transition))
     }
     
     public func adapterContainerLayoutUpdatedSize(_ size: CGSize, intrinsicInsets: UIEdgeInsets, safeInsets: UIEdgeInsets, statusBarHeight: CGFloat, inputHeight: CGFloat, orientation: UIInterfaceOrientation, isRegular: Bool, animated: Bool) {
@@ -3086,6 +3088,8 @@ public final class DrawingToolsInteraction {
             var isVideo = false
             var isAdditional = false
             var isMessage = false
+            var isLink = false
+            var isWeather = false
             if let entity = entityView.entity as? DrawingStickerEntity {
                 if case let .dualVideoReference(isAdditionalValue) = entity.content {
                     isVideo = true
@@ -3093,6 +3097,10 @@ public final class DrawingToolsInteraction {
                 } else if case .message = entity.content {
                     isMessage = true
                 }
+            } else if entityView.entity is DrawingLinkEntity {
+                isLink = true
+            } else if entityView.entity is DrawingWeatherEntity {
+                isWeather = true
             }
             
             guard (!isVideo || isAdditional) && (!isMessage || !isTopmost) else {
@@ -3110,7 +3118,7 @@ public final class DrawingToolsInteraction {
                     }
                 }))
             }
-            if let entityView = entityView as? DrawingLocationEntityView {
+            if entityView is DrawingLocationEntityView || entityView is DrawingLinkEntityView {
                 actions.append(ContextMenuAction(content: .text(title: presentationData.strings.Paint_Edit, accessibilityLabel: presentationData.strings.Paint_Edit), action: { [weak self, weak entityView] in
                     if let self, let entityView {
                         self.editEntity(entityView.entity)
@@ -3138,14 +3146,13 @@ public final class DrawingToolsInteraction {
                     }
                 }))
             }
-            if !isVideo && !isMessage {
+            if !isVideo && !isMessage && !isLink && !isWeather {
                 if let stickerEntity = entityView.entity as? DrawingStickerEntity, case let .file(_, type) = stickerEntity.content, case .reaction = type {
                     
                 } else {
                     actions.append(ContextMenuAction(content: .text(title: presentationData.strings.Paint_Duplicate, accessibilityLabel: presentationData.strings.Paint_Duplicate), action: { [weak self, weak entityView] in
                         if let self, let entityView {
-                            let newEntity = self.entitiesView.duplicate(entityView.entity)
-                            self.entitiesView.selectEntity(newEntity)
+                            self.duplicateEntity(entityView.entity)
                         }
                     }))
                 }
@@ -3205,10 +3212,12 @@ public final class DrawingToolsInteraction {
         self.isActive = false
     }
     
-    public func insertEntity(_ entity: DrawingEntity, scale: CGFloat? = nil, position: CGPoint? = nil) {
+    public func insertEntity(_ entity: DrawingEntity, scale: CGFloat? = nil, position: CGPoint? = nil, select: Bool = true) {
         self.entitiesView.prepareNewEntity(entity, scale: scale, position: position)
         self.entitiesView.add(entity)
-        self.entitiesView.selectEntity(entity, animate: !(entity is DrawingTextEntity))
+        if select {
+            self.entitiesView.selectEntity(entity, animate: !(entity is DrawingTextEntity))
+        }
         
         if let entityView = self.entitiesView.getView(for: entity.uuid) {
             if let textEntityView = entityView as? DrawingTextEntityView {
@@ -3232,6 +3241,20 @@ public final class DrawingToolsInteraction {
                 
                 entityView.animateInsertion()
             }
+        }
+    }
+    
+    public func duplicateEntity(_ entity: DrawingEntity) {
+        let newEntity = self.entitiesView.duplicate(entity)
+        self.entitiesView.selectEntity(newEntity)
+        
+        if let entityView = self.entitiesView.getView(for: newEntity.uuid) {
+            if self.isVideo {
+                entityView.seek(to: 0.0)
+                entityView.play()
+            }
+            
+            entityView.animateInsertion()
         }
     }
     
@@ -3516,7 +3539,7 @@ public final class DrawingToolsInteraction {
         }
     }
     
-    public func containerLayoutUpdated(layout: ContainerViewLayout, transition: Transition) {
+    public func containerLayoutUpdated(layout: ContainerViewLayout, transition: ComponentTransition) {
         self.validLayout = layout
         
         guard self.isActive else {

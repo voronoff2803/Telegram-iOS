@@ -28,6 +28,10 @@ private func makeEntityView(context: AccountContext, entity: DrawingEntity) -> D
         return DrawingMediaEntityView(context: context, entity: entity)
     } else if let entity = entity as? DrawingLocationEntity {
         return DrawingLocationEntityView(context: context, entity: entity)
+    } else if let entity = entity as? DrawingLinkEntity {
+        return DrawingLinkEntityView(context: context, entity: entity)
+    } else if let entity = entity as? DrawingWeatherEntity {
+        return DrawingWeatherEntityView(context: context, entity: entity)
     } else {
         return nil
     }
@@ -54,13 +58,19 @@ private func prepareForRendering(entityView: DrawingEntityView) {
     if let entityView = entityView as? DrawingLocationEntityView {
         entityView.entity.renderImage = entityView.getRenderImage()
     }
+    if let entityView = entityView as? DrawingLinkEntityView {
+        entityView.entity.renderImage = entityView.getRenderImage()
+    }
+    if let entityView = entityView as? DrawingWeatherEntityView {
+        entityView.entity.renderImage = entityView.getRenderImage()
+    }
 }
 
 public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
     private let context: AccountContext
     private let size: CGSize
     private let hasBin: Bool
-    private let isStickerEditor: Bool
+    public let isStickerEditor: Bool
     
     weak var drawingView: DrawingView?
     public weak var selectionContainerView: DrawingSelectionContainerView?
@@ -96,9 +106,6 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
     private let yAxisView = UIView()
     private let angleLayer = SimpleShapeLayer()
     private let bin = ComponentView<Empty>()
-
-    private let stickerOverlayLayer = SimpleShapeLayer()
-    private let stickerFrameLayer = SimpleShapeLayer()
 
     public var onInteractionUpdated: (Bool) -> Void = { _ in }
     public var edgePreviewUpdated: (Bool) -> Void = { _ in }
@@ -145,13 +152,6 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
         self.angleLayer.opacity = 0.0
         self.angleLayer.lineDashPattern = [12, 12] as [NSNumber]
         
-        self.stickerOverlayLayer.fillColor = UIColor(rgb: 0x000000, alpha: 0.6).cgColor
-        
-        self.stickerFrameLayer.fillColor = UIColor.clear.cgColor
-        self.stickerFrameLayer.strokeColor = UIColor(rgb: 0xffffff, alpha: 0.55).cgColor
-        self.stickerFrameLayer.lineDashPattern = [24, 24] as [NSNumber]
-        self.stickerFrameLayer.lineCap = .round
-        
         self.addSubview(self.topEdgeView)
         self.addSubview(self.leftEdgeView)
         self.addSubview(self.rightEdgeView)
@@ -160,22 +160,15 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
         self.addSubview(self.xAxisView)
         self.addSubview(self.yAxisView)
         self.layer.addSublayer(self.angleLayer)
-        
-        if isStickerEditor {
-            self.layer.addSublayer(self.stickerOverlayLayer)
-            self.layer.addSublayer(self.stickerFrameLayer)
-        }
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
-    public override func addSubview(_ view: UIView) {
-        super.addSubview(view)
-        if self.stickerOverlayLayer.superlayer != nil, view is DrawingEntityView {
-            self.layer.addSublayer(self.stickerOverlayLayer)
-            self.layer.addSublayer(self.stickerFrameLayer)
+    deinit {
+        self.eachView { entityView in
+            entityView.reset()
         }
     }
     
@@ -214,25 +207,6 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
         self.angleLayer.path = anglePath
         self.angleLayer.lineWidth = width
         self.angleLayer.bounds = CGRect(origin: .zero, size: CGSize(width: 3000.0, height: width))
-        
-        let frameWidth = floor(self.bounds.width * 0.97)
-        let frameRect = CGRect(origin: CGPoint(x: floor((self.bounds.width - frameWidth) / 2.0), y: floor((self.bounds.height - frameWidth) / 2.0)), size: CGSize(width: frameWidth, height: frameWidth))
-         
-        self.stickerOverlayLayer.frame = self.bounds
-        
-        let overlayOuterRect = UIBezierPath(rect: self.bounds)
-        let overlayInnerRect = UIBezierPath(cgPath: CGPath(roundedRect: frameRect, cornerWidth: frameWidth / 8.0, cornerHeight: frameWidth / 8.0, transform: nil))
-        let overlayLineWidth: CGFloat = 2.0 * 2.2
-        
-        overlayOuterRect.append(overlayInnerRect)
-        overlayOuterRect.usesEvenOddFillRule = true
-
-        self.stickerOverlayLayer.path = overlayOuterRect.cgPath
-        self.stickerOverlayLayer.fillRule = .evenOdd
-        
-        self.stickerFrameLayer.frame = self.bounds
-        self.stickerFrameLayer.lineWidth = overlayLineWidth
-        self.stickerFrameLayer.path = CGPath(roundedRect: frameRect.insetBy(dx: -overlayLineWidth / 2.0, dy: -overlayLineWidth / 2.0), cornerWidth: frameWidth / 8.0 * 1.02, cornerHeight: frameWidth / 8.0 * 1.02, transform: nil)
     }
     
     public var entities: [DrawingEntity] {
@@ -420,6 +394,22 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
                 location.width = floor(self.size.width * 0.85)
                 location.scale = zoomScale
             }
+        } else if let location = entity as? DrawingLinkEntity {
+            location.position = center
+            if setup {
+                location.rotation = rotation
+                location.referenceDrawingSize = self.size
+                location.width = floor(self.size.width * 0.85)
+                location.scale = zoomScale
+            }
+        } else if let weather = entity as? DrawingWeatherEntity {
+            weather.position = center
+            if setup {
+                weather.rotation = rotation
+                weather.referenceDrawingSize = self.size
+                weather.width = floor(self.size.width * 0.85)
+                weather.scale = zoomScale
+            }
         }
     }
     
@@ -543,6 +533,7 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
                 self.hasSelectionChanged(false)
                 view.selectionView?.removeFromSuperview()
             }
+            view.reset()
             if animated {
                 view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak view] _ in
                     view?.removeFromSuperview()
@@ -581,6 +572,7 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
                 if view.entity.isMedia {
                     continue
                 }
+                view.reset()
                 if let selectionView = view.selectionView {
                     selectionView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.1, removeOnCompletion: false, completion: { [weak selectionView] _ in
                         selectionView?.removeFromSuperview()
@@ -599,6 +591,7 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
                 if view.entity.isMedia {
                     continue
                 }
+                view.reset()
                 view.selectionView?.removeFromSuperview()
                 view.removeFromSuperview()
             }
@@ -844,7 +837,7 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
                     break
                 }
                 
-                let transition = Transition.easeInOut(duration: 0.2)
+                let transition = ComponentTransition.easeInOut(duration: 0.2)
                 if isTrappedInBin, let binView = self.bin.view {
                     if !selectedEntityView.isTrappedInBin {
                         let refs = [
@@ -941,7 +934,7 @@ public final class DrawingEntitiesView: UIView, TGPhotoDrawingEntitiesView {
                 self.bringSubviewToFront(binView)
             }
             binView.frame = binFrame
-            Transition.easeInOut(duration: 0.2).setAlpha(view: binView, alpha: location != nil ? 1.0 : 0.0, delay: location == nil && wasOpened ? 0.4 : 0.0)
+            ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: binView, alpha: location != nil ? 1.0 : 0.0, delay: location == nil && wasOpened ? 0.4 : 0.0)
         }
         return isOpened
     }
@@ -986,6 +979,12 @@ public class DrawingEntityView: UIView {
     
     var selectionBounds: CGRect {
         return self.bounds
+    }
+    
+    func reset() {
+        self.onSnapUpdated = { _, _ in }
+        self.onPositionUpdated = { _ in }
+        self.onInteractionUpdated = { _ in }
     }
     
     func animateInsertion() {
@@ -1203,7 +1202,7 @@ private final class EntityBinComponent: Component {
         }
         
         private var wasOpened = false
-        func update(component: EntityBinComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+        func update(component: EntityBinComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
             
@@ -1248,7 +1247,7 @@ private final class EntityBinComponent: Component {
         return View()
     }
     
-    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

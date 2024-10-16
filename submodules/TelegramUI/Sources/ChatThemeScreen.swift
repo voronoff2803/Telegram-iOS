@@ -20,7 +20,7 @@ import TooltipUI
 import AnimatedStickerNode
 import TelegramAnimatedStickerNode
 import ShimmerEffect
-import WebUI
+import AttachmentUI
 
 private struct ThemeSettingsThemeEntry: Comparable, Identifiable {
     let index: Int
@@ -502,8 +502,8 @@ private final class ThemeSettingsThemeItemIconNode : ListViewItemNode {
         }
     }
         
-    override func animateInsertion(_ currentTimestamp: Double, duration: Double, short: Bool) {
-        super.animateInsertion(currentTimestamp, duration: duration, short: short)
+    override func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
+        super.animateInsertion(currentTimestamp, duration: duration, options: options)
         
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
     }
@@ -711,7 +711,7 @@ private func interpolateColors(from: [String: UIColor], to: [String: UIColor], f
     return colors
 }
 
-private class ChatThemeScreenNode: ViewControllerTracingNode, UIScrollViewDelegate {
+private class ChatThemeScreenNode: ViewControllerTracingNode, ASScrollViewDelegate {
     private let context: AccountContext
     private var presentationData: PresentationData
     private weak var controller: ChatThemeScreen?
@@ -842,7 +842,7 @@ private class ChatThemeScreenNode: ViewControllerTracingNode, UIScrollViewDelega
         
         self.addSubnode(self.dimNode)
         
-        self.wrappingScrollNode.view.delegate = self
+        self.wrappingScrollNode.view.delegate = self.wrappedScrollViewDelegate
         self.addSubnode(self.wrappingScrollNode)
         
         self.wrappingScrollNode.addSubnode(self.backgroundNode)

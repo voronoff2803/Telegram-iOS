@@ -20,6 +20,8 @@ import ConfettiEffect
 import TextFormat
 import UniversalMediaPlayer
 import InstantPageCache
+import ScrollComponent
+import PremiumStarComponent
 
 extension PremiumGiftSource {
     var identifier: String? {
@@ -30,6 +32,8 @@ extension PremiumGiftSource {
             return "attach"
         case .settings:
             return "settings"
+        case .stars:
+            return ""
         case .chatList:
             return "chats"
         case .channelBoost:
@@ -239,7 +243,6 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                         }
                         names.append("**\(context.component.peers[i].compactDisplayTitle)**")
                     }
-                    descriptionString = strings.Premium_Gift_MultipleDescription(names, "").string
                 } else {
                     for i in 0 ..< min(3, context.component.peers.count) {
                         if i == 0 {
@@ -274,7 +277,7 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
             if let current = context.state.cachedBoostIcon {
                 boostIcon = current
             } else {
-                boostIcon = generateImage(CGSize(width: 14.0, height: 20.0), rotatedContext: { size, context in
+                boostIcon = generateImage(CGSize(width: 14.0, height: 20.0), contextGenerator: { size, context in
                     context.clear(CGRect(origin: .zero, size: size))
                     if let cgImage = UIImage(bundleImageName: "Premium/BoostChannel")?.cgImage {
                         context.draw(cgImage, in: CGRect(origin: .zero, size: size), byTiling: false)
@@ -424,18 +427,19 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                 UIColor(rgb: 0xef6922),
                 UIColor(rgb: 0xe95a2c),
                 UIColor(rgb: 0xe74e33),
-                UIColor(rgb: 0xe74e33), //replace
+                UIColor(rgb: 0xe74e33),
                 UIColor(rgb: 0xe54937),
                 UIColor(rgb: 0xe3433c),
                 UIColor(rgb: 0xdb374b),
                 UIColor(rgb: 0xcb3e6d),
                 UIColor(rgb: 0xbc4395),
                 UIColor(rgb: 0xab4ac4),
+                UIColor(rgb: 0xab4ac4),
                 UIColor(rgb: 0xa34cd7),
                 UIColor(rgb: 0x9b4fed),
                 UIColor(rgb: 0x8958ff),
                 UIColor(rgb: 0x676bff),
-                UIColor(rgb: 0x676bff), //replace
+                UIColor(rgb: 0x676bff),
                 UIColor(rgb: 0x6172ff),
                 UIColor(rgb: 0x5b79ff),
                 UIColor(rgb: 0x4492ff),
@@ -532,6 +536,8 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                             demoSubject = .lastSeen
                         case .messagePrivacy:
                             demoSubject = .messagePrivacy
+                        case .messageEffects:
+                            demoSubject = .messageEffects
                         case .business:
                             demoSubject = .business
                         default:
@@ -604,7 +610,7 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                     if url.hasPrefix("https://apps.apple.com/account/subscriptions") {
                         controller.context.sharedContext.applicationBindings.openSubscriptions()
                     } else if url.hasPrefix("https://") || url.hasPrefix("tg://") {
-                        controller.context.sharedContext.openExternalUrl(context: controller.context, urlContext: .generic, url: url, forceExternal: !url.hasPrefix("tg://"), presentationData: controller.context.sharedContext.currentPresentationData.with({$0}), navigationController: nil, dismissInput: {})
+                        controller.context.sharedContext.openExternalUrl(context: controller.context, urlContext: .generic, url: url, forceExternal: !url.hasPrefix("tg://") && !url.contains("?start="), presentationData: controller.context.sharedContext.currentPresentationData.with({$0}), navigationController: nil, dismissInput: {})
                     } else {
                         let context = controller.context
                         let signal: Signal<ResolvedUrl, NoError>?
@@ -620,7 +626,7 @@ private final class PremiumGiftScreenContentComponent: CombinedComponent {
                             let _ = (signal
                             |> deliverOnMainQueue).start(next: { resolvedUrl in
                                 context.sharedContext.openResolvedUrl(resolvedUrl, context: context, urlContext: .generic, navigationController: navigationController, forceExternal: false, openPeer: { peer, navigation in
-                                }, sendFile: nil, sendSticker: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { [weak controller] c, arguments in
+                                }, sendFile: nil, sendSticker: nil, sendEmoji: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { [weak controller] c, arguments in
                                     controller?.push(c)
                                 }, dismissInput: {}, contentContext: nil, progress: nil, completion: nil)
                             })
@@ -873,7 +879,7 @@ private final class PremiumGiftScreenComponent: CombinedComponent {
                 price = nil
             }
             let buttonText = presentationData.strings.Premium_Gift_GiftSubscription(price ?? "—").string
-            self.buttonStatePromise.set(.single(AttachmentMainButtonState(text: buttonText, font: .bold, background: .premium, textColor: .white, isVisible: true, progress: self.inProgress ? .center : .none, isEnabled: true)))
+            self.buttonStatePromise.set(.single(AttachmentMainButtonState(text: buttonText, font: .bold, background: .premium, textColor: .white, isVisible: true, progress: self.inProgress ? .center : .none, isEnabled: true, hasShimmer: true)))
         }
         
         func buy() {
@@ -952,6 +958,8 @@ private final class PremiumGiftScreenComponent: CombinedComponent {
                                     case .cantMakePayments:
                                         errorText = presentationData.strings.Premium_Purchase_ErrorCantMakePayments
                                     case .assignFailed:
+                                        errorText = presentationData.strings.Premium_Purchase_ErrorUnknown
+                                    case .tryLater:
                                         errorText = presentationData.strings.Premium_Purchase_ErrorUnknown
                                     case .cancelled:
                                         break
@@ -1296,6 +1304,7 @@ open class PremiumGiftScreen: ViewControllerComponentContainer {
     public var animationColor: UIColor?
     
     public var updateTabBarAlpha: (CGFloat, ContainedViewLayoutTransition) -> Void = { _, _ in }
+    public var updateTabBarVisibility: (Bool, ContainedViewLayoutTransition) -> Void = { _, _ in }
     
     public let mainButtonStatePromise = Promise<AttachmentMainButtonState?>(nil)
     private let mainButtonActionSlot = ActionSlot<Void>()

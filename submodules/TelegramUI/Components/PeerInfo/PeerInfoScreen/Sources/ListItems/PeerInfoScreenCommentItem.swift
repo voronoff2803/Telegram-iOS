@@ -3,6 +3,7 @@ import Display
 import TelegramPresentationData
 import TextFormat
 import Markdown
+import AccountContext
 
 final class PeerInfoScreenCommentItem: PeerInfoScreenItem {
     enum LinkAction {
@@ -31,6 +32,8 @@ private final class PeerInfoScreenCommentItemNode: PeerInfoScreenItemNode {
     
     private var item: PeerInfoScreenCommentItem?
     private var presentationData: PresentationData?
+    
+    private var chevronImage: UIImage?
     
     override init() {
         self.textNode = ImmediateTextNode()
@@ -61,11 +64,12 @@ private final class PeerInfoScreenCommentItemNode: PeerInfoScreenItemNode {
         self.view.addGestureRecognizer(recognizer)
     }
     
-    override func update(width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool, transition: ContainedViewLayoutTransition) -> CGFloat {
+    override func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool, transition: ContainedViewLayoutTransition) -> CGFloat {
         guard let item = item as? PeerInfoScreenCommentItem else {
             return 10.0
         }
         
+        let themeUpdated = self.presentationData?.theme !== presentationData.theme
         self.item = item
         self.presentationData = presentationData
         
@@ -77,10 +81,20 @@ private final class PeerInfoScreenCommentItemNode: PeerInfoScreenItemNode {
         let textFont = Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize)
         let textColor = presentationData.theme.list.freeTextColor
         
-        let attributedText = parseMarkdownIntoAttributedString(item.text, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: textFont, textColor: textColor), bold: MarkdownAttributeSet(font: textFont, textColor: textColor), link: MarkdownAttributeSet(font: textFont, textColor: presentationData.theme.list.itemAccentColor), linkAttribute: { contents in
+        var text = item.text
+        text = text.replacingOccurrences(of: " >]", with: "\u{00A0}>]")
+        let attributedText = parseMarkdownIntoAttributedString(text, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: textFont, textColor: textColor), bold: MarkdownAttributeSet(font: textFont, textColor: textColor), link: MarkdownAttributeSet(font: textFont, textColor: presentationData.theme.list.itemAccentColor), linkAttribute: { contents in
             return (TelegramTextAttributes.URL, contents)
-        }))
-        
+        })).mutableCopy() as! NSMutableAttributedString
+        if let _ = item.text.range(of: ">]"), let range = attributedText.string.range(of: ">") {
+            if themeUpdated || self.chevronImage == nil {
+                self.chevronImage = generateTintedImage(image: UIImage(bundleImageName: "Contact List/SubtitleArrow"), color: presentationData.theme.list.itemAccentColor)
+            }
+            if let chevronImage = self.chevronImage {
+                attributedText.addAttribute(.attachment, value: chevronImage, range: NSRange(range, in: attributedText.string))
+            }
+        }
+
         self.textNode.attributedText = attributedText
         self.activateArea.accessibilityLabel = attributedText.string
         

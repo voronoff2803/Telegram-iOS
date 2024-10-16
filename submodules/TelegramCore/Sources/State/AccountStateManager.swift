@@ -44,6 +44,18 @@ private final class UpdatedPeersNearbySubscriberContext {
     let subscribers = Bag<([PeerNearby]) -> Void>()
 }
 
+private final class UpdatedRevenueBalancesSubscriberContext {
+    let subscribers = Bag<([PeerId: RevenueStats.Balances]) -> Void>()
+}
+
+private final class UpdatedStarsBalanceSubscriberContext {
+    let subscribers = Bag<([PeerId: Int64]) -> Void>()
+}
+
+private final class UpdatedStarsRevenueStatusSubscriberContext {
+    let subscribers = Bag<([PeerId: StarsRevenueStats.Balances]) -> Void>()
+}
+
 public enum DeletedMessageId: Hashable {
     case global(Int32)
     case messageId(MessageId)
@@ -232,6 +244,12 @@ public final class AccountStateManager {
             return self.appUpdateInfoPromise.get()
         }
         
+        private let contactBirthdaysValue = Atomic<[EnginePeer.Id: TelegramBirthday]>(value: [:])
+        private let contactBirthdaysPromise = Promise<[EnginePeer.Id: TelegramBirthday]>([:])
+        public var contactBirthdays: Signal<[EnginePeer.Id: TelegramBirthday], NoError> {
+            return self.contactBirthdaysPromise.get()
+        }
+        
         private let appliedIncomingReadMessagesPipe = ValuePipe<[MessageId]>()
         public var appliedIncomingReadMessages: Signal<[MessageId], NoError> {
             return self.appliedIncomingReadMessagesPipe.signal()
@@ -269,8 +287,21 @@ public final class AccountStateManager {
             return self.storyUpdatesPipe.signal()
         }
         
+        fileprivate let botPreviewUpdatesPipe = ValuePipe<[InternalBotPreviewUpdate]>()
+        public var botPreviewUpdates: Signal<[InternalBotPreviewUpdate], NoError> {
+            return self.botPreviewUpdatesPipe.signal()
+        }
+        
+        fileprivate let forceSendPendingStarsReactionPipe = ValuePipe<MessageId>()
+        public var forceSendPendingStarsReaction: Signal<MessageId, NoError> {
+            return self.forceSendPendingStarsReactionPipe.signal()
+        }
+        
         private var updatedWebpageContexts: [MediaId: UpdatedWebpageSubscriberContext] = [:]
         private var updatedPeersNearbyContext = UpdatedPeersNearbySubscriberContext()
+        private var updatedRevenueBalancesContext = UpdatedRevenueBalancesSubscriberContext()
+        private var updatedStarsBalanceContext = UpdatedStarsBalanceSubscriberContext()
+        private var updatedStarsRevenueStatusContext = UpdatedStarsRevenueStatusSubscriberContext()
         
         private let delayNotificatonsUntil = Atomic<Int32?>(value: nil)
         private let appliedMaxMessageIdPromise = Promise<Int32?>(nil)
@@ -1016,6 +1047,15 @@ public final class AccountStateManager {
                             if let updatedPeersNearby = events.updatedPeersNearby {
                                 strongSelf.notifyUpdatedPeersNearby(updatedPeersNearby)
                             }
+                            if !events.updatedRevenueBalances.isEmpty {
+                                strongSelf.notifyUpdatedRevenueBalances(events.updatedRevenueBalances)
+                            }
+                            if !events.updatedStarsBalance.isEmpty {
+                                strongSelf.notifyUpdatedStarsBalance(events.updatedStarsBalance)
+                            }
+                            if !events.updatedStarsRevenueStatus.isEmpty {
+                                strongSelf.notifyUpdatedStarsRevenueStatus(events.updatedStarsRevenueStatus)
+                            }
                             if !events.updatedCalls.isEmpty {
                                 for call in events.updatedCalls {
                                     strongSelf.callSessionManager?.updateSession(call, completion: { _ in })
@@ -1550,6 +1590,17 @@ public final class AccountStateManager {
             }
         }
         
+        func modifyContactBirthdays(_ f: @escaping ([EnginePeer.Id: TelegramBirthday]) -> ([EnginePeer.Id: TelegramBirthday])) {
+            self.queue.async {
+                let current = self.contactBirthdaysValue.with { $0 }
+                let updated = f(current)
+                if (current != updated) {
+                    let _ = self.contactBirthdaysValue.swap(updated)
+                    self.contactBirthdaysPromise.set(.single(updated))
+                }
+            }
+        }
+        
         public func updatedPeersNearby() -> Signal<[PeerNearby], NoError> {
             let queue = self.queue
             return Signal { [weak self] subscriber in
@@ -1574,6 +1625,87 @@ public final class AccountStateManager {
         private func notifyUpdatedPeersNearby(_ updatedPeersNearby: [PeerNearby]) {
             for subscriber in self.updatedPeersNearbyContext.subscribers.copyItems() {
                 subscriber(updatedPeersNearby)
+            }
+        }
+        
+        public func updatedRevenueBalances() -> Signal<[PeerId: RevenueStats.Balances], NoError> {
+            let queue = self.queue
+            return Signal { [weak self] subscriber in
+                let disposable = MetaDisposable()
+                queue.async {
+                    if let strongSelf = self {
+                        let index = strongSelf.updatedRevenueBalancesContext.subscribers.add({ revenueBalances in
+                            subscriber.putNext(revenueBalances)
+                        })
+                        
+                        disposable.set(ActionDisposable {
+                            if let strongSelf = self {
+                                strongSelf.updatedRevenueBalancesContext.subscribers.remove(index)
+                            }
+                        })
+                    }
+                }
+                return disposable
+            }
+        }
+        
+        private func notifyUpdatedRevenueBalances(_ updatedRevenueBalances: [PeerId: RevenueStats.Balances]) {
+            for subscriber in self.updatedRevenueBalancesContext.subscribers.copyItems() {
+                subscriber(updatedRevenueBalances)
+            }
+        }
+        
+        public func updatedStarsBalance() -> Signal<[PeerId: Int64], NoError> {
+            let queue = self.queue
+            return Signal { [weak self] subscriber in
+                let disposable = MetaDisposable()
+                queue.async {
+                    if let strongSelf = self {
+                        let index = strongSelf.updatedStarsBalanceContext.subscribers.add({ starsBalance in
+                            subscriber.putNext(starsBalance)
+                        })
+                        
+                        disposable.set(ActionDisposable {
+                            if let strongSelf = self {
+                                strongSelf.updatedStarsBalanceContext.subscribers.remove(index)
+                            }
+                        })
+                    }
+                }
+                return disposable
+            }
+        }
+        
+        private func notifyUpdatedStarsBalance(_ updatedStarsBalance: [PeerId: Int64]) {
+            for subscriber in self.updatedStarsBalanceContext.subscribers.copyItems() {
+                subscriber(updatedStarsBalance)
+            }
+        }
+        
+        public func updatedStarsRevenueStatus() -> Signal<[PeerId: StarsRevenueStats.Balances], NoError> {
+            let queue = self.queue
+            return Signal { [weak self] subscriber in
+                let disposable = MetaDisposable()
+                queue.async {
+                    if let strongSelf = self {
+                        let index = strongSelf.updatedStarsRevenueStatusContext.subscribers.add({ revenueBalances in
+                            subscriber.putNext(revenueBalances)
+                        })
+                        
+                        disposable.set(ActionDisposable {
+                            if let strongSelf = self {
+                                strongSelf.updatedStarsRevenueStatusContext.subscribers.remove(index)
+                            }
+                        })
+                    }
+                }
+                return disposable
+            }
+        }
+        
+        private func notifyUpdatedStarsRevenueStatus(_ updatedStarsRevenueStatus: [PeerId: StarsRevenueStats.Balances]) {
+            for subscriber in self.updatedStarsRevenueStatusContext.subscribers.copyItems() {
+                subscriber(updatedStarsRevenueStatus)
             }
         }
         
@@ -1680,6 +1812,12 @@ public final class AccountStateManager {
         }
     }
     
+    public var contactBirthdays: Signal<[EnginePeer.Id: TelegramBirthday], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.contactBirthdays.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+    
     public var appliedIncomingReadMessages: Signal<[MessageId], NoError> {
         return self.impl.signalWith { impl, subscriber in
             return impl.appliedIncomingReadMessages.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
@@ -1728,10 +1866,36 @@ public final class AccountStateManager {
         }
     }
     
+    var botPreviewUpdates: Signal<[InternalBotPreviewUpdate], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.botPreviewUpdates.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+    
+    func injectBotPreviewUpdates(updates: [InternalBotPreviewUpdate]) {
+        self.impl.with { impl in
+            impl.botPreviewUpdatesPipe.putNext(updates)
+        }
+    }
+    
+    var forceSendPendingStarsReaction: Signal<MessageId, NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.forceSendPendingStarsReaction.start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+    
+    func forceSendPendingStarsReaction(messageId: MessageId) {
+        self.impl.with { impl in
+            impl.forceSendPendingStarsReactionPipe.putNext(messageId)
+        }
+    }
+    
     var updateConfigRequested: (() -> Void)?
     var isPremiumUpdated: (() -> Void)?
     
     let messagesRemovedContext = MessagesRemovedContext()
+    
+    public weak var starsContext: StarsContext?
     
     init(
         accountPeerId: PeerId,
@@ -1828,6 +1992,12 @@ public final class AccountStateManager {
         }
     }
     
+    func modifyContactBirthdays(_ f: @escaping ([EnginePeer.Id: TelegramBirthday]) -> ([EnginePeer.Id: TelegramBirthday])) {
+        self.impl.with { impl in
+            impl.modifyContactBirthdays(f)
+        }
+    }
+    
     public func pollStateUpdateCompletion() -> Signal<[MessageId], NoError> {
         return self.impl.signalWith { impl, subscriber in
             return impl.pollStateUpdateCompletion().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
@@ -1849,6 +2019,24 @@ public final class AccountStateManager {
     public func updatedPeersNearby() -> Signal<[PeerNearby], NoError> {
         return self.impl.signalWith { impl, subscriber in
             return impl.updatedPeersNearby().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+    
+    public func updatedRevenueBalances() -> Signal<[PeerId: RevenueStats.Balances], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.updatedRevenueBalances().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+
+    public func updatedStarsBalance() -> Signal<[PeerId: Int64], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.updatedStarsBalance().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+    
+    public func updatedStarsRevenueStatus() -> Signal<[PeerId: StarsRevenueStats.Balances], NoError> {
+        return self.impl.signalWith { impl, subscriber in
+            return impl.updatedStarsRevenueStatus().start(next: subscriber.putNext, error: subscriber.putError, completed: subscriber.putCompletion)
         }
     }
     

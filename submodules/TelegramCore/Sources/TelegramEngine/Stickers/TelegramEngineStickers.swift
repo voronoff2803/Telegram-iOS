@@ -33,6 +33,10 @@ public extension TelegramEngine {
         public func searchStickers(query: [String], scope: SearchStickersScope = [.installed, .remote]) -> Signal<(items: [FoundStickerItem], isFinalResult: Bool), NoError> {
             return _internal_searchStickers(account: self.account, query: query, scope: scope)
         }
+        
+        public func searchStickers(category: EmojiSearchCategories.Group, scope: SearchStickersScope = [.installed, .remote]) -> Signal<(items: [FoundStickerItem], isFinalResult: Bool), NoError> {
+            return _internal_searchStickers(account: self.account, category: category, scope: scope)
+        }
 
         public func searchStickerSetsRemotely(query: String) -> Signal<FoundStickerSets, NoError> {
             return _internal_searchStickerSetsRemotely(network: self.account.network, query: query)
@@ -78,12 +82,40 @@ public extension TelegramEngine {
             return _internal_stickerPacksAttachedToMedia(account: self.account, media: media)
         }
         
-        public func uploadSticker(peer: Peer, resource: MediaResource, alt: String, dimensions: PixelDimensions, mimeType: String) -> Signal<UploadStickerStatus, UploadStickerError> {
-            return _internal_uploadSticker(account: self.account, peer: peer, resource: resource, alt: alt, dimensions: dimensions, mimeType: mimeType)
+        public func uploadSticker(peer: Peer, resource: MediaResource, thumbnail: MediaResource?, alt: String, dimensions: PixelDimensions, duration: Double?, mimeType: String) -> Signal<UploadStickerStatus, UploadStickerError> {
+            return _internal_uploadSticker(account: self.account, peer: peer, resource: resource, thumbnail: thumbnail, alt: alt, dimensions: dimensions, duration: duration, mimeType: mimeType)
         }
         
         public func createStickerSet(title: String, shortName: String, stickers: [ImportSticker], thumbnail: ImportSticker?, type: CreateStickerSetType, software: String?) -> Signal<CreateStickerSetStatus, CreateStickerSetError> {
             return _internal_createStickerSet(account: self.account, title: title, shortName: shortName, stickers: stickers, thumbnail: thumbnail, type: type, software: software)
+        }
+        
+        public func renameStickerSet(packReference: StickerPackReference, title: String) -> Signal<Never, RenameStickerSetError> {
+            return _internal_renameStickerSet(account: self.account, packReference: packReference, title: title)
+        }
+        
+        public func deleteStickerSet(packReference: StickerPackReference) -> Signal<Never, DeleteStickerSetError> {
+            return _internal_deleteStickerSet(account: self.account, packReference: packReference)
+        }
+        
+        public func addStickerToStickerSet(packReference: StickerPackReference, sticker: ImportSticker) -> Signal<Bool, AddStickerToSetError> {
+            return _internal_addStickerToStickerSet(account: self.account, packReference: packReference, sticker: sticker)
+        }
+        
+        public func reorderSticker(sticker: FileMediaReference, position: Int) -> Signal<Never, ReorderStickerError> {
+            return _internal_reorderSticker(account: self.account, sticker: sticker, position: position)
+        }
+        
+        public func deleteStickerFromStickerSet(sticker: FileMediaReference) -> Signal<Never, DeleteStickerError> {
+            return _internal_deleteStickerFromStickerSet(account: self.account, sticker: sticker)
+        }
+        
+        public func replaceSticker(previousSticker: FileMediaReference, sticker: ImportSticker) -> Signal<Never, ReplaceStickerError> {
+            return _internal_replaceSticker(account: self.account, previousSticker: previousSticker, sticker: sticker)
+        }
+        
+        public func getMyStickerSets() -> Signal<[(StickerPackCollectionInfo, StickerPackItem?)], NoError> {
+            return _internal_getMyStickerSets(account: self.account)
         }
         
         public func getStickerSetShortNameSuggestion(title: String) -> Signal<String?, NoError> {
@@ -111,6 +143,10 @@ public extension TelegramEngine {
         
         public func availableReactions() -> Signal<AvailableReactions?, NoError> {
             return _internal_cachedAvailableReactions(postbox: self.account.postbox)
+        }
+        
+        public func availableMessageEffects() -> Signal<AvailableMessageEffects?, NoError> {
+            return _internal_cachedAvailableMessageEffects(postbox: self.account.postbox)
         }
         
         public func savedMessageTagData() -> Signal<SavedMessageTags?, NoError> {
@@ -258,9 +294,22 @@ public extension TelegramEngine {
             }
         }
         
-        public func addRecentlyUsedSticker(file: TelegramMediaFile) {
+        public func searchEmoji(category: EmojiSearchCategories.Group) -> Signal<(items: [TelegramMediaFile], isFinalResult: Bool), NoError> {
+            return _internal_searchEmoji(account: self.account, query: category.identifiers)
+            |> map { items, isFinalResult -> (items: [TelegramMediaFile], isFinalResult: Bool) in
+                return (items.map(\.file), isFinalResult)
+            }
+        }
+        
+        public func addRecentlyUsedSticker(fileReference: FileMediaReference) {
             let _ = self.account.postbox.transaction({ transaction -> Void in
-                TelegramCore.addRecentlyUsedSticker(transaction: transaction, fileReference: .standalone(media: file))
+                TelegramCore.addRecentlyUsedSticker(transaction: transaction, fileReference: fileReference)
+            }).start()
+        }
+        
+        public func removeRecentlyUsedSticker(fileReference: FileMediaReference) {
+            let _ = self.account.postbox.transaction({ transaction -> Void in
+                _internal_removeRecentlyUsedSticker(transaction: transaction, fileReference: fileReference)
             }).start()
         }
     }
@@ -312,7 +361,7 @@ public func _internal_resolveInlineStickers(postbox: Postbox, network: Network, 
                 for result in documentSets {
                     if let result = result {
                         for document in result {
-                            if let file = telegramMediaFileFromApiDocument(document) {
+                            if let file = telegramMediaFileFromApiDocument(document, altDocuments: []) {
                                 resultFiles[file.fileId.id] = file
                                 transaction.storeMediaIfNotPresent(media: file)
                             }

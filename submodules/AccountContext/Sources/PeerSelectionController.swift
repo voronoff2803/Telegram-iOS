@@ -147,7 +147,19 @@ public enum PeerSelectionControllerContext {
 
 public protocol PeerSelectionController: ViewController {
     var peerSelected: ((EnginePeer, Int64?) -> Void)? { get set }
-    var multiplePeersSelected: (([EnginePeer], [EnginePeer.Id: EnginePeer], NSAttributedString, AttachmentTextInputPanelSendMode, ChatInterfaceForwardOptionsState?) -> Void)? { get set }
+    var multiplePeersSelected: (([EnginePeer], [EnginePeer.Id: EnginePeer], NSAttributedString, AttachmentTextInputPanelSendMode, ChatInterfaceForwardOptionsState?, ChatSendMessageActionSheetController.SendParameters?) -> Void)? { get set }
     var inProgress: Bool { get set }
     var customDismiss: (() -> Void)? { get set }
+}
+
+public enum SelectivePrivacySettingsKind {
+    case presence
+    case groupInvitations
+    case voiceCalls
+    case profilePhoto
+    case forwards
+    case phoneNumber
+    case voiceMessages
+    case bio
+    case birthday
 }

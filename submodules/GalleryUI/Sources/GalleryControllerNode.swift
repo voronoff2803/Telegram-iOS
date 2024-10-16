@@ -6,7 +6,7 @@ import Postbox
 import SwipeToDismissGesture
 import AccountContext
 
-open class GalleryControllerNode: ASDisplayNode, UIScrollViewDelegate, UIGestureRecognizerDelegate {
+open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDelegate {
     public var statusBar: StatusBar?
     public var navigationBar: NavigationBar? {
         didSet {
@@ -143,7 +143,7 @@ open class GalleryControllerNode: ASDisplayNode, UIScrollViewDelegate, UIGesture
         self.scrollView.alwaysBounceHorizontal = false
         self.scrollView.alwaysBounceVertical = false
         self.scrollView.clipsToBounds = false
-        self.scrollView.delegate = self
+        self.scrollView.delegate = self.wrappedScrollViewDelegate
         self.scrollView.scrollsToTop = false
         self.view.addSubview(self.scrollView)
         
@@ -228,15 +228,19 @@ open class GalleryControllerNode: ASDisplayNode, UIScrollViewDelegate, UIGesture
                         fromLeft = true
                     }
                     if let current = strongSelf.currentThumbnailContainerNode {
+                        strongSelf.currentThumbnailContainerNode = nil
                         if thumbnailContainerVisible {
                             current.animateOut(toRight: fromLeft)
                             current.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak current] _ in
                                 current?.removeFromSupernode()
                             })
+                            if let (navigationHeight, layout) = strongSelf.containerLayout, node == nil {
+                                strongSelf.containerLayoutUpdated(layout, navigationBarHeight: navigationHeight, transition: .immediate)
+                            }
                         }
                     }
-                    strongSelf.currentThumbnailContainerNode = node
                     if let node = node {
+                        strongSelf.currentThumbnailContainerNode = node
                         strongSelf.insertSubnode(node, aboveSubnode: strongSelf.footerNode)
                         if let (navigationHeight, layout) = strongSelf.containerLayout, thumbnailContainerVisible {
                             strongSelf.containerLayoutUpdated(layout, navigationBarHeight: navigationHeight, transition: .immediate)
@@ -508,6 +512,10 @@ open class GalleryControllerNode: ASDisplayNode, UIScrollViewDelegate, UIGesture
             }
         } else {
             self.scrollView.setContentOffset(CGPoint(x: 0.0, y: self.scrollView.contentSize.height / 3.0), animated: true)
+            
+            if let chatController = self.baseNavigationController()?.topViewController as? ChatController {
+                chatController.updatePushedTransition(1.0, transition: .animated(duration: 0.45, curve: .customSpring(damping: 180.0, initialVelocity: 0.0)))
+            }
         }
     }
     

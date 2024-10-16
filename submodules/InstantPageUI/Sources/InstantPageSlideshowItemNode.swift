@@ -63,7 +63,7 @@ private final class InstantPageSlideshowItemNode: ASDisplayNode {
     }
 }
 
-private final class InstantPageSlideshowPagerNode: ASDisplayNode, UIScrollViewDelegate {
+private final class InstantPageSlideshowPagerNode: ASDisplayNode, ASScrollViewDelegate {
     private let context: AccountContext
     private let sourceLocation: InstantPageSourceLocation
     private let theme: InstantPageTheme
@@ -123,7 +123,7 @@ private final class InstantPageSlideshowPagerNode: ASDisplayNode, UIScrollViewDe
         self.scrollView.alwaysBounceHorizontal = !pageGap.isZero
         self.scrollView.bounces = !pageGap.isZero
         self.scrollView.isPagingEnabled = true
-        self.scrollView.delegate = self
+        self.scrollView.delegate = self.wrappedScrollViewDelegate
         self.scrollView.clipsToBounds = false
         self.scrollView.scrollsToTop = false
         self.view.addSubview(self.scrollView)
@@ -187,7 +187,7 @@ private final class InstantPageSlideshowPagerNode: ASDisplayNode, UIScrollViewDe
         let media = self.items[index]
         let contentNode: ASDisplayNode
         if case .image = media.media {
-            contentNode = InstantPageImageNode(context: self.context, sourceLocation: self.sourceLocation, theme: self.theme, webPage: self.webPage, media: media, attributes: [], interactive: true, roundCorners: false, fit: false, openMedia: self.openMedia, longPressMedia: self.longPressMedia, activatePinchPreview: self.activatePinchPreview, pinchPreviewFinished: self.pinchPreviewFinished)
+            contentNode = InstantPageImageNode(context: self.context, sourceLocation: self.sourceLocation, theme: self.theme, webPage: self.webPage, media: media, attributes: [], interactive: true, roundCorners: false, fit: false, openMedia: self.openMedia, longPressMedia: self.longPressMedia, activatePinchPreview: self.activatePinchPreview, pinchPreviewFinished: self.pinchPreviewFinished, getPreloadedResource: { _ in return nil })
         } else if case .file = media.media {
             contentNode = ASDisplayNode()
         } else {

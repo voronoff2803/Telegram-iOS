@@ -52,7 +52,7 @@ public final class ChatMessageInvoiceBubbleContentNode: ChatMessageBubbleContent
             var title: String?
             var subtitle: NSAttributedString? = nil
             var text: String?
-            var mediaAndFlags: (Media, ChatMessageAttachedContentNodeMediaFlags)?
+            var mediaAndFlags: ([Media], ChatMessageAttachedContentNodeMediaFlags)?
             
             var automaticDownloadSettings = item.controllerInteraction.automaticMediaDownloadSettings
             if let invoice = invoice {
@@ -61,8 +61,8 @@ public final class ChatMessageInvoiceBubbleContentNode: ChatMessageBubbleContent
                 
                 if let image = invoice.photo {
                     automaticDownloadSettings = MediaAutoDownloadSettings.defaultSettings
-                    mediaAndFlags = (image, [.preferMediaBeforeText])
-                } else {
+                    mediaAndFlags = ([image], [.preferMediaBeforeText])
+                } else if invoice.currency != "XTR" {
                     let invoiceLabel = item.presentationData.strings.Message_InvoiceLabel
                     var invoiceText = "\(formatCurrencyAmount(invoice.totalAmount, currency: invoice.currency)) "
                     invoiceText += invoiceLabel
@@ -76,7 +76,7 @@ public final class ChatMessageInvoiceBubbleContentNode: ChatMessageBubbleContent
                 }
             }
             
-            let (initialWidth, continueLayout) = contentNodeLayout(item.presentationData, automaticDownloadSettings, item.associatedData, item.attributes, item.context, item.controllerInteraction, item.message, item.read, item.chatLocation, title, subtitle, text, nil, mediaAndFlags, nil, nil, nil, false, layoutConstants, preparePosition, constrainedSize, item.controllerInteraction.presentationContext.animationCache, item.controllerInteraction.presentationContext.animationRenderer)
+            let (initialWidth, continueLayout) = contentNodeLayout(item.presentationData, automaticDownloadSettings, item.associatedData, item.attributes, item.context, item.controllerInteraction, item.message, item.read, item.chatLocation, title, nil, subtitle, text, nil, mediaAndFlags, nil, nil, nil, false, layoutConstants, preparePosition, constrainedSize, item.controllerInteraction.presentationContext.animationCache, item.controllerInteraction.presentationContext.animationRenderer)
             
             let contentProperties = ChatMessageBubbleContentProperties(hidesSimpleAuthorHeader: false, headerSpacing: 8.0, hidesBackground: .never, forceFullCorners: false, forceAlignment: .none)
             
@@ -142,6 +142,13 @@ public final class ChatMessageInvoiceBubbleContentNode: ChatMessageBubbleContent
     override public func reactionTargetView(value: MessageReaction.Reaction) -> UIView? {
         if let statusNode = self.contentNode.statusNode, !statusNode.isHidden {
             return statusNode.reactionView(value: value)
+        }
+        return nil
+    }
+    
+    override public func messageEffectTargetView() -> UIView? {
+        if let statusNode = self.contentNode.statusNode, !statusNode.isHidden {
+            return statusNode.messageEffectTargetView()
         }
         return nil
     }

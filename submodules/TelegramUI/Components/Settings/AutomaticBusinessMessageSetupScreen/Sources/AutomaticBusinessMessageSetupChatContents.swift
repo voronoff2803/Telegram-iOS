@@ -213,6 +213,10 @@ final class AutomaticBusinessMessageSetupChatContents: ChatCustomContentsProtoco
         switch kind {
         case let .quickReplyMessageInput(shortcut, _):
             initialShortcut = shortcut
+        case .businessLinkSetup:
+            initialShortcut = ""
+        case .hashTagSearch:
+            initialShortcut = ""
         }
         
         let queue = Queue()
@@ -247,6 +251,21 @@ final class AutomaticBusinessMessageSetupChatContents: ChatCustomContentsProtoco
             self.impl.with { impl in
                 impl.quickReplyUpdateShortcut(value: value)
             }
+        case .businessLinkSetup:
+            break
+        case .hashTagSearch:
+            break
         }
     }
+    
+    func businessLinkUpdate(message: String, entities: [MessageTextEntity], title: String?) {
+    }
+    
+    func loadMore() {
+    }
+    
+    func hashtagSearchUpdate(query: String) {
+    }
+    
+    var hashtagSearchResultsUpdate: ((SearchMessagesResult, SearchMessagesState)) -> Void = { _ in }
 }

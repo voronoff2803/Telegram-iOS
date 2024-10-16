@@ -371,6 +371,7 @@ public struct PresentationResourcesChat {
                 context.setLineWidth(2.0)
                 context.setLineCap(.round)
                 context.setLineJoin(.round)
+                context.translateBy(x: -UIScreenPixel, y: 0.0)
                 let _ = try? drawSvgPath(context, path: "M11,14.6666667 L16.4310816,9.40016333 L16.4310816,9.40016333 C16.4694824,9.36292619 16.5305176,9.36292619 16.5689184,9.40016333 L22,14.6666667 S ")
                 let _ = try? drawSvgPath(context, path: "M16.5,9.33333333 C17.0522847,9.33333333 17.5,9.78104858 17.5,10.3333333 L17.5,24 C17.5,24.5522847 17.0522847,25 16.5,25 C15.9477153,25 15.5,24.5522847 15.5,24 L15.5,10.3333333 C15.5,9.78104858 15.9477153,9.33333333 16.5,9.33333333 Z ")
             })
@@ -1117,6 +1118,20 @@ public struct PresentationResourcesChat {
     public static func chatFreeCloseButtonIcon(_ theme: PresentationTheme, wallpaper: TelegramWallpaper) -> UIImage? {
         return theme.image(PresentationResourceKey.chatFreeCloseButtonIcon.rawValue, { _ in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/SideCloseIcon"), color: bubbleVariableColor(variableColor: theme.chat.message.shareButtonForegroundColor, wallpaper: wallpaper))
+        })
+    }
+    
+    public static func chatFreeMoreButtonIcon(_ theme: PresentationTheme, wallpaper: TelegramWallpaper) -> UIImage? {
+        return theme.image(PresentationResourceKey.chatFreeMoreButtonIcon.rawValue, { _ in
+            return generateImage(CGSize(width: 16.0, height: 16.0), rotatedContext: { size, context in
+                context.clear(CGRect(origin: CGPoint(), size: size))
+                context.setFillColor(bubbleVariableColor(variableColor: theme.chat.message.shareButtonForegroundColor, wallpaper: wallpaper).cgColor)
+                
+                let dotSize = CGSize(width: 3.0 + UIScreenPixel, height: 3.0 + UIScreenPixel)
+                context.fillEllipse(in: CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((size.height - dotSize.height) / 2.0)), size: dotSize))
+                context.fillEllipse(in: CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - dotSize.width) / 2.0), y: floorToScreenPixels((size.height - dotSize.height) / 2.0)), size: dotSize))
+                context.fillEllipse(in: CGRect(origin: CGPoint(x: size.width - dotSize.width, y: floorToScreenPixels((size.height - dotSize.height) / 2.0)), size: dotSize))
+            })
         })
     }
     

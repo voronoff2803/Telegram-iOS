@@ -549,6 +549,9 @@
         
         if (allowGrouping)
         {
+            if (_groupingChangedDisposable) {
+                [_groupingChangedDisposable dispose];
+            }
             _groupingChangedDisposable = [[SMetaDisposable alloc] init];
             [_groupingChangedDisposable setDisposable:[_selectionContext.groupingChangedSignal startStrictWithNext:^(NSNumber *next)
             {
@@ -561,6 +564,9 @@
             
             if (_editingContext != nil)
             {
+                if (_timersChangedDisposable) {
+                    [_timersChangedDisposable dispose];
+                }
                 _timersChangedDisposable = [[SMetaDisposable alloc] init];
                 [_timersChangedDisposable setDisposable:[_editingContext.timersUpdatedSignal startStrictWithNext:^(__unused NSNumber *next)
                 {
@@ -586,7 +592,9 @@
     self.delegate = nil;
     [_selectionChangedDisposable dispose];
     [_tooltipDismissDisposable dispose];
+    [_timersChangedDisposable dispose];
     [_adjustmentsChangedDisposable dispose];
+    [_groupingChangedDisposable dispose];
 }
 
 - (void)loadView
@@ -934,6 +942,7 @@
     NSInteger num = 0;
     bool grouping = selectionContext.grouping;
     
+    NSNumber *price;
     bool hasAnyTimers = false;
     if (editingContext != nil || grouping)
     {
@@ -941,6 +950,9 @@
         {
             if ([editingContext timerForItem:asset] != nil) {
                 hasAnyTimers = true;
+            }
+            if (price == nil) {
+                price = [editingContext priceForItem:asset];
             }
             id<TGMediaEditAdjustments> adjustments = [editingContext adjustmentsForItem:asset];
             if ([adjustments isKindOfClass:[TGVideoEditAdjustments class]]) {
@@ -1049,6 +1061,9 @@
                         else if (groupedId != nil && !hasAnyTimers)
                             dict[@"groupedId"] = groupedId;
                         
+                        if (price != nil)
+                            dict[@"price"] = price;
+                        
                         if (spoiler) {
                             dict[@"spoiler"] = @true;
                         }
@@ -1128,6 +1143,9 @@
                                     dict[@"timer"] = timer;
                                 else if (groupedId != nil && !hasAnyTimers)
                                     dict[@"groupedId"] = groupedId;
+                                
+                                if (price != nil)
+                                    dict[@"price"] = price;
                                 
                                 if (spoiler) {
                                     dict[@"spoiler"] = @true;
@@ -1209,6 +1227,9 @@
                             else if (groupedId != nil && !hasAnyTimers)
                                 dict[@"groupedId"] = groupedId;
                             
+                            if (price != nil)
+                                dict[@"price"] = price;
+                            
                             if (spoiler) {
                                 dict[@"spoiler"] = @true;
                             }
@@ -1252,6 +1273,9 @@
                         
                         if (groupedId != nil)
                             dict[@"groupedId"] = groupedId;
+                        
+                        if (price != nil)
+                            dict[@"price"] = price;
                         
                         if (spoiler) {
                             dict[@"spoiler"] = @true;
@@ -1325,6 +1349,9 @@
                             dict[@"timer"] = timer;
                         else if (groupedId != nil && !hasAnyTimers)
                             dict[@"groupedId"] = groupedId;
+                        
+                        if (price != nil)
+                            dict[@"price"] = price;
                         
                         if (spoiler) {
                             dict[@"spoiler"] = @true;
@@ -1406,6 +1433,9 @@
                         dict[@"stickers"] = adjustments.paintingData.stickers;
                     if (timer != nil)
                         dict[@"timer"] = timer;
+                    
+                    if (price != nil)
+                        dict[@"price"] = price;
                     
                     if (spoiler) {
                         dict[@"spoiler"] = @true;

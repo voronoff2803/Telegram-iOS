@@ -357,7 +357,14 @@ private final class StoryContainerScreenComponent: Component {
     }
 
     final class View: UIView, UIGestureRecognizerDelegate {
-        private var component: StoryContainerScreenComponent?
+        private var component: StoryContainerScreenComponent? {
+            didSet {
+                if self.component != nil {
+                    self.isComponentReadyPromise.set(true)
+                }
+            }
+        }
+        private let isComponentReadyPromise = ValuePromise(false, ignoreRepeated: true)
         private weak var state: EmptyComponentState?
         private var environment: ViewControllerComponentContainer.Environment?
         
@@ -418,7 +425,7 @@ private final class StoryContainerScreenComponent: Component {
         
         var longPressRecognizer: StoryLongPressRecognizer?
         
-        private var pendingNavigationToItemId: (peerId: EnginePeer.Id, id: Int32)?
+        private var pendingNavigationToItemId: StoryId?
                 
         private let interactionGuide = ComponentView<Empty>()
         private var isDisplayingInteractionGuide: Bool = false
@@ -514,7 +521,7 @@ private final class StoryContainerScreenComponent: Component {
                 guard let stateValue = self.stateValue, let slice = stateValue.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let itemSetComponentView = itemSetView.view.view as? StoryItemSetContainerComponent.View else {
                     return
                 }
-                guard let visibleItemView = itemSetComponentView.visibleItems[slice.item.storyItem.id]?.view.view as? StoryItemContentComponent.View else {
+                guard let visibleItemView = itemSetComponentView.visibleItems[slice.item.id]?.view.view as? StoryItemContentComponent.View else {
                     return
                 }
                 
@@ -556,7 +563,7 @@ private final class StoryContainerScreenComponent: Component {
                 guard let stateValue = self.stateValue, let slice = stateValue.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let itemSetComponentView = itemSetView.view.view as? StoryItemSetContainerComponent.View else {
                     return
                 }
-                guard let visibleItemView = itemSetComponentView.visibleItems[slice.item.storyItem.id]?.view.view as? StoryItemContentComponent.View else {
+                guard let visibleItemView = itemSetComponentView.visibleItems[slice.item.id]?.view.view as? StoryItemContentComponent.View else {
                     return
                 }
                 visibleItemView.seekEnded()
@@ -622,7 +629,7 @@ private final class StoryContainerScreenComponent: Component {
                 }
                 self.itemSetPinchState = nil
                 if !self.isUpdating {
-                    self.state?.updated(transition: Transition(animation: .curve(duration: 0.3, curve: .spring)))
+                    self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.3, curve: .spring)))
                 }
             }
             self.addGestureRecognizer(pinchRecognizer)
@@ -700,9 +707,13 @@ private final class StoryContainerScreenComponent: Component {
             self.volumeButtonsListenerShouldBeActiveDisposable = (combineLatest(queue: .mainQueue(),
                 self.contentWantsVolumeButtonMonitoring.get(),
                 self.isMuteSwitchOnPromise.get(),
-                self.audioModePromise.get()
+                self.audioModePromise.get(),
+                self.isComponentReadyPromise.get()
             )
-            |> map { contentWantsVolumeButtonMonitoring, isMuteSwitchOn, audioMode -> Bool in
+            |> map { contentWantsVolumeButtonMonitoring, isMuteSwitchOn, audioMode, isComponentReady -> Bool in
+                if !isComponentReady {
+                    return false
+                }
                 if !contentWantsVolumeButtonMonitoring {
                     return false
                 }
@@ -777,7 +788,7 @@ private final class StoryContainerScreenComponent: Component {
                 self.itemSetPanState = ItemSetPanState(fraction: 0.0, didBegin: true)
                 if !updateImmediately {
                     if !self.isUpdating {
-                        self.state?.updated(transition: Transition(animation: .curve(duration: 0.25, curve: .easeInOut)))
+                        self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut)))
                     }
                 }
             } else {
@@ -870,7 +881,7 @@ private final class StoryContainerScreenComponent: Component {
                 itemSetPanState.fraction = 0.0
                 self.itemSetPanState = itemSetPanState
                 
-                let transition = Transition(animation: .curve(duration: 0.4, curve: .spring))
+                let transition = ComponentTransition(animation: .curve(duration: 0.4, curve: .spring))
                 if !self.isUpdating {
                     self.state?.updated(transition: transition)
                 }
@@ -915,14 +926,14 @@ private final class StoryContainerScreenComponent: Component {
                 if self.itemSetPanState == nil {
                     self.itemSetPanState = ItemSetPanState(fraction: 0.0, didBegin: false)
                     if !self.isUpdating {
-                        self.state?.updated(transition: Transition(animation: .curve(duration: 0.25, curve: .easeInOut)))
+                        self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut)))
                     }
                 }
             case .cancelled, .ended:
                 if let itemSetPanState = self.itemSetPanState, !itemSetPanState.didBegin {
                     self.itemSetPanState = nil
                     if !self.isUpdating {
-                        self.state?.updated(transition: Transition(animation: .curve(duration: 0.25, curve: .easeInOut)))
+                        self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut)))
                     }
                 }
             default:
@@ -963,6 +974,13 @@ private final class StoryContainerScreenComponent: Component {
                     }
                 } else {
                     if let result = subview.hitTest(self.convert(self.convert(point, to: subview), to: subview), with: event) {
+                        if let environment = self.environment, case .regular = environment.metrics.widthClass {
+                            if result.isDescendant(of: self.backgroundEffectView) {
+                                if let stateValue = self.stateValue, let slice = stateValue.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id] {
+                                    return itemSetView.view.view
+                                }
+                            }
+                        }
                         return result
                     }
                 }
@@ -1061,7 +1079,7 @@ private final class StoryContainerScreenComponent: Component {
             if !self.dismissWithoutTransitionOut, let component = self.component, let stateValue = self.stateValue, let slice = stateValue.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let itemSetComponentView = itemSetView.view.view as? StoryItemSetContainerComponent.View, let transitionOut = component.transitionOut(slice.peer.id, slice.item.storyItem.id) {
                 self.state?.updated(transition: .immediate)
                 
-                let transition = Transition(animation: .curve(duration: 0.25, curve: .easeInOut))
+                let transition = ComponentTransition(animation: .curve(duration: 0.25, curve: .easeInOut))
                 transition.setAlpha(layer: self.backgroundLayer, alpha: 0.0)
                 transition.setAlpha(view: self.backgroundEffectView, alpha: 0.0)
                 
@@ -1082,11 +1100,11 @@ private final class StoryContainerScreenComponent: Component {
                     transitionOut.completed()
                 }
                 
-                let transition: Transition
+                let transition: ComponentTransition
                 if self.dismissWithoutTransitionOut {
-                    transition = Transition(animation: .curve(duration: 0.5, curve: .spring))
+                    transition = ComponentTransition(animation: .curve(duration: 0.5, curve: .spring))
                 } else {
-                    transition = Transition(animation: .curve(duration: 0.2, curve: .easeInOut))
+                    transition = ComponentTransition(animation: .curve(duration: 0.2, curve: .easeInOut))
                 }
                 
                 self.isDismissedExlusively = true
@@ -1105,53 +1123,56 @@ private final class StoryContainerScreenComponent: Component {
         }
         
         private func updateVolumeButtonMonitoring() {
-            if self.volumeButtonsListener == nil {
-                let buttonAction = { [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    guard let slice = self.stateValue?.slice else {
-                        return
-                    }
-                    var isSilentVideo = false
-                    if case let .file(file) = slice.item.storyItem.media {
-                        for attribute in file.attributes {
-                            if case let .Video(_, _, flags, _) = attribute {
-                                if flags.contains(.isSilent) {
-                                    isSilentVideo = true
-                                }
+            guard self.volumeButtonsListener == nil, let component = self.component else {
+                return
+            }
+            let buttonAction = { [weak self] in
+                guard let self else {
+                    return
+                }
+                guard let slice = self.stateValue?.slice else {
+                    return
+                }
+                var isSilentVideo = false
+                if case let .file(file) = slice.item.storyItem.media {
+                    for attribute in file.attributes {
+                        if case let .Video(_, _, flags, _, _, _) = attribute {
+                            if flags.contains(.isSilent) {
+                                isSilentVideo = true
                             }
+                        }
+                    }
+                }
+                
+                if isSilentVideo {
+                    if let slice = self.stateValue?.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let currentItemView = itemSetView.view.view as? StoryItemSetContainerComponent.View {
+                        currentItemView.displayMutedVideoTooltip()
+                    }
+                } else {
+                    switch self.audioMode {
+                    case .off, .ambient:
+                        break
+                    case .on:
+                        return
+                    }
+                    self.audioMode = .on
+                    
+                    for (_, itemSetView) in self.visibleItemSetViews {
+                        if let componentView = itemSetView.view.view as? StoryItemSetContainerComponent.View {
+                            componentView.leaveAmbientMode()
                         }
                     }
                     
-                    if isSilentVideo {
-                        if let slice = self.stateValue?.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let currentItemView = itemSetView.view.view as? StoryItemSetContainerComponent.View {
-                            currentItemView.displayMutedVideoTooltip()
-                        }
-                    } else {
-                        switch self.audioMode {
-                        case .off, .ambient:
-                            break
-                        case .on:
-                            return
-                        }
-                        self.audioMode = .on
-                        
-                        for (_, itemSetView) in self.visibleItemSetViews {
-                            if let componentView = itemSetView.view.view as? StoryItemSetContainerComponent.View {
-                                componentView.leaveAmbientMode()
-                            }
-                        }
-                        
-                        self.state?.updated(transition: .immediate)
-                    }
+                    self.state?.updated(transition: .immediate)
                 }
-                self.volumeButtonsListener = VolumeButtonsListener(
-                    shouldBeActive: self.volumeButtonsListenerShouldBeActive.get(),
-                    upPressed: buttonAction,
-                    downPressed: buttonAction
-                )
             }
+            self.volumeButtonsListener = VolumeButtonsListener(
+                sharedContext: component.context.sharedContext,
+                isCameraSpecific: false,
+                shouldBeActive: self.volumeButtonsListenerShouldBeActive.get(),
+                upPressed: buttonAction,
+                downPressed: buttonAction
+            )
         }
         
         private var previousBackNavigationTime: Double?
@@ -1192,7 +1213,7 @@ private final class StoryContainerScreenComponent: Component {
                         self.commitHorizontalPan(velocity: CGPoint(x: 200.0, y: 0.0))
                     }
                 } else {
-                    var mappedId: Int32?
+                    var mappedId: StoryId?
                     switch direction {
                     case .previous:
                         mappedId = slice.previousItemId
@@ -1202,14 +1223,24 @@ private final class StoryContainerScreenComponent: Component {
                         mappedId = id
                     }
                     if let mappedId {
-                        self.pendingNavigationToItemId = (slice.peer.id, mappedId)
+                        self.pendingNavigationToItemId = mappedId
                         component.content.navigate(navigation: .item(.id(mappedId)))
                     }
                 }
             }
         }
         
-        func update(component: StoryContainerScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: Transition) -> CGSize {
+        func presentExternalTooltip(_ tooltipScreen: UndoOverlayController) {
+            guard let stateValue = self.stateValue, let slice = stateValue.slice, let itemSetView = self.visibleItemSetViews[slice.peer.id], let itemSetComponentView = itemSetView.view.view as? StoryItemSetContainerComponent.View else {
+                return
+            }
+            itemSetComponentView.sendMessageContext.tooltipScreen = tooltipScreen
+            itemSetComponentView.updateIsProgressPaused()
+            
+            self.environment?.controller()?.present(tooltipScreen, in: .current)
+        }
+        
+        func update(component: StoryContainerScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             if self.didAnimateOut {
                 return availableSize
             }
@@ -1623,7 +1654,12 @@ private final class StoryContainerScreenComponent: Component {
                                             environment.controller()?.dismiss()
                                         }
                                         
-                                        let _ = component.context.engine.messages.deleteStories(peerId: slice.peer.id, ids: [slice.item.storyItem.id]).start()
+                                        if case let .user(user) = slice.peer, user.botInfo != nil {
+                                            //TODO:release
+                                            let _ = component.context.engine.messages.deleteBotPreviews(peerId: slice.peer.id, language: nil, media: [slice.item.storyItem.media._asMedia()]).startStandalone()
+                                        } else {
+                                            let _ = component.context.engine.messages.deleteStories(peerId: slice.peer.id, ids: [slice.item.storyItem.id]).startStandalone()
+                                        }
                                     }
                                 },
                                 markAsSeen: { [weak self] id in
@@ -1631,6 +1667,18 @@ private final class StoryContainerScreenComponent: Component {
                                         return
                                     }
                                     component.content.markAsSeen(id: id)
+                                },
+                                reorder: { [weak self] in
+                                    guard let self, let environment = self.environment else {
+                                        return
+                                    }
+                                    var performReorderAction: (() -> Void)?
+                                    if let controller = environment.controller() as? StoryContainerScreen {
+                                        performReorderAction = controller.performReorderAction
+                                    }
+                                    environment.controller()?.dismiss(completion: {
+                                        performReorderAction?()
+                                    })
                                 },
                                 controller: { [weak self] in
                                     return self?.environment?.controller()
@@ -1774,8 +1822,8 @@ private final class StoryContainerScreenComponent: Component {
                                 return targetTransform
                             }
                                                         
-                            Transition.immediate.setTransform(view: itemSetComponentView, transform: faceTransform)
-                            Transition.immediate.setTransform(layer: itemSetView.tintLayer, transform: faceTransform)
+                            ComponentTransition.immediate.setTransform(view: itemSetComponentView, transform: faceTransform)
+                            ComponentTransition.immediate.setTransform(layer: itemSetView.tintLayer, transform: faceTransform)
                             
                             if let previousRotationFraction = itemSetView.rotationFraction, !itemSetTransition.animation.isImmediate {
                                 let fromT = previousRotationFraction
@@ -1898,7 +1946,7 @@ private final class StoryContainerScreenComponent: Component {
         return View(frame: CGRect())
     }
     
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
@@ -1922,12 +1970,12 @@ public class StoryContainerScreen: ViewControllerComponentContainer {
     
     public final class TransitionView {
         public let makeView: () -> UIView
-        public let updateView: (UIView, TransitionState, Transition) -> Void
+        public let updateView: (UIView, TransitionState, ComponentTransition) -> Void
         public let insertCloneTransitionView: ((UIView) -> Void)?
         
         public init(
             makeView: @escaping () -> UIView,
-            updateView: @escaping (UIView, TransitionState, Transition) -> Void,
+            updateView: @escaping (UIView, TransitionState, ComponentTransition) -> Void,
             insertCloneTransitionView: ((UIView) -> Void)?
         ) {
             self.makeView = makeView
@@ -1990,6 +2038,7 @@ public class StoryContainerScreen: ViewControllerComponentContainer {
     }
     
     public var customBackAction: (() -> Void)?
+    public var performReorderAction: (() -> Void)?
     
     public init(
         context: AccountContext,
@@ -2040,6 +2089,12 @@ public class StoryContainerScreen: ViewControllerComponentContainer {
             if let componentView = self.node.hostView.componentView as? StoryContainerScreenComponent.View {
                 componentView.animateIn()
             }
+        }
+    }
+    
+    public func presentExternalTooltip(_ tooltipScreen: UndoOverlayController) {
+        if let componentView = self.node.hostView.componentView as? StoryContainerScreenComponent.View {
+            componentView.presentExternalTooltip(tooltipScreen)
         }
     }
     
@@ -2143,6 +2198,8 @@ func allowedStoryReactions(context: AccountContext) -> Signal<[ReactionItem], No
                     largeApplicationAnimation: nil,
                     isCustom: true
                 ))
+            case .stars:
+                break
             }
         }
         

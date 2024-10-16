@@ -7,8 +7,9 @@ import SceneKit
 import GZip
 import AppBundle
 import LegacyComponents
+import PremiumStarComponent
 
-private let sceneVersion: Int = 2
+private let sceneVersion: Int = 3
 
 private func deg2rad(_ number: Float) -> Float {
     return number * .pi / 180
@@ -231,6 +232,9 @@ class PremiumCoinComponent: Component {
             self.sceneView.delegate = self
             
             let _ = self.sceneView.snapshot()
+//            self.didSetReady = true
+//            self._ready.set(.single(true))
+//            self.onReady()
         }
         
         private var didSetReady = false
@@ -345,8 +349,12 @@ class PremiumCoinComponent: Component {
                     return
                 }
                 
-                if #available(iOS 17.0, *), let material = node.geometry?.materials.first {
-                    material.metalness.intensity = 0.3
+                if let material = node.geometry?.materials.first {
+                    if node.name == "Logos" {
+                        material.metalness.intensity = 0.1
+                    } else {
+                        material.metalness.intensity = 0.3
+                    }
                 }
                 
                 let animation = CABasicAnimation(keyPath: "contentsTransform")
@@ -487,7 +495,7 @@ class PremiumCoinComponent: Component {
             node.addAnimation(springAnimation, forKey: "rotate")
         }
         
-        func update(component: PremiumCoinComponent, availableSize: CGSize, transition: Transition) -> CGSize {
+        func update(component: PremiumCoinComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             self.sceneView.bounds = CGRect(origin: .zero, size: CGSize(width: availableSize.width * 2.0, height: availableSize.height * 2.0))
             if self.sceneView.superview == self {
                 self.sceneView.center = CGPoint(x: availableSize.width / 2.0, y: availableSize.height / 2.0)
@@ -503,7 +511,7 @@ class PremiumCoinComponent: Component {
         return View(frame: CGRect(), isIntro: self.isIntro)
     }
     
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
     }
 }

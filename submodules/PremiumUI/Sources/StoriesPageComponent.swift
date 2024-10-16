@@ -12,6 +12,7 @@ import TelegramPresentationData
 import BundleIconComponent
 import AvatarNode
 import AvatarStoryIndicatorComponent
+import ScrollComponent
 
 private final class AvatarComponent: Component {
     let context: AccountContext
@@ -56,7 +57,7 @@ private final class AvatarComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
-        func update(component: AvatarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+        func update(component: AvatarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
             
@@ -105,7 +106,7 @@ private final class AvatarComponent: Component {
         return View(frame: CGRect())
     }
 
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
@@ -515,7 +516,7 @@ final class StoriesPageComponent: CombinedComponent {
         let updateDismissOffset: (CGFloat) -> Void
         let updatedIsDisplaying: (Bool) -> Void
         
-        var resetScroll: ActionSlot<Void>?
+        var resetScroll: ActionSlot<CGPoint?>?
         
         var topContentOffset: CGFloat = 0.0
         var bottomContentOffset: CGFloat = 100.0 {
@@ -536,7 +537,7 @@ final class StoriesPageComponent: CombinedComponent {
                     self.updatedIsDisplaying(self.isDisplaying)
                     
                     if !self.isDisplaying {
-                        self.resetScroll?.invoke(Void())
+                        self.resetScroll?.invoke(nil)
                     }
                 }
             }
@@ -583,7 +584,7 @@ final class StoriesPageComponent: CombinedComponent {
         let topSeparator = Child(Rectangle.self)
         let title = Child(MultilineTextComponent.self)
         
-        let resetScroll = ActionSlot<Void>()
+        let resetScroll = ActionSlot<CGPoint?>()
         
         return { context in
             let state = context.state

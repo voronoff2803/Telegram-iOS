@@ -48,7 +48,7 @@ public final class EntitySearchContainerController: ViewController {
         self.node.containerLayoutUpdated(layout, transition: transition)
     }
     
-    private class Node: ViewControllerTracingNode, UIScrollViewDelegate {
+    private class Node: ViewControllerTracingNode, ASScrollViewDelegate {
         private weak var controller: EntitySearchContainerController?
         
         private let containerNode: EntitySearchContainerNode
@@ -137,7 +137,7 @@ final class EntitySearchContentComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
-        func update(component: EntitySearchContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: Transition) -> CGSize {
+        func update(component: EntitySearchContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             let containerNode: EntitySearchContainerNode?
             if let current = self.containerNode {
                 containerNode = current
@@ -174,7 +174,7 @@ final class EntitySearchContentComponent: Component {
         return View(frame: CGRect())
     }
     
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

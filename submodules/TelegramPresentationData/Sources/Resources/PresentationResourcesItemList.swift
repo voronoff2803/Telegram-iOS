@@ -69,6 +69,12 @@ public struct PresentationResourcesItemList {
         })
     }
     
+    public static func accentDeleteIconImage(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.itemListAccentDeleteIcon.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/MessageSelectionTrash"), color: theme.list.itemAccentColor)
+        })
+    }
+    
     public static func deleteIconImage(_ theme: PresentationTheme) -> UIImage? {
         return theme.image(PresentationResourceKey.itemListDeleteIcon.rawValue, { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/MessageSelectionTrash"), color: theme.list.itemDestructiveColor)
@@ -381,6 +387,49 @@ public struct PresentationResourcesItemList {
     public static func statsForwardsIcon(_ theme: PresentationTheme) -> UIImage? {
         return theme.image(PresentationResourceKey.statsForwardsIcon.rawValue, { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chart/Forwards"), color: theme.list.itemSecondaryTextColor)
+        })
+    }
+    
+    public static func sharedLinkIcon(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.sharedLinkIcon.rawValue, { theme in
+            return generateImage(CGSize(width: 40.0, height: 40.0), rotatedContext: { size, context in
+                UIGraphicsPushContext(context)
+                defer {
+                    UIGraphicsPopContext()
+                }
+                
+                context.clear(CGRect(origin: CGPoint(), size: size))
+                context.setFillColor(theme.list.itemCheckColors.fillColor.cgColor)
+                context.fillEllipse(in: CGRect(origin: CGPoint(), size: size))
+                
+                if let image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.list.itemCheckColors.foregroundColor) {
+                    image.draw(at: CGPoint(x: floor((size.width - image.size.width) * 0.5), y: floor((size.height - image.size.height) * 0.5)))
+                }
+            })
+        })
+    }
+    
+    public static func hideIconImage(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.hideIconImage.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Chat List/Archive/IconHide"), color: theme.list.itemAccentColor)
+        })
+    }
+    
+    public static func peerStatusLockedImage(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.peerStatusLockedImage.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Stickers/SmallLock"), color: theme.list.itemSecondaryTextColor)
+        })
+    }
+    
+    public static func expandDownArrowImage(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.expandDownArrowImage.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Item List/ExpandingItemVerticalRegularArrow"), color: .white)?.withRenderingMode(.alwaysTemplate)
+        })
+    }
+    
+    public static func expandSmallDownArrowImage(_ theme: PresentationTheme) -> UIImage? {
+        return theme.image(PresentationResourceKey.expandSmallDownArrowImage.rawValue, { theme in
+            return generateTintedImage(image: UIImage(bundleImageName: "Item List/ExpandingItemVerticalSmallArrow"), color: .white)?.withRenderingMode(.alwaysTemplate)
         })
     }
 }

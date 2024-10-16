@@ -5,11 +5,11 @@ import AccountContext
 import Postbox
 import TelegramCore
 
-private func entitiesPath() -> String {
+func entitiesPath() -> String {
     return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0] + "/mediaEntities"
 }
 
-private func fullEntityMediaPath(_ path: String) -> String {
+func fullEntityMediaPath(_ path: String) -> String {
     return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0] + "/mediaEntities/" + path
 }
 
@@ -32,7 +32,8 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
             case sticker
             case reaction(MessageReaction.Reaction, ReactionStyle)
         }
-        case file(TelegramMediaFile, FileType)
+        
+        case file(FileMediaReference, FileType)
         case image(UIImage, ImageType)
         case animatedImage(Data, UIImage)
         case video(TelegramMediaFile)
@@ -43,7 +44,7 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
             switch lhs {
             case let .file(lhsFile, lhsFileType):
                 if case let .file(rhsFile, rhsFileType) = rhs {
-                    return lhsFile.fileId == rhsFile.fileId && lhsFileType == rhsFileType
+                    return lhsFile.media.fileId == rhsFile.media.fileId && lhsFileType == rhsFileType
                 } else {
                     return false
                 }
@@ -135,6 +136,9 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
     public var secondaryRenderImage: UIImage?
     public var overlayRenderImage: UIImage?
     
+    public var tertiaryRenderImage: UIImage?
+    public var quaternaryRenderImage: UIImage?
+    
     public var center: CGPoint {
         return self.position
     }
@@ -152,7 +156,7 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
             if case .reaction = type {
                 dimensions = CGSize(width: 512.0, height: 512.0)
             } else {
-                dimensions = file.dimensions?.cgSize ?? CGSize(width: 512.0, height: 512.0)
+                dimensions = file.media.dimensions?.cgSize ?? CGSize(width: 512.0, height: 512.0)
             }
         case let .video(file):
             dimensions = file.dimensions?.cgSize ?? CGSize(width: 512.0, height: 512.0)
@@ -176,7 +180,7 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
                 case .reaction:
                     return false
                 default:
-                    return file.isAnimatedSticker || file.isVideoSticker || file.mimeType == "video/webm"
+                    return file.media.isAnimatedSticker || file.media.isVideoSticker || file.media.mimeType == "video/webm"
                 }
             }
         case .image:
@@ -248,7 +252,9 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
             } else {
                 fileType = .sticker
             }
-            self.content = .file(file, fileType)
+            self.content = .file(.standalone(media: file), fileType)
+        } else if let dataPath = try container.decodeIfPresent(String.self, forKey: .animatedImagePath), let data = try? Data(contentsOf: URL(fileURLWithPath: fullEntityMediaPath(dataPath))), let imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath), let thumbnailImage = UIImage(contentsOfFile: fullEntityMediaPath(imagePath)) {
+            self.content = .animatedImage(data, thumbnailImage)
         } else if let imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath), let image = UIImage(contentsOfFile: fullEntityMediaPath(imagePath)) {
             let isRectangle = try container.decodeIfPresent(Bool.self, forKey: .isRectangle) ?? false
             let isDualPhoto = try container.decodeIfPresent(Bool.self, forKey: .isDualPhoto) ?? false
@@ -261,8 +267,6 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
                 imageType = .sticker
             }
             self.content = .image(image, imageType)
-        } else if let dataPath = try container.decodeIfPresent(String.self, forKey: .animatedImagePath), let data = try? Data(contentsOf: URL(fileURLWithPath: fullEntityMediaPath(dataPath))), let imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath), let thumbnailImage = UIImage(contentsOfFile: fullEntityMediaPath(imagePath)) {
-            self.content = .animatedImage(data, thumbnailImage)
         } else if let file = try container.decodeIfPresent(TelegramMediaFile.self, forKey: .videoFile) {
             self.content = .video(file)
         } else {
@@ -290,7 +294,7 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
         try container.encode(self.uuid, forKey: .uuid)
         switch self.content {
         case let .file(file, fileType):
-            try container.encode(file, forKey: .file)
+            try container.encode(file.media, forKey: .file)
             switch fileType {
             case let .reaction(reaction, reactionStyle):
                 try container.encode(reaction, forKey: .reaction)
@@ -405,5 +409,63 @@ public final class DrawingStickerEntity: DrawingEntity, Codable {
             return false
         }
         return true
+    }
+}
+
+public extension UIImage {
+    class func animatedImageFromData(data: Data) -> DrawingAnimatedImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return nil
+        }
+
+        let count = CGImageSourceGetCount(source)
+        var images = [UIImage]()
+        var duration = 0.0
+
+        for i in 0 ..< count {
+            if let cgImage = CGImageSourceCreateImageAtIndex(source, i, nil) {
+                let image = UIImage(cgImage: cgImage)
+                images.append(image)
+
+                let delaySeconds = UIImage.delayForImageAtIndex(Int(i), source: source)
+                duration += delaySeconds
+            }
+        }
+
+        return DrawingAnimatedImage(images: images, duration: duration)
+    }
+
+    class func delayForImageAtIndex(_ index: Int, source: CGImageSource!) -> Double {
+        var delay = 0.0
+        guard #available(iOS 13.0, *) else {
+            return delay
+        }
+
+        let cfProperties = CGImageSourceCopyPropertiesAtIndex(source, index, nil)
+        let gifPropertiesPointer = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: 0)
+        if CFDictionaryGetValueIfPresent(cfProperties, Unmanaged.passUnretained(kCGImagePropertyHEICSDictionary).toOpaque(), gifPropertiesPointer) == false {
+            return delay
+        }
+
+        let gifProperties:CFDictionary = unsafeBitCast(gifPropertiesPointer.pointee, to: CFDictionary.self)
+
+        var delayObject: AnyObject = unsafeBitCast(CFDictionaryGetValue(gifProperties, Unmanaged.passUnretained(kCGImagePropertyHEICSUnclampedDelayTime).toOpaque()), to: AnyObject.self)
+        if delayObject.doubleValue == 0 {
+            delayObject = unsafeBitCast(CFDictionaryGetValue(gifProperties, Unmanaged.passUnretained(kCGImagePropertyHEICSDelayTime).toOpaque()), to: AnyObject.self)
+        }
+
+        delay = delayObject as? Double ?? 0
+
+        return delay
+    }
+}
+
+public final class DrawingAnimatedImage {
+    public let images: [UIImage]
+    public let duration: Double
+
+    init(images: [UIImage], duration: Double) {
+        self.images = images
+        self.duration = duration
     }
 }

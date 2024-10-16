@@ -220,7 +220,19 @@ func updateChatPresentationInterfaceStateImpl(
         }
     }
     
-    if let (updatedUrlPreviewState, updatedUrlPreviewSignal) = urlPreviewStateForInputText(updatedChatPresentationInterfaceState.interfaceState.composeInputState.inputText, context: selfController.context, currentQuery: selfController.urlPreviewQueryState?.0, forPeerId: selfController.chatLocation.peerId) {
+    var canHaveUrlPreview = true
+    if case let .customChatContents(customChatContents) = updatedChatPresentationInterfaceState.subject {
+        switch customChatContents.kind {
+        case .hashTagSearch:
+            break
+        case .quickReplyMessageInput:
+            break
+        case .businessLinkSetup:
+            canHaveUrlPreview = false
+        }
+    }
+    
+    if canHaveUrlPreview, let (updatedUrlPreviewState, updatedUrlPreviewSignal) = urlPreviewStateForInputText(updatedChatPresentationInterfaceState.interfaceState.composeInputState.inputText, context: selfController.context, currentQuery: selfController.urlPreviewQueryState?.0, forPeerId: selfController.chatLocation.peerId) {
         selfController.urlPreviewQueryState?.1.dispose()
         var inScope = true
         var inScopeResult: ((TelegramMediaWebpage?) -> (TelegramMediaWebpage, String)?)?
@@ -562,15 +574,7 @@ func updateChatPresentationInterfaceStateImpl(
             controller.updateVisibility()
         }
     }
- 
-    if let currentMenuWebAppController = selfController.currentMenuWebAppController, !selfController.presentationInterfaceState.showWebView {
-        selfController.currentMenuWebAppController = nil
-        if let currentMenuWebAppController = currentMenuWebAppController as? AttachmentController {
-            currentMenuWebAppController.ensureUnfocused = false
-        }
-        currentMenuWebAppController.dismiss(animated: true, completion: nil)
-    }
-    
+     
     selfController.presentationInterfaceStatePromise.set(selfController.presentationInterfaceState)
     
     if case .tag = selfController.chatDisplayNode.historyNode.tag {
@@ -583,6 +587,10 @@ func updateChatPresentationInterfaceStateImpl(
     }
     
     selfController.updateDownButtonVisibility()
+    
+    if selfController.presentationInterfaceState.hasBirthdayToday {
+        selfController.displayBirthdayTooltip()
+    }
     
     if case .standard(.embedded) = selfController.presentationInterfaceState.mode, let controllerInteraction = selfController.controllerInteraction, let interfaceInteraction = selfController.interfaceInteraction {
         if let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(selfController.presentationInterfaceState, context: selfController.context, currentPanel: selfController.customNavigationPanelNode as? ChatTitleAccessoryPanelNode, controllerInteraction: controllerInteraction, interfaceInteraction: interfaceInteraction, force: true) {

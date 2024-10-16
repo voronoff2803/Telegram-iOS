@@ -34,7 +34,7 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
             items.append(.action(ContextMenuActionItem(text: strings.StoryFeed_ContextOpenProfile, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/User"), color: theme.contextMenu.primaryColor)
             }, action: { c, _ in
-                c.dismiss(completion: {
+                c?.dismiss(completion: {
                     let _ = (context.engine.data.get(
                         TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)
                     )
@@ -188,10 +188,12 @@ func contactContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, con
                                 let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                                 let text: String
                                 switch error {
-                                    case .limitExceeded:
-                                        text = presentationData.strings.TwoStepAuth_FloodError
-                                    default:
-                                        text = presentationData.strings.Login_UnknownError
+                                case .limitExceeded:
+                                    text = presentationData.strings.TwoStepAuth_FloodError
+                                case .premiumRequired:
+                                    text = presentationData.strings.Conversation_SendMessageErrorNonPremiumForbidden(peer.compactDisplayTitle).string
+                                default:
+                                    text = presentationData.strings.Login_UnknownError
                                 }
                                 contactsController.present(textAlertController(context: context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), in: .window(.root))
                             }

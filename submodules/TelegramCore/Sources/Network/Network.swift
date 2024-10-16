@@ -434,13 +434,14 @@ public struct NetworkInitializationArguments {
     public let voipMaxLayer: Int32
     public let voipVersions: [CallSessionManagerImplementationVersion]
     public let appData: Signal<Data?, NoError>
+    public let externalRequestVerificationStream: Signal<[String: String], NoError>
     public let autolockDeadine: Signal<Int32?, NoError>
     public let encryptionProvider: EncryptionProvider
     public let deviceModelName:String?
     public let useBetaFeatures: Bool
     public let isICloudEnabled: Bool
     
-    public init(apiId: Int32, apiHash: String, languagesCategory: String, appVersion: String, voipMaxLayer: Int32, voipVersions: [CallSessionManagerImplementationVersion], appData: Signal<Data?, NoError>, autolockDeadine: Signal<Int32?, NoError>, encryptionProvider: EncryptionProvider, deviceModelName: String?, useBetaFeatures: Bool, isICloudEnabled: Bool) {
+    public init(apiId: Int32, apiHash: String, languagesCategory: String, appVersion: String, voipMaxLayer: Int32, voipVersions: [CallSessionManagerImplementationVersion], appData: Signal<Data?, NoError>, externalRequestVerificationStream: Signal<[String: String], NoError>, autolockDeadine: Signal<Int32?, NoError>, encryptionProvider: EncryptionProvider, deviceModelName: String?, useBetaFeatures: Bool, isICloudEnabled: Bool) {
         self.apiId = apiId
         self.apiHash = apiHash
         self.languagesCategory = languagesCategory
@@ -448,6 +449,7 @@ public struct NetworkInitializationArguments {
         self.voipMaxLayer = voipMaxLayer
         self.voipVersions = voipVersions
         self.appData = appData
+        self.externalRequestVerificationStream = externalRequestVerificationStream
         self.autolockDeadine = autolockDeadine
         self.encryptionProvider = encryptionProvider
         self.deviceModelName = deviceModelName
@@ -459,7 +461,7 @@ public struct NetworkInitializationArguments {
 private let cloudDataContext = Atomic<CloudDataContext?>(value: nil)
 #endif
 
-func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializationArguments, supplementary: Bool, datacenterId: Int, keychain: Keychain, basePath: String, testingEnvironment: Bool, languageCode: String?, proxySettings: ProxySettings?, networkSettings: NetworkSettings?, phoneNumber: String?, useRequestTimeoutTimers: Bool) -> Signal<Network, NoError> {
+func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializationArguments, supplementary: Bool, datacenterId: Int, keychain: Keychain, basePath: String, testingEnvironment: Bool, languageCode: String?, proxySettings: ProxySettings?, networkSettings: NetworkSettings?, phoneNumber: String?, useRequestTimeoutTimers: Bool, appConfiguration: AppConfiguration) -> Signal<Network, NoError> {
     return Signal { subscriber in
         let queue = Queue()
         queue.async {
@@ -573,6 +575,25 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             
             if !supplementary {
                 context.setDiscoverBackupAddressListSignal(MTBackupAddressSignals.fetchBackupIps(testingEnvironment, currentContext: context, additionalSource: wrappedAdditionalSource, phoneNumber: phoneNumber, mainDatacenterId: datacenterId))
+                let externalRequestVerificationStream = arguments.externalRequestVerificationStream
+                context.setExternalRequestVerification({ nonce in
+                    return MTSignal(generator: { subscriber in
+                        let disposable = (externalRequestVerificationStream
+                        |> map { dict -> String? in
+                            return dict[nonce]
+                        }
+                        |> filter { $0 != nil }
+                        |> take(1)
+                        |> timeout(15.0, queue: .mainQueue(), alternate: .single("APNS_PUSH_TIMEOUT"))).start(next: { secret in
+                            subscriber?.putNext(secret)
+                            subscriber?.putCompletion()
+                        })
+                        
+                        return MTBlockDisposable(block: {
+                            disposable.dispose()
+                        })
+                    })
+                })
             }
             
             /*#if DEBUG
@@ -609,9 +630,17 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
             mtProto.delegate = connectionStatusDelegate
             mtProto.add(requestService)
             
-            let useExperimentalFeatures = networkSettings?.useExperimentalDownload ?? false
+            var useExperimentalFeatures = networkSettings?.useExperimentalDownload ?? true
+            if let data = appConfiguration.data, let _ = data["ios_killswitch_disable_downloadv2"] {
+                useExperimentalFeatures = false
+            }
             
             let network = Network(queue: queue, datacenterId: datacenterId, context: context, mtProto: mtProto, requestService: requestService, connectionStatusDelegate: connectionStatusDelegate, _connectionStatus: connectionStatus, basePath: basePath, appDataDisposable: appDataDisposable, encryptionProvider: arguments.encryptionProvider, useRequestTimeoutTimers: useRequestTimeoutTimers, useBetaFeatures: arguments.useBetaFeatures, useExperimentalFeatures: useExperimentalFeatures)
+            
+            if let data = appConfiguration.data, let notifyInterval = data["upload_premium_speedup_notify_period"] as? Double {
+                network.updateNetworkSpeedLimitedEventNotifyInterval(value: notifyInterval)
+            }
+            
             appDataUpdatedImpl = { [weak network] data in
                 guard let data = data else {
                     return
@@ -734,6 +763,26 @@ public enum NetworkRequestResult<T> {
     case progress(Float, Int32)
 }
 
+private final class NetworkSpeedLimitedEventState {
+    var notifyInterval: Double = 60.0 * 60.0
+    var lastNotifyTimestamp: Double = 0.0
+    
+    func add(event: NetworkSpeedLimitedEvent) -> Bool {
+        let timestamp = CFAbsoluteTimeGetCurrent()
+        
+        if self.lastNotifyTimestamp + self.notifyInterval < timestamp {
+            return true
+        } else {
+            return false
+        }
+    }
+    
+    func markNotifyTimestamp() {
+        let timestamp = CFAbsoluteTimeGetCurrent()
+        self.lastNotifyTimestamp = timestamp
+    }
+}
+
 public final class Network: NSObject, MTRequestMessageServiceDelegate {
     public let encryptionProvider: EncryptionProvider
     
@@ -765,6 +814,12 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
     public var connectionStatus: Signal<ConnectionStatus, NoError> {
         return self._connectionStatus.get() |> distinctUntilChanged
     }
+    
+    public var networkSpeedLimitedEvents: Signal<NetworkSpeedLimitedEvent, NoError> {
+        return self.networkSpeedLimitedEventPipe.signal()
+    }
+    private let networkSpeedLimitedEventPipe = ValuePipe<NetworkSpeedLimitedEvent>()
+    private let networkSpeedLimitedEventState = Atomic<NetworkSpeedLimitedEventState>(value: NetworkSpeedLimitedEventState())
     
     public func dropConnectionStatus() {
         _connectionStatus.set(.single(.waitingForNetwork))
@@ -826,18 +881,18 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
                     let array = NSMutableArray()
                     if let result = result {
                         switch result {
-                            case let .cdnConfig(publicKeys):
-                                for key in publicKeys {
-                                    switch key {
-                                        case let .cdnPublicKey(dcId, publicKey):
-                                            if id == Int(dcId) {
-                                                let dict = NSMutableDictionary()
-                                                dict["key"] = publicKey
-                                                dict["fingerprint"] = MTRsaFingerprint(encryptionProvider, publicKey)
-                                                array.add(dict)
-                                            }
+                        case let .cdnConfig(publicKeys):
+                            for key in publicKeys {
+                                switch key {
+                                case let .cdnPublicKey(dcId, publicKey):
+                                    if id == Int(dcId) {
+                                        let dict = NSMutableDictionary()
+                                        dict["key"] = publicKey
+                                        dict["fingerprint"] = MTRsaFingerprint(encryptionProvider, publicKey)
+                                        array.add(dict)
                                     }
                                 }
+                            }
                         }
                     }
                     return array
@@ -867,20 +922,24 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
                 let isCdn: Bool
                 let isMedia: Bool = true
                 switch target {
-                    case let .main(id):
-                        datacenterId = id
-                        isCdn = false
-                    case let .cdn(id):
-                        datacenterId = id
-                        isCdn = true
+                case let .main(id):
+                    datacenterId = id
+                    isCdn = false
+                case let .cdn(id):
+                    datacenterId = id
+                    isCdn = true
                 }
-                return strongSelf.makeWorker(datacenterId: datacenterId, isCdn: isCdn, isMedia: isMedia, tag: tag, continueInBackground: continueInBackground)
+                if datacenterId != 0 {
+                    return strongSelf.makeWorker(datacenterId: datacenterId, isCdn: isCdn, isMedia: isMedia, tag: tag, continueInBackground: continueInBackground)
+                } else {
+                    return nil
+                }
             }
             return nil
         })
         
         let shouldKeepConnectionSignal = self.shouldKeepConnection.get()
-            |> distinctUntilChanged |> deliverOn(queue)
+        |> distinctUntilChanged |> deliverOn(queue)
         self.shouldKeepConnectionDisposable.set(shouldKeepConnectionSignal.start(next: { [weak self] value in
             if let strongSelf = self {
                 if value {
@@ -967,11 +1026,11 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
             self.context.addAddressForDatacenter(withId: Int(datacenterId), address: address)
             
             /*let currentScheme = self.context.transportSchemeForDatacenter(withId: Int(datacenterId), media: false, isProxy: false)
-            if let currentScheme = currentScheme, currentScheme.address.isEqual(to: address) {
-            } else {
-                let scheme = MTTransportScheme(transport: MTTcpTransport.self, address: address, media: false)
-                self.context.updateTransportSchemeForDatacenter(withId: Int(datacenterId), transportScheme: scheme, media: false, isProxy: false)
-            }*/
+             if let currentScheme = currentScheme, currentScheme.address.isEqual(to: address) {
+             } else {
+             let scheme = MTTransportScheme(transport: MTTcpTransport.self, address: address, media: false)
+             self.context.updateTransportSchemeForDatacenter(withId: Int(datacenterId), transportScheme: scheme, media: false, isProxy: false)
+             }*/
             
             let currentSchemes = self.context.transportSchemesForDatacenter(withId: Int(datacenterId), media: false, enforceMedia: false, isProxy: false)
             var found = false
@@ -988,7 +1047,7 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
         }
     }
     
-    public func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true) -> Signal<NetworkRequestResult<T>, MTRpcError> {
+    public func requestWithAdditionalInfo<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), info: NetworkRequestAdditionalInfo, tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<NetworkRequestResult<T>, MTRpcError> {
         let requestService = self.requestService
         return Signal { subscriber in
             let request = MTRequest()
@@ -1005,6 +1064,9 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
             request.shouldContinueExecutionWithErrorContext = { errorContext in
                 guard let errorContext = errorContext else {
                     return true
+                }
+                if let onFloodWaitError, errorContext.floodWaitSeconds > 0, let errorText = errorContext.floodWaitErrorText {
+                    onFloodWaitError(errorText)
                 }
                 if errorContext.floodWaitSeconds > 0 && !automaticFloodWait {
                     return false
@@ -1056,8 +1118,8 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
             }
         }
     }
-        
-    public func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true) -> Signal<T, MTRpcError> {
+    
+    public func request<T>(_ data: (FunctionDescription, Buffer, DeserializeFunctionResponse<T>), tag: NetworkRequestDependencyTag? = nil, automaticFloodWait: Bool = true, onFloodWaitError: ((String) -> Void)? = nil) -> Signal<T, MTRpcError> {
         let requestService = self.requestService
         return Signal { subscriber in
             let request = MTRequest()
@@ -1074,6 +1136,9 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
             request.shouldContinueExecutionWithErrorContext = { errorContext in
                 guard let errorContext = errorContext else {
                     return true
+                }
+                if let onFloodWaitError, errorContext.floodWaitSeconds > 0, let errorText = errorContext.floodWaitErrorText {
+                    onFloodWaitError(errorText)
                 }
                 if errorContext.floodWaitSeconds > 0 && !automaticFloodWait {
                     return false
@@ -1111,6 +1176,27 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
             return ActionDisposable { [weak requestService] in
                 requestService?.removeRequest(byInternalId: internalId)
             }
+        }
+    }
+    
+    func updateNetworkSpeedLimitedEventNotifyInterval(value: Double) {
+        let _ = self.networkSpeedLimitedEventState.with { state in
+            state.notifyInterval = value
+        }
+    }
+    
+    func addNetworkSpeedLimitedEvent(event: NetworkSpeedLimitedEvent) {
+        let notify = self.networkSpeedLimitedEventState.with { state in
+            return state.add(event: event)
+        }
+        if notify {
+            self.networkSpeedLimitedEventPipe.putNext(event)
+        }
+    }
+    
+    public func markNetworkSpeedLimitDisplayed() {
+        self.networkSpeedLimitedEventState.with { state in
+            return state.markNotifyTimestamp()
         }
     }
 }

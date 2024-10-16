@@ -127,6 +127,7 @@ public final class AccountContextImpl: AccountContext {
     public let wallpaperUploadManager: WallpaperUploadManager?
     private let themeUpdateManager: ThemeUpdateManager?
     public let inAppPurchaseManager: InAppPurchaseManager?
+    public let starsContext: StarsContext?
     
     public let peerChannelMemberCategoriesContextsManager = PeerChannelMemberCategoriesContextsManager()
     
@@ -173,21 +174,21 @@ public final class AccountContextImpl: AccountContext {
     public let animationRenderer: MultiAnimationRenderer
     
     private var animatedEmojiStickersDisposable: Disposable?
-    public private(set) var animatedEmojiStickers: [String: [StickerPackItem]] = [:]
-    private let animatedEmojiStickersValue = Promise<[String: [StickerPackItem]]>()
-    public var animatedEmojiStickersSignal: Signal<[String: [StickerPackItem]], NoError> {
-        return self.animatedEmojiStickersValue.get()
+    public private(set) var animatedEmojiStickersValue: [String: [StickerPackItem]] = [:]
+    private let animatedEmojiStickersPromise = Promise<[String: [StickerPackItem]]>()
+    public var animatedEmojiStickers: Signal<[String: [StickerPackItem]], NoError> {
+        return self.animatedEmojiStickersPromise.get()
     }
     
-    private var additionalAnimatedEmojiStickersValue: Promise<[String: [Int: StickerPackItem]]>?
+    private var additionalAnimatedEmojiStickersPromise: Promise<[String: [Int: StickerPackItem]]>?
     public var additionalAnimatedEmojiStickers: Signal<[String: [Int: StickerPackItem]], NoError> {
-        let additionalAnimatedEmojiStickersValue: Promise<[String: [Int: StickerPackItem]]>
-        if let current = self.additionalAnimatedEmojiStickersValue {
-            additionalAnimatedEmojiStickersValue = current
+        let additionalAnimatedEmojiStickersPromise: Promise<[String: [Int: StickerPackItem]]>
+        if let current = self.additionalAnimatedEmojiStickersPromise {
+            additionalAnimatedEmojiStickersPromise = current
         } else {
-            additionalAnimatedEmojiStickersValue = Promise<[String: [Int: StickerPackItem]]>()
-            self.additionalAnimatedEmojiStickersValue = additionalAnimatedEmojiStickersValue
-            additionalAnimatedEmojiStickersValue.set(self.engine.stickers.loadedStickerPack(reference: .animatedEmojiAnimations, forceActualized: false)
+            additionalAnimatedEmojiStickersPromise = Promise<[String: [Int: StickerPackItem]]>()
+            self.additionalAnimatedEmojiStickersPromise = additionalAnimatedEmojiStickersPromise
+            additionalAnimatedEmojiStickersPromise.set(self.engine.stickers.loadedStickerPack(reference: .animatedEmojiAnimations, forceActualized: false)
             |> map { animatedEmoji -> [String: [Int: StickerPackItem]] in
                 let sequence = "0️⃣1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣8️⃣9️⃣".strippedEmoji
                 var animatedEmojiStickers: [String: [Int: StickerPackItem]] = [:]
@@ -225,7 +226,7 @@ public final class AccountContextImpl: AccountContext {
                 return animatedEmojiStickers
             })
         }
-        return additionalAnimatedEmojiStickersValue.get()
+        return additionalAnimatedEmojiStickersPromise.get()
     }
     
     private var availableReactionsValue: Promise<AvailableReactions?>?
@@ -239,6 +240,19 @@ public final class AccountContextImpl: AccountContext {
             availableReactionsValue.set(self.engine.stickers.availableReactions())
         }
         return availableReactionsValue.get()
+    }
+    
+    private var availableMessageEffectsValue: Promise<AvailableMessageEffects?>?
+    public var availableMessageEffects: Signal<AvailableMessageEffects?, NoError> {
+        let availableMessageEffectsValue: Promise<AvailableMessageEffects?>
+        if let current = self.availableMessageEffectsValue {
+            availableMessageEffectsValue = current
+        } else {
+            availableMessageEffectsValue = Promise<AvailableMessageEffects?>()
+            self.availableMessageEffectsValue = availableMessageEffectsValue
+            availableMessageEffectsValue.set(self.engine.stickers.availableMessageEffects())
+        }
+        return availableMessageEffectsValue.get()
     }
     
     private var userLimitsConfigurationDisposable: Disposable?
@@ -281,18 +295,18 @@ public final class AccountContextImpl: AccountContext {
             self.themeUpdateManager = ThemeUpdateManagerImpl(sharedContext: sharedContext, account: account)
             
             self.inAppPurchaseManager = InAppPurchaseManager(engine: self.engine)
+            self.starsContext = self.engine.payments.peerStarsContext()
         } else {
             self.prefetchManager = nil
             self.wallpaperUploadManager = nil
             self.themeUpdateManager = nil
             self.inAppPurchaseManager = nil
+            self.starsContext = nil
         }
         
-        if let locationManager = self.sharedContextImpl.locationManager, sharedContext.applicationBindings.isMainApp && !temp {
-            self.peersNearbyManager = PeersNearbyManagerImpl(account: account, engine: self.engine, locationManager: locationManager, inForeground: sharedContext.applicationBindings.applicationInForeground)
-        } else {
-            self.peersNearbyManager = nil
-        }
+        self.account.stateManager.starsContext = self.starsContext
+        
+        self.peersNearbyManager = nil
         
         self.cachedGroupCallContexts = AccountGroupCallContextCacheImpl()
         
@@ -391,8 +405,8 @@ public final class AccountContextImpl: AccountContext {
             guard let strongSelf = self else {
                 return
             }
-            strongSelf.animatedEmojiStickers = stickers
-            strongSelf.animatedEmojiStickersValue.set(.single(stickers))
+            strongSelf.animatedEmojiStickersValue = stickers
+            strongSelf.animatedEmojiStickersPromise.set(.single(stickers))
         })
         
         self.userLimitsConfigurationDisposable = (self.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: account.peerId))
@@ -564,8 +578,8 @@ public final class AccountContextImpl: AccountContext {
         }
     }
     
-    public func scheduleGroupCall(peerId: PeerId) {
-        let _ = self.sharedContext.callManager?.scheduleGroupCall(context: self, peerId: peerId, endCurrentIfAny: true)
+    public func scheduleGroupCall(peerId: PeerId, parentController: ViewController) {
+        let _ = self.sharedContext.callManager?.scheduleGroupCall(context: self, peerId: peerId, endCurrentIfAny: true, parentController: parentController)
     }
     
     public func joinGroupCall(peerId: PeerId, invite: String?, requestJoinAsPeerId: ((@escaping (PeerId?) -> Void) -> Void)?, activeCall: EngineGroupCallDescription) {

@@ -601,7 +601,16 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
         }
         
         let textSize: CGSize
-        if case .attributedString = self.text, let context = self.context {
+        
+        var isTextWithEntities = false
+        switch self.text {
+        case .attributedString, .entities:
+            isTextWithEntities = true
+        default:
+            break
+        }
+        
+        if isTextWithEntities, let context = self.context {
             textSize = self.textView.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextWithEntitiesComponent(
@@ -612,7 +621,7 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
                     text: .plain(attributedText),
                     horizontalAlignment: self.textAlignment == .center ? .center : .left,
                     truncationType: .end,
-                    maximumNumberOfLines: 3,
+                    maximumNumberOfLines: 0,
                     lineSpacing: 0.2,
                     highlightAction: nil,
                     tapAction: { _, _ in
@@ -783,7 +792,7 @@ private final class TooltipScreenNode: ViewControllerTracingNode {
             var avatarFrame = animationFrame
             
             if let icon, case let .peer(_, isStory) = icon, isStory {
-                let indicatorTransition: Transition = .immediate
+                let indicatorTransition: ComponentTransition = .immediate
                 let avatarStoryIndicator: ComponentView<Empty>
                 if let current = self.avatarStoryIndicator {
                     avatarStoryIndicator = current

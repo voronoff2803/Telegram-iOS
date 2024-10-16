@@ -31,6 +31,8 @@ import PremiumGiftAttachmentScreen
 import TelegramCallsUI
 import AutomaticBusinessMessageSetupScreen
 import MediaEditorScreen
+import CameraScreen
+import ShareController
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
@@ -41,6 +43,10 @@ extension ChatControllerImpl {
     }
     
     func presentAttachmentMenu(subject: AttachMenuSubject) {
+        guard self.audioRecorderValue == nil && self.videoRecorderValue == nil else {
+            return
+        }
+        
         let context = self.context
         let inputIsActive = self.presentationInterfaceState.inputMode == .text
         
@@ -197,7 +203,15 @@ extension ChatControllerImpl {
         
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
         let premiumGiftOptions: [CachedPremiumGiftOption]
-        if let peer = self.presentationInterfaceState.renderedPeer?.peer, !premiumConfiguration.isPremiumDisabled, premiumConfiguration.showPremiumGiftInAttachMenu, let user = peer as? TelegramUser, !user.isPremium && !user.isDeleted && user.botInfo == nil && !user.flags.contains(.isSupport) {
+        
+        var showPremiumGift = false
+        if !premiumConfiguration.isPremiumDisabled {
+            if premiumConfiguration.showPremiumGiftInAttachMenu || self.presentationInterfaceState.hasBirthdayToday {
+                showPremiumGift = true
+            }
+        }
+        
+        if let peer = self.presentationInterfaceState.renderedPeer?.peer, showPremiumGift, let user = peer as? TelegramUser, !user.isPremium && !user.isDeleted && user.botInfo == nil && !user.flags.contains(.isSupport) {
             premiumGiftOptions = self.presentationInterfaceState.premiumGiftOptions
         } else {
             premiumGiftOptions = []
@@ -267,6 +281,13 @@ extension ChatControllerImpl {
                 }
                 return EntityInputView(context: strongSelf.context, isDark: false, areCustomEmojiEnabled: strongSelf.presentationInterfaceState.customEmojiAvailable)
             })
+            attachmentController.shouldMinimizeOnSwipe = { [weak attachmentController] button in
+                if case .app = button {
+                    attachmentController?.convertToStandalone()
+                    return true
+                }
+                return false
+            }
             attachmentController.didDismiss = { [weak self] in
                 self?.attachmentController = nil
                 self?.canReadHistory.set(true)
@@ -299,11 +320,11 @@ extension ChatControllerImpl {
                         completion(controller, mediaPickerContext)
                     }, updateMediaPickerContext: { [weak attachmentController] mediaPickerContext in
                         attachmentController?.mediaPickerContext = mediaPickerContext
-                    }, completion: { [weak self] signals, silentPosting, scheduleTime, getAnimatedTransitionSource, completion in
+                    }, completion: { [weak self] signals, silentPosting, scheduleTime, parameters, getAnimatedTransitionSource, completion in
                         if !inputText.string.isEmpty {
                             self?.clearInputText()
                         }
-                        self?.enqueueMediaMessages(signals: signals, silentPosting: silentPosting, scheduleTime: scheduleTime, getAnimatedTransitionSource: getAnimatedTransitionSource, completion: completion)
+                        self?.enqueueMediaMessages(signals: signals, silentPosting: silentPosting, scheduleTime: scheduleTime, parameters: parameters, getAnimatedTransitionSource: getAnimatedTransitionSource, completion: completion)
                     })
                 case .file:
                     strongSelf.controllerNavigationDisposable.set(nil)
@@ -374,7 +395,7 @@ extension ChatControllerImpl {
                                     strongSelf.chatDisplayNode.collapseInput()
                                     
                                     strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                     })
                                 }
                             }, nil)
@@ -395,7 +416,7 @@ extension ChatControllerImpl {
                     completion(contactsController, contactsController.mediaPickerContext)
                     strongSelf.controllerNavigationDisposable.set((contactsController.result
                     |> deliverOnMainQueue).startStrict(next: { [weak self] peers in
-                        if let strongSelf = self, let (peers, _, silent, scheduleTime, text) = peers {
+                        if let strongSelf = self, let (peers, _, silent, scheduleTime, text, parameters) = peers {
                             var textEnqueueMessage: EnqueueMessage?
                             if let text = text, text.length > 0 {
                                 var attributes: [MessageAttribute] = []
@@ -438,12 +459,23 @@ extension ChatControllerImpl {
                                                 strongSelf.chatDisplayNode.collapseInput()
                                                 
                                                 strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                                 })
                                             }
                                         }, nil)
                                         let message = EnqueueMessage.message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
                                         enqueueMessages.append(message)
+                                    }
+                                }
+                                if !enqueueMessages.isEmpty {
+                                    enqueueMessages[enqueueMessages.count - 1] = enqueueMessages[enqueueMessages.count - 1].withUpdatedAttributes { attributes in
+                                        var attributes = attributes
+                                        if let parameters {
+                                            if let effect = parameters.effect {
+                                                attributes.append(EffectMessageAttribute(id: effect.id))
+                                            }
+                                        }
+                                        return attributes
                                     }
                                 }
                                 strongSelf.sendMessages(strongSelf.transformEnqueueMessages(enqueueMessages, silentPosting: silent, scheduleTime: scheduleTime))
@@ -461,14 +493,14 @@ extension ChatControllerImpl {
                                     |> mapToSignal { basicData -> Signal<(Peer?,  DeviceContactExtendedData?), NoError> in
                                         var stableId: String?
                                         let queryPhoneNumber = formatPhoneNumber(context: context, number: phoneNumber)
-                                    outer: for (id, data) in basicData {
-                                        for phoneNumber in data.phoneNumbers {
-                                            if formatPhoneNumber(context: context, number: phoneNumber.value) == queryPhoneNumber {
-                                                stableId = id
-                                                break outer
+                                        outer: for (id, data) in basicData {
+                                            for phoneNumber in data.phoneNumbers {
+                                                if formatPhoneNumber(context: context, number: phoneNumber.value) == queryPhoneNumber {
+                                                    stableId = id
+                                                    break outer
+                                                }
                                             }
                                         }
-                                    }
                                         
                                         if let stableId = stableId {
                                             return (context.sharedContext.contactDataManager?.extendedData(stableId: stableId) ?? .single(nil))
@@ -488,7 +520,7 @@ extension ChatControllerImpl {
                                     }
                                 }
                                 strongSelf.controllerNavigationDisposable.set((dataSignal
-                                                                               |> deliverOnMainQueue).startStrict(next: { peerAndContactData in
+                                |> deliverOnMainQueue).startStrict(next: { peerAndContactData in
                                     if let strongSelf = self, let contactData = peerAndContactData.1, contactData.basicData.phoneNumbers.count != 0 {
                                         if contactData.isPrimitive {
                                             let phone = contactData.basicData.phoneNumbers[0].value
@@ -499,7 +531,7 @@ extension ChatControllerImpl {
                                                     strongSelf.chatDisplayNode.collapseInput()
                                                     
                                                     strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                                     })
                                                 }
                                             }, nil)
@@ -508,10 +540,16 @@ extension ChatControllerImpl {
                                             if let textEnqueueMessage = textEnqueueMessage {
                                                 enqueueMessages.append(textEnqueueMessage)
                                             }
-                                            enqueueMessages.append(.message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+                                            var attributes: [MessageAttribute] = []
+                                            if let parameters {
+                                                if let effect = parameters.effect {
+                                                    attributes.append(EffectMessageAttribute(id: effect.id))
+                                                }
+                                            }
+                                            enqueueMessages.append(.message(text: "", attributes: attributes, inlineStickers: [:], mediaReference: .standalone(media: media), threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
                                             strongSelf.sendMessages(strongSelf.transformEnqueueMessages(enqueueMessages, silentPosting: silent, scheduleTime: scheduleTime))
                                         } else {
-                                            let contactController = strongSelf.context.sharedContext.makeDeviceContactInfoController(context: strongSelf.context, subject: .filter(peer: peerAndContactData.0, contactId: nil, contactData: contactData, completion: { peer, contactData in
+                                            let contactController = strongSelf.context.sharedContext.makeDeviceContactInfoController(context: ShareControllerAppAccountContext(context: strongSelf.context), environment: ShareControllerAppEnvironment(sharedContext: strongSelf.context.sharedContext), subject: .filter(peer: peerAndContactData.0, contactId: nil, contactData: contactData, completion: { peer, contactData in
                                                 guard let strongSelf = self, !contactData.basicData.phoneNumbers.isEmpty else {
                                                     return
                                                 }
@@ -524,7 +562,7 @@ extension ChatControllerImpl {
                                                             strongSelf.chatDisplayNode.collapseInput()
                                                             
                                                             strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                                                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                                                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                                             })
                                                         }
                                                     }, nil)
@@ -545,27 +583,26 @@ extension ChatControllerImpl {
                         }
                     }))
                 case .poll:
-                    let controller = strongSelf.configurePollCreation()
-                    completion(controller, controller?.mediaPickerContext)
-                    strongSelf.controllerNavigationDisposable.set(nil)
+                    if let controller = strongSelf.configurePollCreation() as? AttachmentContainable {
+                        completion(controller, controller.mediaPickerContext)
+                        strongSelf.controllerNavigationDisposable.set(nil)
+                    }
                 case .gift:
-                    if let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer {
+                    if let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer, let starsContext = context.starsContext {
                         let premiumGiftOptions = strongSelf.presentationInterfaceState.premiumGiftOptions
                         if !premiumGiftOptions.isEmpty {
-                            let controller = PremiumGiftAttachmentScreen(context: context, peerIds: [peer.id], options: premiumGiftOptions, source: .attachMenu, pushController: { [weak self] c in
-                                if let strongSelf = self {
-                                    strongSelf.push(c)
+                            let controller = PremiumGiftAttachmentScreen(context: context, starsContext: starsContext, peerId: peer.id, premiumOptions: premiumGiftOptions, completion: { [weak self] in
+                                guard let self else {
+                                    return
                                 }
-                            }, completion: { [weak self] in
-                                if let strongSelf = self {
-                                    strongSelf.hintPlayNextOutgoingGift()
-                                    strongSelf.attachmentController?.dismiss(animated: true)
-                                }
+                                self.hintPlayNextOutgoingGift()
+                                self.attachmentController?.dismiss(animated: true)
                             })
+                                                        
                             completion(controller, controller.mediaPickerContext)
                             strongSelf.controllerNavigationDisposable.set(nil)
                             
-                            let _ = ApplicationSpecificNotice.incrementDismissedPremiumGiftSuggestion(accountManager: context.sharedContext.accountManager, peerId: peer.id).startStandalone()
+                            let _ = ApplicationSpecificNotice.incrementDismissedPremiumGiftSuggestion(accountManager: context.sharedContext.accountManager, peerId: peer.id, timestamp: Int32(Date().timeIntervalSince1970)).startStandalone()
                         }
                     }
                 case let .app(bot):
@@ -576,7 +613,7 @@ extension ChatControllerImpl {
                             payload = botPayload
                             fromAttachMenu = false
                         }
-                        let params = WebAppParameters(source: fromAttachMenu ? .attachMenu : .generic, peerId: peer.id, botId: bot.peer.id, botName: bot.shortName, url: nil, queryId: nil, payload: payload, buttonText: nil, keepAliveSignal: nil, forceHasSettings: false)
+                        let params = WebAppParameters(source: fromAttachMenu ? .attachMenu : .generic, peerId: peer.id, botId: bot.peer.id, botName: bot.shortName, botVerified: bot.peer.isVerified, url: nil, queryId: nil, payload: payload, buttonText: nil, keepAliveSignal: nil, forceHasSettings: false, fullSize: false)
                         let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
                         let controller = WebAppController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, params: params, replyToMessageId: replyMessageSubject?.messageId, threadId: strongSelf.chatLocation.threadId)
                         controller.openUrl = { [weak self] url, concealed, commit in
@@ -588,7 +625,7 @@ extension ChatControllerImpl {
                         controller.completion = { [weak self] in
                             if let strongSelf = self {
                                 strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                 })
                                 strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
                             }
@@ -846,7 +883,7 @@ extension ChatControllerImpl {
                         }
                     }, recognizedQRCode: { [weak self] code in
                         if let strongSelf = self {
-                            if let (host, port, username, password, secret) = parseProxyUrl(code) {
+                            if let (host, port, username, password, secret) = parseProxyUrl(sharedContext: strongSelf.context.sharedContext, url: code) {
                                 strongSelf.openResolved(result: ResolvedUrl.proxy(host: host, port: port, username: username, password: password, secret: secret), sourceMessageId: nil)
                             }
                         }
@@ -868,7 +905,7 @@ extension ChatControllerImpl {
                             })
                         }
                     }, getCaptionPanelView: { [weak self] in
-                        return self?.getCaptionPanelView()
+                        return self?.getCaptionPanelView(isFile: false)
                     })
                 }
             }, openFileGallery: {
@@ -955,7 +992,7 @@ extension ChatControllerImpl {
                     })
                 }
             }, getCaptionPanelView: { [weak self] in
-                return self?.getCaptionPanelView()
+                return self?.getCaptionPanelView(isFile: false)
             }, present: { [weak self] c, a in
                 self?.present(c, in: .window(.root), with: a)
             })
@@ -1070,7 +1107,7 @@ extension ChatControllerImpl {
                                         attributes.append(.Audio(isVoice: false, duration: audioMetadata.duration, title: audioMetadata.title, performer: audioMetadata.performer, waveform: nil))
                                     }
                                     
-                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: fileId), partialReference: nil, resource: ICloudFileResource(urlData: item.urlData, thumbnail: false), previewRepresentations: previewRepresentations, videoThumbnails: [], immediateThumbnailData: nil, mimeType: mimeType, size: Int64(item.fileSize), attributes: attributes)
+                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: fileId), partialReference: nil, resource: ICloudFileResource(urlData: item.urlData, thumbnail: false), previewRepresentations: previewRepresentations, videoThumbnails: [], immediateThumbnailData: nil, mimeType: mimeType, size: Int64(item.fileSize), attributes: attributes, alternativeRepresentations: [])
                                     let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: groupingKey, correlationId: nil, bubbleUpEmojiOrStickersets: [])
                                     messages.append(message)
                                 }
@@ -1088,7 +1125,7 @@ extension ChatControllerImpl {
                                             strongSelf.chatDisplayNode.collapseInput()
                                             
                                             strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                             })
                                         }
                                     }, nil)
@@ -1126,10 +1163,14 @@ extension ChatControllerImpl {
         self.present(actionSheet, in: .window(.root))
     }
     
-    func presentMediaPicker(subject: MediaPickerScreen.Subject = .assets(nil, .default), saveEditedPhotos: Bool, bannedSendPhotos: (Int32, Bool)?, bannedSendVideos: (Int32, Bool)?, present: @escaping (MediaPickerScreen, AttachmentMediaPickerContext?) -> Void, updateMediaPickerContext: @escaping (AttachmentMediaPickerContext?) -> Void, completion: @escaping ([Any], Bool, Int32?, @escaping (String) -> UIView?, @escaping () -> Void) -> Void) {
+    func presentMediaPicker(subject: MediaPickerScreen.Subject = .assets(nil, .default), saveEditedPhotos: Bool, bannedSendPhotos: (Int32, Bool)?, bannedSendVideos: (Int32, Bool)?, present: @escaping (MediaPickerScreen, AttachmentMediaPickerContext?) -> Void, updateMediaPickerContext: @escaping (AttachmentMediaPickerContext?) -> Void, completion: @escaping ([Any], Bool, Int32?, ChatSendMessageActionSheetController.SendParameters?, @escaping (String) -> UIView?, @escaping () -> Void) -> Void) {
         var isScheduledMessages = false
         if case .scheduledMessages = self.presentationInterfaceState.subject {
             isScheduledMessages = true
+        }
+        var paidMediaAllowed = false
+        if let cachedData = self.peerView?.cachedData as? CachedChannelData, cachedData.flags.contains(.paidMediaAllowed) {
+            paidMediaAllowed = true
         }
         let controller = MediaPickerScreen(
             context: self.context,
@@ -1141,6 +1182,7 @@ extension ChatControllerImpl {
             bannedSendPhotos: bannedSendPhotos,
             bannedSendVideos: bannedSendVideos,
             canBoostToUnrestrict: (self.presentationInterfaceState.boostsToUnrestrict ?? 0) > 0 && bannedSendPhotos?.1 != true && bannedSendVideos?.1 != true,
+            paidMediaAllowed: paidMediaAllowed,
             subject: subject,
             saveEditedPhotos: saveEditedPhotos
         )
@@ -1152,7 +1194,11 @@ extension ChatControllerImpl {
         }
         let mediaPickerContext = controller.mediaPickerContext
         controller.openCamera = { [weak self] cameraView in
-            self?.openCamera(cameraView: cameraView)
+            if let cameraView = cameraView as? TGAttachmentCameraView {
+                self?.openCamera(cameraView: cameraView)
+            } else {
+                self?.openCamera(cameraView: nil)
+            }
         }
         controller.presentWebSearch = { [weak self, weak controller] mediaGroups, activateOnDisplay in
             self?.presentWebSearch(editingMessage: false, attachment: true, activateOnDisplay: activateOnDisplay, present: { [weak controller] c, a in
@@ -1194,10 +1240,10 @@ extension ChatControllerImpl {
             }
         }
         controller.getCaptionPanelView = { [weak self] in
-            return self?.getCaptionPanelView()
+            return self?.getCaptionPanelView(isFile: false)
         }
-        controller.legacyCompletion = { signals, silently, scheduleTime, getAnimatedTransitionSource, sendCompletion in
-            completion(signals, silently, scheduleTime, getAnimatedTransitionSource, sendCompletion)
+        controller.legacyCompletion = { signals, silently, scheduleTime, parameters, getAnimatedTransitionSource, sendCompletion in
+            completion(signals, silently, scheduleTime, parameters, getAnimatedTransitionSource, sendCompletion)
         }
         present(controller, mediaPickerContext)
     }
@@ -1260,7 +1306,7 @@ extension ChatControllerImpl {
                                 })
                             }))
                             controller.getCaptionPanelView = { [weak self] in
-                                return self?.getCaptionPanelView()
+                                return self?.getCaptionPanelView(isFile: fileMode)
                             }
                             strongSelf.effectiveNavigationController?.pushViewController(controller)
                         }
@@ -1295,7 +1341,7 @@ extension ChatControllerImpl {
                             })
                         }
                     }, getCaptionPanelView: { [weak self] in
-                        return self?.getCaptionPanelView()
+                        return self?.getCaptionPanelView(isFile: fileMode)
                     })
                     controller.descriptionGenerator = legacyAssetPickerItemGenerator()
                     controller.completionBlock = { [weak legacyController] signals, silentPosting, scheduleTime in
@@ -1423,7 +1469,7 @@ extension ChatControllerImpl {
                     return true
                 }
                 controller.getCaptionPanelView = { [weak strongSelf] in
-                    return strongSelf?.getCaptionPanelView()
+                    return strongSelf?.getCaptionPanelView(isFile: false)
                 }
                 present(controller, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
             }
@@ -1459,7 +1505,7 @@ extension ChatControllerImpl {
                         strongSelf.chatDisplayNode.collapseInput()
                         
                         strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                         })
                     }
                 }, nil)
@@ -1477,7 +1523,7 @@ extension ChatControllerImpl {
         self.effectiveNavigationController?.pushViewController(contactsController)
         self.controllerNavigationDisposable.set((contactsController.result
         |> deliverOnMainQueue).startStrict(next: { [weak self] peers in
-            if let strongSelf = self, let (peers, _, _, _, _) = peers {
+            if let strongSelf = self, let (peers, _, _, _, _, _) = peers {
                 if peers.count > 1 {
                     var enqueueMessages: [EnqueueMessage] = []
                     for peer in peers {
@@ -1508,7 +1554,7 @@ extension ChatControllerImpl {
                                     strongSelf.chatDisplayNode.collapseInput()
                                     
                                     strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                     })
                                 }
                             }, nil)
@@ -1569,14 +1615,14 @@ extension ChatControllerImpl {
                                         strongSelf.chatDisplayNode.collapseInput()
                                         
                                         strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                         })
                                     }
                                 }, nil)
                                 let message = EnqueueMessage.message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: media), threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
                                 strongSelf.sendMessages([message])
                             } else {
-                                let contactController = strongSelf.context.sharedContext.makeDeviceContactInfoController(context: strongSelf.context, subject: .filter(peer: peerAndContactData.0, contactId: nil, contactData: contactData, completion: { peer, contactData in
+                                let contactController = strongSelf.context.sharedContext.makeDeviceContactInfoController(context: ShareControllerAppAccountContext(context: strongSelf.context), environment: ShareControllerAppEnvironment(sharedContext: strongSelf.context.sharedContext), subject: .filter(peer: peerAndContactData.0, contactId: nil, contactData: contactData, completion: { peer, contactData in
                                     guard let strongSelf = self, !contactData.basicData.phoneNumbers.isEmpty else {
                                         return
                                     }
@@ -1589,7 +1635,7 @@ extension ChatControllerImpl {
                                                 strongSelf.chatDisplayNode.collapseInput()
                                                 
                                                 strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil) }
+                                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil) }
                                                 })
                                             }
                                         }, nil)
@@ -1606,12 +1652,12 @@ extension ChatControllerImpl {
         }))
     }
     
-    func getCaptionPanelView() -> TGCaptionPanelView? {
+    func getCaptionPanelView(isFile: Bool) -> TGCaptionPanelView? {
         var isScheduledMessages = false
         if case .scheduledMessages = self.presentationInterfaceState.subject {
             isScheduledMessages = true
         }
-        return self.context.sharedContext.makeGalleryCaptionPanelView(context: self.context, chatLocation: self.presentationInterfaceState.chatLocation, isScheduledMessages: isScheduledMessages, customEmojiAvailable: self.presentationInterfaceState.customEmojiAvailable, present: { [weak self] c in
+        return self.context.sharedContext.makeGalleryCaptionPanelView(context: self.context, chatLocation: self.presentationInterfaceState.chatLocation, isScheduledMessages: isScheduledMessages, isFile: isFile, customEmojiAvailable: self.presentationInterfaceState.customEmojiAvailable, present: { [weak self] c in
             self?.present(c, in: .window(.root))
         }, presentInGlobalOverlay: { [weak self] c in
             guard let self else {
@@ -1683,7 +1729,7 @@ extension ChatControllerImpl {
                 }
             }, recognizedQRCode: { [weak self] code in
                 if let strongSelf = self {
-                    if let (host, port, username, password, secret) = parseProxyUrl(code) {
+                    if let (host, port, username, password, secret) = parseProxyUrl(sharedContext: strongSelf.context.sharedContext, url: code) {
                         strongSelf.openResolved(result: ResolvedUrl.proxy(host: host, port: port, username: username, password: password, secret: secret), sourceMessageId: nil)
                     }
                 }
@@ -1705,7 +1751,7 @@ extension ChatControllerImpl {
                     })
                 }
             }, getCaptionPanelView: { [weak self] in
-                return self?.getCaptionPanelView()
+                return self?.getCaptionPanelView(isFile: false)
             }, dismissedWithResult: { [weak self] in
                 self?.attachmentController?.dismiss(animated: false, completion: nil)
             }, finishedTransitionIn: { [weak self] in
@@ -1715,66 +1761,87 @@ extension ChatControllerImpl {
     }
     
     func openStickerEditor() {
-        let mainController = AttachmentController(context: self.context, updatedPresentationData: self.updatedPresentationData, chatLocation: nil, buttons: [.standalone], initialButton: .standalone, fromMenu: false, hasTextInput: false, makeEntityInputView: {
-            return nil
-        })
-//        controller.forceSourceRect = true
-//        controller.getSourceRect = getSourceRect
-        mainController.requestController = { [weak self, weak mainController] _, present in
-            guard let self else {
-                return
-            }
-            let mediaPickerController = MediaPickerScreen(context: self.context, updatedPresentationData: self.updatedPresentationData, peer: nil, threadTitle: nil, chatLocation: nil, subject: .assets(nil, .createSticker))
-            mediaPickerController.customSelection = { [weak self, weak mainController] controller, result in
+        self.chatDisplayNode.dismissInput()
+        
+        var dismissImpl: (() -> Void)?
+        let mainController = self.context.sharedContext.makeStickerMediaPickerScreen(
+            context: self.context,
+            getSourceRect: { return nil },
+            completion: { [weak self] result, transitionView, transitionRect, transitionImage, fromCamera, transitionOut, cancelled in
                 guard let self else {
                     return
                 }
-                if let result = result as? PHAsset {
-                    controller.updateHiddenMediaId(result.localIdentifier)
-                    if let transitionView = controller.transitionView(for: result.localIdentifier, snapshot: false) {
-                        let editorController = MediaEditorScreen(
-                            context: self.context,
-                            mode: .stickerEditor,
-                            subject: .single(.asset(result)),
-                            transitionIn: .gallery(
-                                MediaEditorScreen.TransitionIn.GalleryTransitionIn(
-                                    sourceView: transitionView,
-                                    sourceRect: transitionView.bounds,
-                                    sourceImage: controller.transitionImage(for: result.localIdentifier)
-                                )
-                            ),
-                            transitionOut: { finished, isNew in
-                                if !finished {
-                                    return MediaEditorScreen.TransitionOut(
-                                        destinationView: transitionView,
-                                        destinationRect: transitionView.bounds,
-                                        destinationCornerRadius: 0.0
-                                    )
-                                }
-                                return nil
-                            }, completion: { [weak self, weak mainController] result, commit in
-                                mainController?.dismiss()
-                                
-                                Queue.mainQueue().after(0.1) {
-                                    commit({})
-                                    if let mediaResult = result.media, case let .image(image, _) = mediaResult {
-                                        self?.enqueueStickerImage(image, isMemoji: false)
-                                    }
-                                }
-                            } as (MediaEditorScreen.Result, @escaping (@escaping () -> Void) -> Void) -> Void
-                        )
-                        editorController.dismissed = { [weak controller] in
-                            controller?.updateHiddenMediaId(nil)
+                let subject: Signal<MediaEditorScreen.Subject?, NoError>
+                if let asset = result as? PHAsset {
+                    subject = .single(.asset(asset))
+                } else if let image = result as? UIImage {
+                    subject = .single(.image(image, PixelDimensions(image.size), nil, .bottomRight))
+                } else if let result = result as? Signal<CameraScreen.Result, NoError> {
+                    subject = result
+                    |> map { value -> MediaEditorScreen.Subject? in
+                        switch value {
+                        case .pendingImage:
+                            return nil
+                        case let .image(image):
+                            return .image(image.image, PixelDimensions(image.image.size), nil, .topLeft)
+                        default:
+                            return nil
                         }
-                        self.push(editorController)
-                                                
-//                        completion(result, transitionView, transitionView.bounds, controller.transitionImage(for: result.localIdentifier), transitionOut, { [weak controller] in
-//                            controller?.updateHiddenMediaId(nil)
-//                        })
                     }
+                } else {
+                    subject = .single(.empty(PixelDimensions(width: 1080, height: 1920)))
                 }
+                
+                let editorController = MediaEditorScreen(
+                    context: self.context,
+                    mode: .stickerEditor(mode: .generic),
+                    subject: subject,
+                    transitionIn: fromCamera ? .camera : transitionView.flatMap({ .gallery(
+                        MediaEditorScreen.TransitionIn.GalleryTransitionIn(
+                            sourceView: $0,
+                            sourceRect: transitionRect,
+                            sourceImage: transitionImage
+                        )
+                    ) }),
+                    transitionOut: { finished, isNew in
+                        if !finished, let transitionView {
+                            return MediaEditorScreen.TransitionOut(
+                                destinationView: transitionView,
+                                destinationRect: transitionView.bounds,
+                                destinationCornerRadius: 0.0
+                            )
+                        }
+                        return nil
+                    }, completion: { [weak self] result, commit in
+                        dismissImpl?()
+                        self?.chatDisplayNode.dismissInput()
+                        
+                        Queue.mainQueue().after(0.1) {
+                            commit({})
+                            if case let .sticker(file, _) = result.media {
+                                self?.enqueueStickerFile(file)
+                            }
+                        }
+                    } as (MediaEditorScreen.Result, @escaping (@escaping () -> Void) -> Void) -> Void
+                )
+                editorController.cancelled = { _ in
+                    cancelled()
+                }
+                editorController.sendSticker = { [weak self] file, sourceView, sourceRect in
+                    return self?.interfaceInteraction?.sendSticker(file, true, sourceView, sourceRect, nil, []) ?? false
+                }
+                self.push(editorController)
+            },
+            dismissed: {}
+        )
+        dismissImpl = { [weak mainController] in
+            if let mainController, let navigationController = mainController.navigationController {
+                var viewControllers = navigationController.viewControllers
+                viewControllers = viewControllers.filter { c in
+                    return !(c is CameraScreen) && c !== mainController
+                }
+                navigationController.setViewControllers(viewControllers, animated: false)
             }
-            present(mediaPickerController, mediaPickerController.mediaPickerContext)
         }
         mainController.navigationPresentation = .flatModal
         mainController.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)

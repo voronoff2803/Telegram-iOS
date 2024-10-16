@@ -42,8 +42,8 @@ private func managedRecentMedia(postbox: Postbox, network: Network, collectionId
     } |> switchToLatest
 }
 
-func managedRecentStickers(postbox: Postbox, network: Network) -> Signal<Void, NoError> {
-    return managedRecentMedia(postbox: postbox, network: network, collectionId: Namespaces.OrderedItemList.CloudRecentStickers, extractItemId: { RecentMediaItemId($0).mediaId.id }, reverseHashOrder: false, forceFetch: false, fetch: { hash in
+func managedRecentStickers(postbox: Postbox, network: Network, forceFetch: Bool = false) -> Signal<Void, NoError> {
+    return managedRecentMedia(postbox: postbox, network: network, collectionId: Namespaces.OrderedItemList.CloudRecentStickers, extractItemId: { RecentMediaItemId($0).mediaId.id }, reverseHashOrder: false, forceFetch: forceFetch, fetch: { hash in
         return network.request(Api.functions.messages.getRecentStickers(flags: 0, hash: hash))
         |> retryRequest
         |> mapToSignal { result -> Signal<[OrderedItemListEntry]?, NoError> in
@@ -53,7 +53,7 @@ func managedRecentStickers(postbox: Postbox, network: Network) -> Signal<Void, N
                 case let .recentStickers(_, _, stickers, _):
                     var items: [OrderedItemListEntry] = []
                     for sticker in stickers {
-                        if let file = telegramMediaFileFromApiDocument(sticker), let id = file.id {
+                        if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
                             if let entry = CodableEntry(RecentMediaItem(file)) {
                                 items.append(OrderedItemListEntry(id: RecentMediaItemId(id).rawValue, contents: entry))
                             }
@@ -76,7 +76,7 @@ func managedRecentGifs(postbox: Postbox, network: Network, forceFetch: Bool = fa
                     case let .savedGifs(_, gifs):
                         var items: [OrderedItemListEntry] = []
                         for gif in gifs {
-                            if let file = telegramMediaFileFromApiDocument(gif), let id = file.id {
+                            if let file = telegramMediaFileFromApiDocument(gif, altDocuments: []), let id = file.id {
                                 if let entry = CodableEntry(RecentMediaItem(file)) {
                                     items.append(OrderedItemListEntry(id: RecentMediaItemId(id).rawValue, contents: entry))
                                 }
@@ -88,8 +88,8 @@ func managedRecentGifs(postbox: Postbox, network: Network, forceFetch: Bool = fa
     })
 }
 
-func managedSavedStickers(postbox: Postbox, network: Network) -> Signal<Void, NoError> {
-    return managedRecentMedia(postbox: postbox, network: network, collectionId: Namespaces.OrderedItemList.CloudSavedStickers, extractItemId: { RecentMediaItemId($0).mediaId.id }, reverseHashOrder: true, forceFetch: false, fetch: { hash in
+func managedSavedStickers(postbox: Postbox, network: Network, forceFetch: Bool = false) -> Signal<Void, NoError> {
+    return managedRecentMedia(postbox: postbox, network: network, collectionId: Namespaces.OrderedItemList.CloudSavedStickers, extractItemId: { RecentMediaItemId($0).mediaId.id }, reverseHashOrder: true, forceFetch: forceFetch, fetch: { hash in
         return network.request(Api.functions.messages.getFavedStickers(hash: hash))
             |> retryRequest
             |> mapToSignal { result -> Signal<[OrderedItemListEntry]?, NoError> in
@@ -114,7 +114,7 @@ func managedSavedStickers(postbox: Postbox, network: Network) -> Signal<Void, No
                         
                         var items: [OrderedItemListEntry] = []
                         for sticker in stickers {
-                            if let file = telegramMediaFileFromApiDocument(sticker), let id = file.id {
+                            if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
                                 var stringRepresentations: [String] = []
                                 if let representations = fileStringRepresentations[id] {
                                     stringRepresentations = representations
@@ -141,7 +141,7 @@ func managedGreetingStickers(postbox: Postbox, network: Network) -> Signal<Void,
                 case let .stickers(_, stickers):
                     var items: [OrderedItemListEntry] = []
                     for sticker in stickers {
-                        if let file = telegramMediaFileFromApiDocument(sticker), let id = file.id {
+                        if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
                             if let entry = CodableEntry(RecentMediaItem(file)) {
                                 items.append(OrderedItemListEntry(id: RecentMediaItemId(id).rawValue, contents: entry))
                             }
@@ -165,7 +165,7 @@ func managedPremiumStickers(postbox: Postbox, network: Network) -> Signal<Void, 
                 case let .stickers(_, stickers):
                     var items: [OrderedItemListEntry] = []
                     for sticker in stickers {
-                        if let file = telegramMediaFileFromApiDocument(sticker), let id = file.id {
+                        if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
                             if let entry = CodableEntry(RecentMediaItem(file)) {
                                 items.append(OrderedItemListEntry(id: RecentMediaItemId(id).rawValue, contents: entry))
                             }
@@ -189,7 +189,7 @@ func managedAllPremiumStickers(postbox: Postbox, network: Network) -> Signal<Voi
                 case let .stickers(_, stickers):
                     var items: [OrderedItemListEntry] = []
                     for sticker in stickers {
-                        if let file = telegramMediaFileFromApiDocument(sticker), let id = file.id {
+                        if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
                             if let entry = CodableEntry(RecentMediaItem(file)) {
                                 items.append(OrderedItemListEntry(id: RecentMediaItemId(id).rawValue, contents: entry))
                             }
@@ -411,6 +411,8 @@ func managedRecentReactions(postbox: Postbox, network: Network) -> Signal<Void, 
             return 0
         case let .custom(fileId):
             return fileId.id
+        case .stars:
+            return 0
         }
     }, reverseHashOrder: false, forceFetch: false, fetch: { hash in
         return network.request(Api.functions.messages.getRecentReactions(limit: 100, hash: hash))
@@ -428,6 +430,8 @@ func managedRecentReactions(postbox: Postbox, network: Network) -> Signal<Void, 
                         return nil
                     case let .custom(fileId):
                         return fileId
+                    case .stars:
+                        return nil
                     }
                 })
                 |> map { files -> [OrderedItemListEntry] in
@@ -442,6 +446,8 @@ func managedRecentReactions(postbox: Postbox, network: Network) -> Signal<Void, 
                                 continue
                             }
                             item = RecentReactionItem(.custom(file))
+                        case .stars:
+                            item = RecentReactionItem(.stars)
                         }
                         if let entry = CodableEntry(item) {
                             items.append(OrderedItemListEntry(id: item.id.rawValue, contents: entry))
@@ -462,6 +468,8 @@ func managedTopReactions(postbox: Postbox, network: Network) -> Signal<Void, NoE
             return 0
         case let .custom(fileId):
             return fileId.id
+        case .stars:
+            return 0
         }
     }, reverseHashOrder: false, forceFetch: false, fetch: { hash in
         return network.request(Api.functions.messages.getTopReactions(limit: 32, hash: hash))
@@ -479,6 +487,8 @@ func managedTopReactions(postbox: Postbox, network: Network) -> Signal<Void, NoE
                         return nil
                     case let .custom(fileId):
                         return fileId
+                    case .stars:
+                        return nil
                     }
                 })
                 |> map { files -> [OrderedItemListEntry] in
@@ -493,6 +503,8 @@ func managedTopReactions(postbox: Postbox, network: Network) -> Signal<Void, NoE
                                 continue
                             }
                             item = RecentReactionItem(.custom(file))
+                        case .stars:
+                            item = RecentReactionItem(.stars)
                         }
                         if let entry = CodableEntry(item) {
                             items.append(OrderedItemListEntry(id: item.id.rawValue, contents: entry))
@@ -513,6 +525,8 @@ func managedDefaultTagReactions(postbox: Postbox, network: Network) -> Signal<Vo
             return 0
         case let .custom(fileId):
             return fileId.id
+        case .stars:
+            return 0
         }
     }, reverseHashOrder: false, forceFetch: false, fetch: { hash in
         return network.request(Api.functions.messages.getDefaultTagReactions(hash: hash))
@@ -530,6 +544,8 @@ func managedDefaultTagReactions(postbox: Postbox, network: Network) -> Signal<Vo
                         return nil
                     case let .custom(fileId):
                         return fileId
+                    case .stars:
+                        return nil
                     }
                 })
                 |> map { files -> [OrderedItemListEntry] in
@@ -544,6 +560,8 @@ func managedDefaultTagReactions(postbox: Postbox, network: Network) -> Signal<Vo
                                 continue
                             }
                             item = RecentReactionItem(.custom(file))
+                        case .stars:
+                            item = RecentReactionItem(.stars)
                         }
                         if let entry = CodableEntry(item) {
                             items.append(OrderedItemListEntry(id: item.id.rawValue, contents: entry))

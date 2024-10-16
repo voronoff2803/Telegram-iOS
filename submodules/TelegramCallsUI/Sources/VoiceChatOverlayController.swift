@@ -13,11 +13,12 @@ import AppBundle
 import ContextUI
 import PresentationDataUtils
 import TooltipUI
+import VoiceChatActionButton
 
 private let slideOffset: CGFloat = 80.0 + 44.0
 
 public final class VoiceChatOverlayController: ViewController {
-    private final class Node: ViewControllerTracingNode, UIGestureRecognizerDelegate {
+    private final class Node: ViewControllerTracingNode, ASGestureRecognizerDelegate {
         private weak var controller: VoiceChatOverlayController?
         
         private var validLayout: ContainerViewLayout?

@@ -434,6 +434,7 @@ final class AvatarEditorScreenComponent: Component {
                                             isPremiumLocked: false,
                                             isEmbedded: false,
                                             hasClear: false,
+                                            hasEdit: false,
                                             collapsedLineCount: nil,
                                             displayPremiumBadges: false,
                                             headerItem: nil,
@@ -455,6 +456,7 @@ final class AvatarEditorScreenComponent: Component {
                                             isPremiumLocked: false,
                                             isEmbedded: false,
                                             hasClear: false,
+                                            hasEdit: false,
                                             collapsedLineCount: nil,
                                             displayPremiumBadges: false,
                                             headerItem: nil,
@@ -481,7 +483,7 @@ final class AvatarEditorScreenComponent: Component {
                         }))
                     }
                 case let .category(value):
-                    let resultSignal = context.engine.stickers.searchEmoji(emojiString: value)
+                    let resultSignal = context.engine.stickers.searchEmoji(category: value)
                     |> mapToSignal { files, isFinalResult -> Signal<(items: [EmojiPagerContentComponent.ItemGroup], isFinalResult: Bool), NoError> in
                         var items: [EmojiPagerContentComponent.Item] = []
                         
@@ -513,6 +515,7 @@ final class AvatarEditorScreenComponent: Component {
                             isPremiumLocked: false,
                             isEmbedded: false,
                             hasClear: false,
+                            hasEdit: false,
                             collapsedLineCount: nil,
                             displayPremiumBadges: false,
                             headerItem: nil,
@@ -547,17 +550,18 @@ final class AvatarEditorScreenComponent: Component {
                                     isPremiumLocked: false,
                                     isEmbedded: false,
                                     hasClear: false,
+                                    hasEdit: false,
                                     collapsedLineCount: nil,
                                     displayPremiumBadges: false,
                                     headerItem: nil,
                                     fillWithLoadingPlaceholders: true,
                                     items: []
                                 )
-                            ], id: AnyHashable(value), version: version, isPreset: true), isSearching: false)
+                            ], id: AnyHashable(value.id), version: version, isPreset: true), isSearching: false)
                             return
                         }
                         
-                        self.emojiSearchStateValue = EmojiSearchState(result: EmojiSearchResult(groups: result.items, id: AnyHashable(value), version: version, isPreset: true), isSearching: false)
+                        self.emojiSearchStateValue = EmojiSearchState(result: EmojiSearchResult(groups: result.items, id: AnyHashable(value.id), version: version, isPreset: true), isSearching: false)
                         version += 1
                     }))
                 }
@@ -654,6 +658,7 @@ final class AvatarEditorScreenComponent: Component {
                         context.sharedContext.mainWindow?.presentInGlobalOverlay(actionSheet)
                     }
                 },
+                editAction: { _ in },
                 pushController: { c in
                 },
                 presentController: { c in
@@ -681,7 +686,7 @@ final class AvatarEditorScreenComponent: Component {
                         self.endEditing(true)
                         if let state = self.state, state.expanded {
                             state.expanded = false
-                            state.updated(transition: Transition(animation: .curve(duration: 0.45, curve: .spring)))
+                            state.updated(transition: ComponentTransition(animation: .curve(duration: 0.45, curve: .spring)))
                         }
                     }
                 },
@@ -784,6 +789,7 @@ final class AvatarEditorScreenComponent: Component {
                     } else if groupId == AnyHashable("peerSpecific") {
                     }
                 },
+                editAction: { _ in },
                 pushController: { c in
                 },
                 presentController: { c in
@@ -811,7 +817,7 @@ final class AvatarEditorScreenComponent: Component {
                         self.endEditing(true)
                         if let state = self.state, state.expanded {
                             state.expanded = false
-                            state.updated(transition: Transition(animation: .curve(duration: 0.45, curve: .spring)))
+                            state.updated(transition: ComponentTransition(animation: .curve(duration: 0.45, curve: .spring)))
                         }
                     }
                 },
@@ -833,7 +839,7 @@ final class AvatarEditorScreenComponent: Component {
         
         private var isExpanded = false
         
-        func update(component: AvatarEditorScreenComponent, availableSize: CGSize, state: State, environment: Environment<ViewControllerComponentContainer.Environment>, transition: Transition) -> CGSize {
+        func update(component: AvatarEditorScreenComponent, availableSize: CGSize, state: State, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
                         
@@ -977,7 +983,7 @@ final class AvatarEditorScreenComponent: Component {
                                     emojiView.ensureSearchUnfocused()
                                 }
                                 state.expanded = !state.expanded
-                                state.updated(transition: Transition(animation: .curve(duration: 0.35, curve: .spring)))
+                                state.updated(transition: ComponentTransition(animation: .curve(duration: 0.35, curve: .spring)))
                             }
                         }
                     )
@@ -1395,7 +1401,7 @@ final class AvatarEditorScreenComponent: Component {
                     try? backgroundImage.jpegData(compressionQuality: 0.8)?.write(to: tempUrl)
                     
                     let drawingSize = CGSize(width: 1920.0, height: 1920.0)
-                    let entity = DrawingStickerEntity(content: .file(file, .sticker))
+                    let entity = DrawingStickerEntity(content: .file(.standalone(media: file), .sticker))
                     entity.referenceDrawingSize = drawingSize
                     entity.position = CGPoint(x: drawingSize.width / 2.0, y: drawingSize.height / 2.0)
                     entity.scale = 3.3
@@ -1403,7 +1409,8 @@ final class AvatarEditorScreenComponent: Component {
                     var fileId: Int64 = 0
                     var stickerPackId: Int64 = 0
                     var stickerPackAccessHash: Int64 = 0
-                    if case let .file(file, _) = entity.content {
+                    if case let .file(fileReference, _) = entity.content {
+                        let file = fileReference.media
                         if file.isCustomEmoji {
                             fileId = file.fileId.id
                         } else if file.isAnimatedSticker {
@@ -1484,7 +1491,7 @@ final class AvatarEditorScreenComponent: Component {
         return View(frame: CGRect())
     }
     
-    func update(view: View, availableSize: CGSize, state: State, environment: Environment<ViewControllerComponentContainer.Environment>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: State, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
@@ -1535,8 +1542,7 @@ public final class AvatarEditorScreen: ViewControllerComponentContainer {
             hasTrending: false,
             forceHasPremium: true,
             searchIsPlaceholderOnly: false,
-            isProfilePhotoEmojiSelection: !isGroup,
-            isGroupPhotoEmojiSelection: isGroup
+            subject: isGroup ? .groupPhotoEmojiSelection : .profilePhotoEmojiSelection
         )
         
         let signal = combineLatest(queue: .mainQueue(),

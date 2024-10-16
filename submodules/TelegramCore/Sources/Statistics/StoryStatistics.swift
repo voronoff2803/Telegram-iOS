@@ -321,7 +321,7 @@ private final class StoryStatsPublicForwardsContextImpl {
                                             timestamp: item.timestamp,
                                             expirationTimestamp: item.expirationTimestamp,
                                             media: EngineMedia(media),
-                                            alternativeMedia: item.alternativeMedia.flatMap(EngineMedia.init),
+                                            alternativeMediaList: item.alternativeMediaList.map(EngineMedia.init),
                                             mediaAreas: item.mediaAreas,
                                             text: item.text,
                                             entities: item.entities,
@@ -369,8 +369,8 @@ private final class StoryStatsPublicForwardsContextImpl {
                 return
             }
             strongSelf.lastOffset = nextOffset
-            for forwards in forwards {
-                strongSelf.results.append(forwards)
+            for forward in forwards {
+                strongSelf.results.append(forward)
             }
             strongSelf.isLoadingMore = false
             strongSelf.hasLoadedOnce = true

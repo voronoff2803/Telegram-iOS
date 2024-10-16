@@ -1,10 +1,9 @@
 import Foundation
 import UIKit
-import SegmentedControlNode
+import Display
 import TelegramPresentationData
 import ComponentFlow
 import TabSelectorComponent
-import Display
 
 public final class ItemListControllerSegmentedTitleView: UIView {
     private let tabSelector = ComponentView<Empty>()
@@ -58,7 +57,7 @@ public final class ItemListControllerSegmentedTitleView: UIView {
         self.update(transition: .immediate)
     }
     
-    private func update(transition: Transition) {
+    private func update(transition: ComponentTransition) {
         guard let size = self.validLayout else {
             return
         }

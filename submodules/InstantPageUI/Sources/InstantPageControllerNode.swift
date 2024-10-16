@@ -18,7 +18,7 @@ import UndoUI
 import ContextUI
 import TranslateUI
 
-final class InstantPageControllerNode: ASDisplayNode, UIScrollViewDelegate {
+final class InstantPageControllerNode: ASDisplayNode, ASScrollViewDelegate {
     private weak var controller: InstantPageController?
     private let context: AccountContext
     private var settings: InstantPagePresentationSettings?
@@ -137,7 +137,7 @@ final class InstantPageControllerNode: ASDisplayNode, UIScrollViewDelegate {
         self.scrollNode.addSubnode(self.scrollNodeFooter)
         self.addSubnode(self.navigationBar)
         self.scrollNode.view.delaysContentTouches = false
-        self.scrollNode.view.delegate = self
+        self.scrollNode.view.delegate = self.wrappedScrollViewDelegate
         
         self.navigationBar.back = navigateBack
         self.navigationBar.share = { [weak self] in
@@ -649,7 +649,7 @@ final class InstantPageControllerNode: ASDisplayNode, UIScrollViewDelegate {
                         self?.updateWebEmbedHeight(embedIndex, height)
                     }, updateDetailsExpanded: { [weak self] expanded in
                         self?.updateDetailsExpanded(detailsIndex, expanded)
-                    }, currentExpandedDetails: self.currentExpandedDetails) {
+                    }, currentExpandedDetails: self.currentExpandedDetails, getPreloadedResource: { _ in return nil }) {
                         newNode.frame = itemFrame
                         newNode.updateLayout(size: itemFrame.size, transition: transition)
                         if let topNode = topNode {
@@ -1375,8 +1375,10 @@ final class InstantPageControllerNode: ASDisplayNode, UIScrollViewDelegate {
                                 default:
                                     break
                             }
-                        }, sendFile: nil,
+                        }, 
+                        sendFile: nil,
                         sendSticker: nil,
+                        sendEmoji: nil,
                         requestMessageActionUrlAuth: nil,
                         joinVoiceChat: nil,
                         present: { c, a in
@@ -1426,7 +1428,7 @@ final class InstantPageControllerNode: ASDisplayNode, UIScrollViewDelegate {
             }, openUrl: { _ in }, openPeer: { _ in
             }, showAll: false)
             
-            let peer = TelegramUser(id: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(0)), accessHash: nil, firstName: "", lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil)
+            let peer = TelegramUser(id: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(0)), accessHash: nil, firstName: "", lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil)
             let message = Message(stableId: 0, stableVersion: 0, id: MessageId(peerId: peer.id, namespace: 0, id: 0), globallyUniqueId: nil, groupingKey: nil, groupInfo: nil, threadId: nil, timestamp: 0, flags: [], tags: [], globalTags: [], localTags: [], customTags: [], forwardInfo: nil, author: peer, text: "", attributes: [], media: [map], peers: SimpleDictionary(), associatedMessages: SimpleDictionary(), associatedMessageIds: [], associatedMedia: [:], associatedThreadInfo: nil, associatedStories: [:])
             
             let controller = LocationViewController(context: self.context, subject: EngineMessage(message), params: controllerParams)

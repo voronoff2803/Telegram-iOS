@@ -39,6 +39,7 @@ public extension EmojiPagerContentComponent {
         case groupPhoto
         case backgroundIcon
         case reactionList
+        case stickerAlt
     }
     
     static func emojiInputData(
@@ -49,15 +50,17 @@ public extension EmojiPagerContentComponent {
         subject: Subject,
         hasTrending: Bool,
         topReactionItems: [EmojiComponentReactionItem],
+        topEmojiItems: [String] = [],
         areUnicodeEmojiEnabled: Bool,
         areCustomEmojiEnabled: Bool,
         chatPeerId: EnginePeer.Id?,
-        selectedItems: Set<MediaId> = Set(),
+        selectedItems: Set<AnyHashable> = Set(),
         topStatusTitle: String? = nil,
         topicTitle: String? = nil,
         topicColor: Int32? = nil,
         backgroundIconColor: UIColor? = nil,
         hasSearch: Bool = true,
+        hasRecent: Bool = true,
         forceHasPremium: Bool = false,
         premiumIfSavedMessages: Bool = true,
         hideBackground: Bool = false
@@ -242,7 +245,14 @@ public extension EmojiPagerContentComponent {
                                 itemGroups[groupIndex].items.append(resultItem)
                             } else {
                                 itemGroupIndexById[groupId] = itemGroups.count
-                                itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: strings.EmojiInput_SectionTitleEmoji, subtitle: nil, badge: nil, isPremiumLocked: false, isFeatured: false, collapsedLineCount: nil, isClearable: false, headerItem: nil, items: [resultItem]))
+                                                                
+                                let title: String?
+                                if case .stickerAlt = subject {
+                                    title = nil
+                                } else {
+                                    title = strings.EmojiInput_SectionTitleEmoji
+                                }
+                                itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: title, subtitle: nil, badge: nil, isPremiumLocked: false, isFeatured: false, collapsedLineCount: nil, isClearable: false, headerItem: nil, items: [resultItem]))
                             }
                         }
                     }
@@ -359,7 +369,27 @@ public extension EmojiPagerContentComponent {
                 }
             }
             
-            if case .topicIcon = subject {
+            if case .stickerAlt = subject {
+                for emoji in topEmojiItems {
+                    let resultItem = EmojiPagerContentComponent.Item(
+                        animationData: nil,
+                        content: .staticEmoji(emoji),
+                        itemFile: nil,
+                        subgroupId: nil,
+                        icon: .none,
+                        tintMode: .none
+                    )
+                    
+                    let groupId = "recent"
+                    if let groupIndex = itemGroupIndexById[groupId] {
+                        itemGroups[groupIndex].items.append(resultItem)
+                    } else {
+                        itemGroupIndexById[groupId] = itemGroups.count
+                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: nil, subtitle: nil, badge: nil, isPremiumLocked: false, isFeatured: false, collapsedLineCount: 5, isClearable: false, headerItem: nil, items: [resultItem]))
+                    }
+                }
+                
+            } else if case .topicIcon = subject {
                 let resultItem = EmojiPagerContentComponent.Item(
                     animationData: nil,
                     content: .icon(.topic(String((topicTitle ?? "").prefix(1)), topicColor ?? 0)),
@@ -698,7 +728,7 @@ public extension EmojiPagerContentComponent {
                         }
                     }
                 }
-            } else if subject == .reactionList {
+            } else if case .reactionList = subject {
                 var existingIds = Set<MessageReaction.Reaction>()
                 
                 if let availableReactions = availableReactions {
@@ -763,6 +793,10 @@ public extension EmojiPagerContentComponent {
                                 }
                             case let .custom(file):
                                 topReactionItems.append(EmojiComponentReactionItem(reaction: .custom(file.fileId.id), file: file))
+                            case .stars:
+                                if let reaction = availableReactions?.reactions.first(where: { $0.value == .stars }) {
+                                    topReactionItems.append(EmojiComponentReactionItem(reaction: .stars, file: reaction.selectAnimation))
+                                }
                             }
                         }
                     }
@@ -932,6 +966,22 @@ public extension EmojiPagerContentComponent {
                                 } else {
                                     icon = .none
                                 }
+                            case .stars:
+                                if existingIds.contains(.stars) {
+                                    continue
+                                }
+                                existingIds.insert(.stars)
+                                if let availableReactions = availableReactions, let availableReaction = availableReactions.reactions.first(where: { $0.value == .stars }) {
+                                    if let centerAnimation = availableReaction.centerAnimation {
+                                        animationFile = centerAnimation
+                                    } else {
+                                        continue
+                                    }
+                                } else {
+                                    continue
+                                }
+                                
+                                icon = .none
                             }
                             
                             var tintMode: Item.TintMode = .none
@@ -984,6 +1034,12 @@ public extension EmojiPagerContentComponent {
                                 }
                             case let .custom(file):
                                 topReactionItems.append(EmojiComponentReactionItem(reaction: .custom(file.fileId.id), file: file))
+                            case .stars:
+                                if let reaction = availableReactions?.reactions.first(where: { $0.value == .stars }) {
+                                    topReactionItems.append(EmojiComponentReactionItem(reaction: .stars, file: reaction.selectAnimation))
+                                } else {
+                                    continue
+                                }
                             }
                         }
                     }
@@ -1160,7 +1216,7 @@ public extension EmojiPagerContentComponent {
                 }
             }
             
-            let hasRecentEmoji = ![.reaction(onlyTop: true), .reaction(onlyTop: false), .quickReaction, .status, .profilePhoto, .groupPhoto, .topicIcon, .backgroundIcon, .reactionList, .messageTag].contains(subject)
+            let hasRecentEmoji = ![.reaction(onlyTop: true), .reaction(onlyTop: false), .quickReaction, .status, .profilePhoto, .groupPhoto, .topicIcon, .backgroundIcon, .reactionList, .messageTag, .stickerAlt].contains(subject)
             
             if let recentEmoji = recentEmoji, hasRecentEmoji {
                 for item in recentEmoji.items {
@@ -1476,6 +1532,8 @@ public extension EmojiPagerContentComponent {
                     displaySearchWithPlaceholder = strings.EmojiSearch_SearchEmojiPlaceholder
                 } else if [.profilePhoto, .groupPhoto].contains(subject) {
                     displaySearchWithPlaceholder = strings.Common_Search
+                } else if case .stickerAlt = subject {
+                    displaySearchWithPlaceholder = strings.Common_Search
                 }
             }
             
@@ -1515,6 +1573,7 @@ public extension EmojiPagerContentComponent {
                     isPremiumLocked: group.isPremiumLocked,
                     isEmbedded: isEmbedded,
                     hasClear: hasClear,
+                    hasEdit: false,
                     collapsedLineCount: group.collapsedLineCount,
                     displayPremiumBadges: false,
                     headerItem: headerItem,
@@ -1546,6 +1605,7 @@ public extension EmojiPagerContentComponent {
                 searchInitiallyHidden: searchInitiallyHidden,
                 searchAlwaysActive: false,
                 searchIsPlaceholderOnly: false,
+                searchUnicodeEmojiOnly: subject == .stickerAlt,
                 emptySearchResults: nil,
                 enableLongPress: enableLongPress,
                 selectedItems: selectedItems,
@@ -1553,6 +1613,13 @@ public extension EmojiPagerContentComponent {
             )
         }
         return emojiItems
+    }
+    
+    enum StickersSubject {
+        case profilePhotoEmojiSelection
+        case groupPhotoEmojiSelection
+        case chatStickers
+        case greetingStickers
     }
     
     static func stickerInputData(
@@ -1565,9 +1632,10 @@ public extension EmojiPagerContentComponent {
         hasSearch: Bool,
         hasTrending: Bool,
         forceHasPremium: Bool,
+        hasEdit: Bool = false,
+        hasAdd: Bool = false,
         searchIsPlaceholderOnly: Bool = true,
-        isProfilePhotoEmojiSelection: Bool = false,
-        isGroupPhotoEmojiSelection: Bool = false,
+        subject: StickersSubject = .chatStickers,
         hideBackground: Bool = false
     ) -> Signal<EmojiPagerContentComponent, NoError> {
         let premiumConfiguration = PremiumConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
@@ -1618,11 +1686,41 @@ public extension EmojiPagerContentComponent {
         let strings = context.sharedContext.currentPresentationData.with({ $0 }).strings
         
         let searchCategories: Signal<EmojiSearchCategories?, NoError>
-        if isProfilePhotoEmojiSelection || isGroupPhotoEmojiSelection {
+        switch subject {
+        case .groupPhotoEmojiSelection, .profilePhotoEmojiSelection:
             searchCategories = context.engine.stickers.emojiSearchCategories(kind: .avatar)
-        } else {
-            searchCategories = context.engine.stickers.emojiSearchCategories(kind: .emoji)
+        case .chatStickers, .greetingStickers:
+            searchCategories = context.engine.stickers.emojiSearchCategories(kind: .combinedChatStickers)
+            |> map { result -> EmojiSearchCategories? in
+                guard let result else {
+                    return nil
+                }
+                
+                var groups: [EmojiSearchCategories.Group] = []
+                groups = result.groups
+                if case .greetingStickers = subject {
+                    if let index = groups.firstIndex(where: { group in
+                        return group.kind == .greeting
+                    }) {
+                        let group = groups.remove(at: index)
+                        groups.insert(group, at: 0)
+                    }
+                } else if case .chatStickers = subject {
+                    if let index = groups.firstIndex(where: { group in
+                        return group.kind == .premium
+                    }) {
+                        let group = groups.remove(at: index)
+                        groups.append(group)
+                    }
+                }
+                
+                return EmojiSearchCategories(
+                    hash: result.hash,
+                    groups: groups
+                )
+            }
         }
+        
         return combineLatest(
             context.account.postbox.itemCollectionsView(orderedItemListCollectionIds: stickerOrderedItemListCollectionIds, namespaces: stickerNamespaces, aroundIndex: nil, count: 10000000),
             hasPremium(context: context, chatPeerId: chatPeerId, premiumIfSavedMessages: false),
@@ -1643,6 +1741,7 @@ public extension EmojiPagerContentComponent {
                 var isPremiumLocked: Bool
                 var isFeatured: Bool
                 var displayPremiumBadges: Bool
+                var hasEdit: Bool
                 var headerItem: EntityKeyboardAnimationData?
                 var items: [EmojiPagerContentComponent.Item]
             }
@@ -1741,6 +1840,7 @@ public extension EmojiPagerContentComponent {
                                 isPremiumLocked: false,
                                 isFeatured: false,
                                 displayPremiumBadges: false,
+                                hasEdit: false,
                                 headerItem: nil,
                                 items: [resultItem]
                             )
@@ -1750,6 +1850,7 @@ public extension EmojiPagerContentComponent {
             }
             
             if let savedStickers = savedStickers {
+                let groupId = "saved"
                 for item in savedStickers.items {
                     guard let item = item.contents.get(SavedStickerItem.self) else {
                         continue
@@ -1763,7 +1864,7 @@ public extension EmojiPagerContentComponent {
                         tintMode = .primary
                     }
                     
-                    let animationData = EntityKeyboardAnimationData(file: item.file)
+                    let animationData = EntityKeyboardAnimationData(file: item.file, partialReference: .savedSticker)
                     let resultItem = EmojiPagerContentComponent.Item(
                         animationData: animationData,
                         content: .animation(animationData),
@@ -1773,16 +1874,16 @@ public extension EmojiPagerContentComponent {
                         tintMode: tintMode
                     )
                     
-                    let groupId = "saved"
                     if let groupIndex = itemGroupIndexById[groupId] {
                         itemGroups[groupIndex].items.append(resultItem)
                     } else {
                         itemGroupIndexById[groupId] = itemGroups.count
-                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: strings.EmojiInput_SectionTitleFavoriteStickers, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: false, headerItem: nil, items: [resultItem]))
+                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: strings.EmojiInput_SectionTitleFavoriteStickers, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: false, hasEdit: false, headerItem: nil, items: [resultItem]))
                     }
                 }
             }
             
+            var addedCreateStickerButton = false
             if let recentStickers = recentStickers {
                 let groupId = "recent"
                 for item in recentStickers.items {
@@ -1798,7 +1899,7 @@ public extension EmojiPagerContentComponent {
                         tintMode = .primary
                     }
                     
-                    let animationData = EntityKeyboardAnimationData(file: item.media)
+                    let animationData = EntityKeyboardAnimationData(file: item.media, partialReference: .recentSticker)
                     let resultItem = EmojiPagerContentComponent.Item(
                         animationData: animationData,
                         content: .animation(animationData),
@@ -1812,8 +1913,21 @@ public extension EmojiPagerContentComponent {
                         itemGroups[groupIndex].items.append(resultItem)
                     } else {
                         itemGroupIndexById[groupId] = itemGroups.count
-                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: strings.Stickers_FrequentlyUsed, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: false, headerItem: nil, items: [resultItem]))
+                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: strings.Stickers_FrequentlyUsed, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: false, hasEdit: false, headerItem: nil, items: [resultItem]))
                     }
+                }
+                
+                if hasAdd && !addedCreateStickerButton, let groupIndex = itemGroupIndexById[groupId] {
+                    let resultItem = EmojiPagerContentComponent.Item(
+                        animationData: nil,
+                        content: .icon(.add),
+                        itemFile: nil,
+                        subgroupId: nil,
+                        icon: .none,
+                        tintMode: .none
+                    )
+                    itemGroups[groupIndex].items.insert(resultItem, at: 0)
+                    addedCreateStickerButton = true
                 }
             }
               
@@ -1822,6 +1936,7 @@ public extension EmojiPagerContentComponent {
                 avatarPeer = peerSpecificPack.peer
                 
                 var processedIds = Set<MediaId>()
+                let groupId = "peerSpecific"
                 for item in peerSpecificPack.items {
                     if isPremiumDisabled && item.file.isPremiumSticker {
                         continue
@@ -1846,13 +1961,25 @@ public extension EmojiPagerContentComponent {
                         tintMode: tintMode
                     )
                     
-                    let groupId = "peerSpecific"
                     if let groupIndex = itemGroupIndexById[groupId] {
                         itemGroups[groupIndex].items.append(resultItem)
                     } else {
                         itemGroupIndexById[groupId] = itemGroups.count
-                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: peerSpecificPack.peer.compactDisplayTitle, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: false, headerItem: nil, items: [resultItem]))
+                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: peerSpecificPack.peer.compactDisplayTitle, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: false, hasEdit: false, headerItem: nil, items: [resultItem]))
                     }
+                }
+                
+                if hasEdit && !addedCreateStickerButton, let groupIndex = itemGroupIndexById[groupId] {
+                    let resultItem = EmojiPagerContentComponent.Item(
+                        animationData: nil,
+                        content: .icon(.add),
+                        itemFile: nil,
+                        subgroupId: nil,
+                        icon: .none,
+                        tintMode: .none
+                    )
+                    itemGroups[groupIndex].items.insert(resultItem, at: 0)
+                    addedCreateStickerButton = true
                 }
             }
             
@@ -1883,9 +2010,11 @@ public extension EmojiPagerContentComponent {
                     
                     var title = ""
                     var headerItem: EntityKeyboardAnimationData?
+                    var groupHasEdit = false
                     inner: for (id, info, _) in view.collectionInfos {
                         if id == groupId, let info = info as? StickerPackCollectionInfo {
                             title = info.title
+                            groupHasEdit = info.flags.contains(.isCreator)
                             
                             if let thumbnail = info.thumbnail {
                                 let type: EntityKeyboardAnimationData.ItemType
@@ -1911,7 +2040,20 @@ public extension EmojiPagerContentComponent {
                             break inner
                         }
                     }
-                    itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: title, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: true, headerItem: headerItem, items: [resultItem]))
+                    itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: title, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: true, hasEdit: hasEdit && groupHasEdit, headerItem: headerItem, items: [resultItem]))
+                    
+                    if hasEdit && !addedCreateStickerButton, let groupIndex = itemGroupIndexById[groupId] {
+                        let resultItem = EmojiPagerContentComponent.Item(
+                            animationData: nil,
+                            content: .icon(.add),
+                            itemFile: nil,
+                            subgroupId: nil,
+                            icon: .none,
+                            tintMode: .none
+                        )
+                        itemGroups[groupIndex].items.insert(resultItem, at: 0)
+                        addedCreateStickerButton = true
+                    }
                 }
             }
             
@@ -1974,7 +2116,7 @@ public extension EmojiPagerContentComponent {
                             )
                         }
                         
-                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: featuredStickerPack.info.title, subtitle: subtitle, actionButtonTitle: strings.Stickers_Install, isPremiumLocked: isPremiumLocked, isFeatured: true, displayPremiumBadges: false, headerItem: headerItem, items: [resultItem]))
+                        itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: featuredStickerPack.info.title, subtitle: subtitle, actionButtonTitle: strings.Stickers_Install, isPremiumLocked: isPremiumLocked, isFeatured: true, displayPremiumBadges: false, hasEdit: false, headerItem: headerItem, items: [resultItem]))
                     }
                 }
             }
@@ -1989,6 +2131,7 @@ public extension EmojiPagerContentComponent {
                 } else if group.id == AnyHashable("featuredTop") {
                     hasClear = true
                     isEmbedded = true
+                } else if group.id == AnyHashable("saved") {
                 }
                 
                 return EmojiPagerContentComponent.ItemGroup(
@@ -2002,12 +2145,21 @@ public extension EmojiPagerContentComponent {
                     isPremiumLocked: group.isPremiumLocked,
                     isEmbedded: isEmbedded,
                     hasClear: hasClear,
+                    hasEdit: group.hasEdit,
                     collapsedLineCount: nil,
                     displayPremiumBadges: group.displayPremiumBadges,
                     headerItem: group.headerItem,
                     fillWithLoadingPlaceholders: false,
                     items: group.items
                 )
+            }
+            
+            let warpContentsOnEdges: Bool
+            switch subject {
+            case .profilePhotoEmojiSelection, .groupPhotoEmojiSelection:
+                warpContentsOnEdges = true
+            default:
+                warpContentsOnEdges = false
             }
             
             return EmojiPagerContentComponent(
@@ -2022,13 +2174,166 @@ public extension EmojiPagerContentComponent {
                 itemLayoutType: .detailed,
                 itemContentUniqueId: nil,
                 searchState: .empty(hasResults: false),
-                warpContentsOnEdges: isProfilePhotoEmojiSelection || isGroupPhotoEmojiSelection,
+                warpContentsOnEdges: warpContentsOnEdges,
                 hideBackground: hideBackground,
                 displaySearchWithPlaceholder: hasSearch ? strings.StickersSearch_SearchStickersPlaceholder : nil,
                 searchCategories: searchCategories,
                 searchInitiallyHidden: true,
                 searchAlwaysActive: false,
                 searchIsPlaceholderOnly: searchIsPlaceholderOnly,
+                searchUnicodeEmojiOnly: false,
+                emptySearchResults: nil,
+                enableLongPress: false,
+                selectedItems: Set(),
+                customTintColor: nil
+            )
+        }
+    }
+    
+    static func messageEffectsInputData(
+        context: AccountContext,
+        animationCache: AnimationCache,
+        animationRenderer: MultiAnimationRenderer,
+        hasSearch: Bool,
+        hideBackground: Bool = false
+    ) -> Signal<EmojiPagerContentComponent, NoError> {
+        let premiumConfiguration = PremiumConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
+        let isPremiumDisabled = premiumConfiguration.isPremiumDisabled
+        
+        let strings = context.sharedContext.currentPresentationData.with({ $0 }).strings
+        
+        let searchCategories: Signal<EmojiSearchCategories?, NoError> = context.engine.stickers.emojiSearchCategories(kind: .emoji)
+        
+        return combineLatest(
+            hasPremium(context: context, chatPeerId: nil, premiumIfSavedMessages: false),
+            context.engine.stickers.availableMessageEffects(),
+            searchCategories
+        )
+        |> map { hasPremium, availableMessageEffects, searchCategories -> EmojiPagerContentComponent in
+            struct ItemGroup {
+                var supergroupId: AnyHashable
+                var id: AnyHashable
+                var title: String?
+                var subtitle: String?
+                var actionButtonTitle: String?
+                var isPremiumLocked: Bool
+                var isFeatured: Bool
+                var displayPremiumBadges: Bool
+                var hasEdit: Bool
+                var headerItem: EntityKeyboardAnimationData?
+                var items: [EmojiPagerContentComponent.Item]
+            }
+            var itemGroups: [ItemGroup] = []
+            var itemGroupIndexById: [AnyHashable: Int] = [:]
+            
+            if let availableMessageEffects {
+                var reactionEffects: [AvailableMessageEffects.MessageEffect] = []
+                var stickerEffects: [AvailableMessageEffects.MessageEffect] = []
+                for messageEffect in availableMessageEffects.messageEffects {
+                    if messageEffect.effectAnimation != nil {
+                        reactionEffects.append(messageEffect)
+                    } else {
+                        stickerEffects.append(messageEffect)
+                    }
+                }
+                
+                for i in 0 ..< 2 {
+                    let groupId = i == 0 ? "reactions" : "stickers"
+                    for item in i == 0 ? reactionEffects : stickerEffects {
+                        if item.isPremium && isPremiumDisabled {
+                            continue
+                        }
+                        
+                        let itemFile: TelegramMediaFile = item.effectSticker
+                        
+                        var tintMode: Item.TintMode = .none
+                        if itemFile.isCustomTemplateEmoji {
+                            tintMode = .primary
+                        }
+                        
+                        let icon: EmojiPagerContentComponent.Item.Icon
+                        if i == 0 {
+                            if !hasPremium && item.isPremium {
+                                icon = .locked
+                            } else {
+                                icon = .none
+                            }
+                        } else {
+                            if !hasPremium && item.isPremium {
+                                icon = .locked
+                            } else if let staticIcon = item.staticIcon {
+                                icon = .customFile(staticIcon)
+                            } else {
+                                icon = .text(item.emoticon)
+                            }
+                        }
+                        
+                        let animationData = EntityKeyboardAnimationData(file: itemFile, partialReference: .none)
+                        let resultItem = EmojiPagerContentComponent.Item(
+                            animationData: animationData,
+                            content: .animation(animationData),
+                            itemFile: itemFile,
+                            subgroupId: nil,
+                            icon: icon,
+                            tintMode: tintMode
+                        )
+                        
+                        if let groupIndex = itemGroupIndexById[groupId] {
+                            itemGroups[groupIndex].items.append(resultItem)
+                        } else {
+                            itemGroupIndexById[groupId] = itemGroups.count
+                            itemGroups.append(ItemGroup(supergroupId: groupId, id: groupId, title: i == 0 ? nil : strings.Chat_MessageEffectMenu_SectionMessageEffects, subtitle: nil, actionButtonTitle: nil, isPremiumLocked: false, isFeatured: false, displayPremiumBadges: false, hasEdit: false, headerItem: nil, items: [resultItem]))
+                        }
+                    }
+                }
+            }
+            
+            let warpContentsOnEdges: Bool = true
+            
+            let allItemGroups = itemGroups.map { group -> EmojiPagerContentComponent.ItemGroup in
+                let hasClear = false
+                let isEmbedded = false
+                
+                return EmojiPagerContentComponent.ItemGroup(
+                    supergroupId: group.supergroupId,
+                    groupId: group.id,
+                    title: group.title,
+                    subtitle: group.subtitle,
+                    badge: nil,
+                    actionButtonTitle: group.actionButtonTitle,
+                    isFeatured: group.isFeatured,
+                    isPremiumLocked: group.isPremiumLocked,
+                    isEmbedded: isEmbedded,
+                    hasClear: hasClear,
+                    hasEdit: group.hasEdit,
+                    collapsedLineCount: nil,
+                    displayPremiumBadges: group.displayPremiumBadges,
+                    headerItem: group.headerItem,
+                    fillWithLoadingPlaceholders: false,
+                    items: group.items
+                )
+            }
+            
+            return EmojiPagerContentComponent(
+                id: "stickers",
+                context: context,
+                avatarPeer: nil,
+                animationCache: animationCache,
+                animationRenderer: animationRenderer,
+                inputInteractionHolder: EmojiPagerContentComponent.InputInteractionHolder(),
+                panelItemGroups: [],
+                contentItemGroups: allItemGroups,
+                itemLayoutType: .detailed,
+                itemContentUniqueId: nil,
+                searchState: .empty(hasResults: false),
+                warpContentsOnEdges: warpContentsOnEdges,
+                hideBackground: hideBackground,
+                displaySearchWithPlaceholder: hasSearch ? strings.StickersSearch_SearchStickersPlaceholder : nil,
+                searchCategories: searchCategories,
+                searchInitiallyHidden: true,
+                searchAlwaysActive: false,
+                searchIsPlaceholderOnly: false,
+                searchUnicodeEmojiOnly: false,
                 emptySearchResults: nil,
                 enableLongPress: false,
                 selectedItems: Set(),

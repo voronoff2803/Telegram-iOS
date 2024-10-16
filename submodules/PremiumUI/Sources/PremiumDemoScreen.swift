@@ -20,29 +20,40 @@ import TelegramUIPreferences
 
 public final class PremiumGradientBackgroundComponent: Component {
     public let colors: [UIColor]
+    public let cornerRadius: CGFloat
+    public let topOverscroll: Bool
     
     public init(
-        colors: [UIColor]
+        colors: [UIColor],
+        cornerRadius: CGFloat = 10.0,
+        topOverscroll: Bool = false
     ) {
         self.colors = colors
+        self.cornerRadius = cornerRadius
+        self.topOverscroll = topOverscroll
     }
     
     public static func ==(lhs: PremiumGradientBackgroundComponent, rhs: PremiumGradientBackgroundComponent) -> Bool {
         if lhs.colors != rhs.colors {
             return false
         }
+        if lhs.cornerRadius != rhs.cornerRadius {
+            return false
+        }
+        if lhs.topOverscroll != rhs.topOverscroll {
+            return false
+        }
         return true
     }
     
     public final class View: UIView {
-        private let clipLayer: CALayer
+        private let clipLayer: CAReplicatorLayer
         private let gradientLayer: CAGradientLayer
         
         private var component: PremiumGradientBackgroundComponent?
         
         override init(frame: CGRect) {
-            self.clipLayer = CALayer()
-            self.clipLayer.cornerRadius = 10.0
+            self.clipLayer = CAReplicatorLayer()
             self.clipLayer.masksToBounds = true
             
             self.gradientLayer = CAGradientLayer()
@@ -58,24 +69,38 @@ public final class PremiumGradientBackgroundComponent: Component {
         }
         
         
-        func update(component: PremiumGradientBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+        func update(component: PremiumGradientBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.clipLayer.frame = CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: availableSize.height + 10.0))
             self.gradientLayer.frame = CGRect(origin: .zero, size: availableSize)
-        
+            
             var locations: [NSNumber] = []
             let delta = 1.0 / CGFloat(component.colors.count - 1)
             for i in 0 ..< component.colors.count {
                 locations.append((delta * CGFloat(i)) as NSNumber)
             }
+
             self.gradientLayer.locations = locations
             self.gradientLayer.colors = component.colors.reversed().map { $0.cgColor }
             self.gradientLayer.type = .radial
             self.gradientLayer.startPoint = CGPoint(x: 1.0, y: 0.0)
             self.gradientLayer.endPoint = CGPoint(x: -2.0, y: 3.0)
+
+            self.clipLayer.cornerRadius = component.cornerRadius
             
             self.component = component
             
             self.setupGradientAnimations()
+            
+            if component.topOverscroll {
+                self.clipLayer.instanceCount = 2
+                var instanceTransform = CATransform3DIdentity
+                instanceTransform = CATransform3DTranslate(instanceTransform, 0.0, -availableSize.height * 1.5, 0.0)
+                instanceTransform = CATransform3DScale(instanceTransform, 1.0, -2.0, 1.0)
+                self.clipLayer.instanceTransform = instanceTransform
+                self.clipLayer.masksToBounds = false
+            } else {
+                self.clipLayer.masksToBounds = true
+            }
             
             return availableSize
         }
@@ -124,7 +149,7 @@ public final class PremiumGradientBackgroundComponent: Component {
         return View(frame: CGRect())
     }
     
-    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
@@ -346,7 +371,7 @@ final class DemoPagerComponent: Component {
             self.ignoreContentOffsetChange = false
         }
         
-        func update(component: DemoPagerComponent, availableSize: CGSize, transition: Transition) -> CGSize {
+        func update(component: DemoPagerComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             var validIds: [AnyHashable] = []
             
             component.nextAction?.connect { [weak self] in
@@ -448,7 +473,7 @@ final class DemoPagerComponent: Component {
         return View(frame: CGRect())
     }
     
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
     }
 }
@@ -620,7 +645,8 @@ private final class DemoSheetContent: CombinedComponent {
                                         immediateThumbnailData: file.immediateThumbnailData,
                                         mimeType: file.mimeType,
                                         size: file.size,
-                                        attributes: file.attributes
+                                        attributes: file.attributes,
+                                        alternativeRepresentations: file.alternativeRepresentations
                                     )
                                 }
                             default:
@@ -641,7 +667,7 @@ private final class DemoSheetContent: CombinedComponent {
                 strongSelf.isPremium = isPremium
                 strongSelf.promoConfiguration = promoConfiguration
                 if !reactions.isEmpty && !stickers.isEmpty {
-                    strongSelf.updated(transition: Transition(.immediate).withUserData(DemoAnimateInTransition()))
+                    strongSelf.updated(transition: ComponentTransition(.immediate).withUserData(DemoAnimateInTransition()))
                 }
             })
         }
@@ -1053,6 +1079,26 @@ private final class DemoSheetContent: CombinedComponent {
                     )
                 )
                 
+                availableItems[.messageEffects] = DemoPagerComponent.Item(
+                    AnyComponentWithIdentity(
+                        id: PremiumDemoScreen.Subject.messageEffects,
+                        component: AnyComponent(
+                            PageComponent(
+                                content: AnyComponent(PhoneDemoComponent(
+                                    context: component.context,
+                                    position: .top,
+                                    model: .island,
+                                    videoFile: configuration.videos["effects"],
+                                    decoration: .swirlStars
+                                )),
+                                title: strings.Premium_MessageEffects,
+                                text: strings.Premium_MessageEffectsInfo,
+                                textColor: textColor
+                            )
+                        )
+                    )
+                )
+                
                 let index: Int = 0
                 var items: [DemoPagerComponent.Item] = []
                 if let item = availableItems.first(where: { $0.value.content.id == component.subject as AnyHashable }) {
@@ -1082,7 +1128,7 @@ private final class DemoSheetContent: CombinedComponent {
                             id: "background",
                             component: AnyComponent(
                                 BlurredBackgroundComponent(
-                                    color:  UIColor(rgb: 0x888888, alpha: 0.1)
+                                    color: UIColor(rgb: 0x888888, alpha: 0.1)
                                 )
                             )
                         ),
@@ -1107,6 +1153,79 @@ private final class DemoSheetContent: CombinedComponent {
             )
                          
             var measuredTextHeight: CGFloat?
+            var text: String
+            switch component.subject {
+            case .moreUpload:
+                text = strings.Premium_UploadSizeInfo
+            case .fasterDownload:
+                text = strings.Premium_FasterSpeedStandaloneInfo
+            case .voiceToText:
+                text = strings.Premium_VoiceToTextStandaloneInfo
+            case .noAds:
+                text = strings.Premium_NoAdsStandaloneInfo
+            case .uniqueReactions:
+                text = strings.Premium_InfiniteReactionsInfo
+            case .premiumStickers:
+                text = strings.Premium_StickersInfo
+            case .emojiStatus:
+                text = strings.Premium_EmojiStatusInfo
+            case .advancedChatManagement:
+                text = strings.Premium_ChatManagementStandaloneInfo
+            case .profileBadge:
+                text = strings.Premium_BadgeInfo
+            case .animatedUserpics:
+                text = strings.Premium_AvatarInfo
+            case .appIcons:
+                text = strings.Premium_AppIconStandaloneInfo
+            case .animatedEmoji:
+                text = strings.Premium_AnimatedEmojiStandaloneInfo
+            case .translation:
+                text = strings.Premium_TranslationStandaloneInfo
+            case .colors:
+                text = strings.Premium_ColorsInfo
+            case .wallpapers:
+                text = strings.Premium_WallpapersInfo
+            case .messageTags:
+                text = strings.Premium_MessageTagsInfo
+            case .lastSeen:
+                text = strings.Premium_LastSeenInfo
+            case .messagePrivacy:
+                text = strings.Premium_MessagePrivacyInfo
+            case .folderTags:
+                text = strings.Premium_FolderTagsStandaloneInfo
+            case .messageEffects:
+                text = strings.Premium_MessageEffectsInfo
+            default:
+                text = ""
+            }
+        
+            let textSideInset: CGFloat = 24.0
+            
+            let textColor = UIColor.black
+            let textFont = Font.regular(17.0)
+            let boldTextFont = Font.semibold(17.0)
+            let markdownAttributes = MarkdownAttributes(
+                body: MarkdownAttributeSet(font: textFont, textColor: textColor),
+                bold: MarkdownAttributeSet(font: boldTextFont, textColor: textColor),
+                link: MarkdownAttributeSet(font: textFont, textColor: textColor),
+                linkAttribute: { _ in
+                    return nil
+                }
+            )
+            let measureText = measureText.update(
+                component: MultilineTextComponent(
+                    text: .markdown(text: text, attributes: markdownAttributes),
+                    horizontalAlignment: .center,
+                    maximumNumberOfLines: 0,
+                    lineSpacing: 0.0
+                ),
+                availableSize: CGSize(width: context.availableSize.width - textSideInset * 2.0, height: context.availableSize.height),
+                transition: .immediate
+            )
+            context.add(measureText
+                .position(CGPoint(x: 0.0, y: 1000.0))
+            )
+            measuredTextHeight = measureText.size.height
             
             let buttonText: String
             var buttonAnimationName: String?
@@ -1119,7 +1238,6 @@ private final class DemoSheetContent: CombinedComponent {
                 case let .gift(price):
                     buttonText = strings.Premium_Gift_GiftSubscription(price ?? "–").string
                 case .other:
-                    var text: String
                     switch component.subject {
                         case .fasterDownload:
                             buttonText = strings.Premium_FasterSpeed_Proceed
@@ -1161,77 +1279,6 @@ private final class DemoSheetContent: CombinedComponent {
                         default:
                             buttonText = strings.Common_OK
                     }
-                    
-                    switch component.subject {
-                    case .moreUpload:
-                        text = strings.Premium_UploadSizeInfo
-                    case .fasterDownload:
-                        text = strings.Premium_FasterSpeedStandaloneInfo
-                    case .voiceToText:
-                        text = strings.Premium_VoiceToTextStandaloneInfo
-                    case .noAds:
-                        text = strings.Premium_NoAdsStandaloneInfo
-                    case .uniqueReactions:
-                        text = strings.Premium_InfiniteReactionsInfo
-                    case .premiumStickers:
-                        text = strings.Premium_StickersInfo
-                    case .emojiStatus:
-                        text = strings.Premium_EmojiStatusInfo
-                    case .advancedChatManagement:
-                        text = strings.Premium_ChatManagementStandaloneInfo
-                    case .profileBadge:
-                        text = strings.Premium_BadgeInfo
-                    case .animatedUserpics:
-                        text = strings.Premium_AvatarInfo
-                    case .appIcons:
-                        text = strings.Premium_AppIconStandaloneInfo
-                    case .animatedEmoji:
-                        text = strings.Premium_AnimatedEmojiStandaloneInfo
-                    case .translation:
-                        text = strings.Premium_TranslationStandaloneInfo
-                    case .colors:
-                        text = strings.Premium_ColorsInfo
-                    case .wallpapers:
-                        text = strings.Premium_WallpapersInfo
-                    case .messageTags:
-                        text = strings.Premium_MessageTagsInfo
-                    case .lastSeen:
-                        text = strings.Premium_LastSeenInfo
-                    case .messagePrivacy:
-                        text = strings.Premium_MessagePrivacyInfo
-                    case .folderTags:
-                        text = strings.Premium_FolderTagsStandaloneInfo
-                    default:
-                        text = ""
-                    }
-                
-                    let textSideInset: CGFloat = 24.0
-                    
-                    let textColor = UIColor.black
-                    let textFont = Font.regular(17.0)
-                    let boldTextFont = Font.semibold(17.0)
-                    let markdownAttributes = MarkdownAttributes(
-                        body: MarkdownAttributeSet(font: textFont, textColor: textColor),
-                        bold: MarkdownAttributeSet(font: boldTextFont, textColor: textColor),
-                        link: MarkdownAttributeSet(font: textFont, textColor: textColor),
-                        linkAttribute: { _ in
-                            return nil
-                        }
-                    )
-                    let measureText = measureText.update(
-                        component: MultilineTextComponent(
-                            text: .markdown(text: text, attributes: markdownAttributes),
-                            horizontalAlignment: .center,
-                            maximumNumberOfLines: 0,
-                            lineSpacing: 0.0
-                        ),
-                        availableSize: CGSize(width: context.availableSize.width - textSideInset * 2.0, height: context.availableSize.height),
-                        transition: .immediate
-                    )
-                    context.add(measureText
-                        .position(CGPoint(x: 0.0, y: 1000.0))
-                    )
-                    measuredTextHeight = measureText.size.height
                 }
             }
             
@@ -1417,6 +1464,7 @@ public class PremiumDemoScreen: ViewControllerComponentContainer {
         case messagePrivacy
         case business
         case folderTags
+        case messageEffects
         
         case businessLocation
         case businessHours
@@ -1424,6 +1472,75 @@ public class PremiumDemoScreen: ViewControllerComponentContainer {
         case businessQuickReplies
         case businessAwayMessage
         case businessChatBots
+        case businessIntro
+        case businessLinks
+        
+        public var perk: PremiumPerk {
+            switch self {
+            case .doubleLimits:
+                return .doubleLimits
+            case .moreUpload:
+                return .moreUpload
+            case .fasterDownload:
+                return .fasterDownload
+            case .voiceToText:
+                return .voiceToText
+            case .noAds:
+                return .noAds
+            case .uniqueReactions:
+                return .uniqueReactions
+            case .premiumStickers:
+                return .premiumStickers
+            case .advancedChatManagement:
+                return .advancedChatManagement
+            case .profileBadge:
+                return .profileBadge
+            case .animatedUserpics:
+                return .animatedUserpics
+            case .appIcons:
+                return .appIcons
+            case .animatedEmoji:
+                return .animatedEmoji
+            case .emojiStatus:
+                return .emojiStatus
+            case .translation:
+                return .translation
+            case .stories:
+                return .stories
+            case .colors:
+                return .colors
+            case .wallpapers:
+                return .wallpapers
+            case .messageTags:
+                return .messageTags
+            case .lastSeen:
+                return .lastSeen
+            case .messagePrivacy:
+                return .messagePrivacy
+            case .business:
+                return .business
+            case .folderTags:
+                return .folderTags
+            case .messageEffects:
+                return .messageEffects
+            case .businessLocation:
+                return .businessLocation
+            case .businessHours:
+                return .businessHours
+            case .businessGreetingMessage:
+                return .businessGreetingMessage
+            case .businessQuickReplies:
+                return .businessQuickReplies
+            case .businessAwayMessage:
+                return .businessAwayMessage
+            case .businessChatBots:
+                return .businessChatBots
+            case .businessIntro:
+                return .businessIntro
+            case .businessLinks:
+                return .businessLinks
+            }
+        }
     }
     
     public enum Source: Equatable {

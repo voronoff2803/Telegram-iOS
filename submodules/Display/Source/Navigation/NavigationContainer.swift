@@ -3,7 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import SwiftSignalKit
 
-public final class NavigationContainer: ASDisplayNode, UIGestureRecognizerDelegate {
+public final class NavigationContainer: ASDisplayNode, ASGestureRecognizerDelegate {
     private final class Child {
         let value: ViewController
         var layout: ContainerViewLayout
@@ -76,6 +76,8 @@ public final class NavigationContainer: ASDisplayNode, UIGestureRecognizerDelega
     private let isFlat: Bool
     public private(set) var controllers: [ViewController] = []
     private var state: State = State(layout: nil, canBeClosed: nil, top: nil, transition: nil, pending: nil)
+    
+    weak var minimizedContainer: MinimizedContainer?
     
     private var ignoreInputHeight: Bool = false
     
@@ -151,7 +153,7 @@ public final class NavigationContainer: ASDisplayNode, UIGestureRecognizerDelega
         if #available(iOS 13.4, *) {
             panRecognizer.allowedScrollTypesMask = .continuous
         }
-        panRecognizer.delegate = self
+        panRecognizer.delegate = self.wrappedGestureRecognizerDelegate
         panRecognizer.delaysTouchesBegan = false
         panRecognizer.cancelsTouchesInView = true
         self.panRecognizer = panRecognizer
@@ -235,6 +237,13 @@ public final class NavigationContainer: ASDisplayNode, UIGestureRecognizerDelega
                 let topNode = topController.displayNode
                 var bottomControllerLayout = layout
                 if bottomController.view.disableAutomaticKeyboardHandling.isEmpty {
+                    if let minimizedContainer = self.minimizedContainer, (bottomControllerLayout.inputHeight ?? 0.0) > 0.0 {
+                        var updatedSize = bottomControllerLayout.size
+                        var updatedIntrinsicInsets = bottomControllerLayout.intrinsicInsets
+                        updatedSize.height -= minimizedContainer.collapsedHeight(layout: layout)
+                        updatedIntrinsicInsets.bottom = 0.0
+                        bottomControllerLayout = bottomControllerLayout.withUpdatedSize(updatedSize).withUpdatedIntrinsicInsets(updatedIntrinsicInsets)
+                    }
                     bottomControllerLayout = bottomControllerLayout.withUpdatedInputHeight(nil)
                 }
                 bottomController.containerLayoutUpdated(bottomControllerLayout, transition: .immediate)

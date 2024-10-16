@@ -83,7 +83,6 @@ func _internal_updateBotAbout(account: Account, peerId: PeerId, about: String) -
     |> switchToLatest
 }
 
-
 func _internal_updateBotDescription(account: Account, peerId: PeerId, description: String) -> Signal<Void, UpdateBotInfoError> {
     return account.postbox.transaction { transaction -> Signal<Void, UpdateBotInfoError> in
         if let peer = transaction.getPeer(peerId), let inputUser = apiInputUser(peer) {
@@ -101,7 +100,7 @@ func _internal_updateBotDescription(account: Account, peerId: PeerId, descriptio
                                 if let botInfo = current.botInfo {
                                     var updatedBotInfo = botInfo
                                     if botInfo.description == editableBotInfo.description {
-                                        updatedBotInfo = BotInfo(description: description, photo: botInfo.photo, video: botInfo.video, commands: botInfo.commands, menuButton: botInfo.menuButton)
+                                        updatedBotInfo = BotInfo(description: description, photo: botInfo.photo, video: botInfo.video, commands: botInfo.commands, menuButton: botInfo.menuButton, privacyPolicyUrl: botInfo.privacyPolicyUrl)
                                     }
                                     return current.withUpdatedEditableBotInfo(editableBotInfo.withUpdatedDescription(description)).withUpdatedBotInfo(updatedBotInfo)
                                 } else {

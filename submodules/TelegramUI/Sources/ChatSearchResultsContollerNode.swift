@@ -148,7 +148,7 @@ private func chatListSearchContainerPreparedTransition(from fromEntries: [ChatLi
     return ChatListSearchContainerTransition(deletions: deletions, insertions: insertions, updates: updates)
 }
 
-class ChatSearchResultsControllerNode: ViewControllerTracingNode, UIScrollViewDelegate {
+class ChatSearchResultsControllerNode: ViewControllerTracingNode, ASScrollViewDelegate {
     private let context: AccountContext
     private var presentationData: PresentationData
     private let animationCache: AnimationCache
@@ -267,7 +267,7 @@ class ChatSearchResultsControllerNode: ViewControllerTracingNode, UIScrollViewDe
             switch item.content {
             case let .peer(peerData):
                 if let message = peerData.messages.first {
-                    let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peerData.peer.peerId), subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil), botStart: nil, mode: .standard(.previewing))
+                    let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peerData.peer.peerId), subject: .message(id: .id(message.id), highlight: ChatControllerSubject.MessageHighlight(quote: nil), timecode: nil, setupReply: false), botStart: nil, mode: .standard(.previewing), params: nil)
                     chatController.canReadHistory.set(false)
                     let contextController = ContextController(presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node)), items: .single(ContextController.Items(content: .list([]))), gesture: gesture)
                     presentInGlobalOverlay(contextController)
@@ -282,12 +282,15 @@ class ChatSearchResultsControllerNode: ViewControllerTracingNode, UIScrollViewDe
         }, openStorageManagement: {
         }, openPasswordSetup: {
         }, openPremiumIntro: {
-        }, openPremiumGift: {
+        }, openPremiumGift: { _ in
+        }, openPremiumManagement: {
         }, openActiveSessions: {
+        }, openBirthdaySetup: {
         }, performActiveSessionAction: { _, _ in
         }, openChatFolderUpdates: {
         }, hideChatFolderUpdates: {
         }, openStories: { _, _ in
+        }, openStarsTopup: { _ in
         }, dismissNotice: { _ in
         }, editPeer: { _ in
         })

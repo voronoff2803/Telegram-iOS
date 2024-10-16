@@ -36,7 +36,13 @@ public func ChangePhoneNumberController(context: AccountContext) -> ViewControll
             authorizationPushConfiguration
             |> castError(RequestChangeAccountPhoneNumberVerificationError.self)
             |> mapToSignal { authorizationPushConfiguration in
-                return context.engine.accountData.requestChangeAccountPhoneNumberVerification(phoneNumber: phoneNumber, pushNotificationConfiguration: authorizationPushConfiguration, firebaseSecretStream: context.sharedContext.firebaseSecretStream)
+                return context.engine.accountData.requestChangeAccountPhoneNumberVerification(
+                    apiId: context.sharedContext.networkArguments.apiId,
+                    apiHash: context.sharedContext.networkArguments.apiHash,
+                    phoneNumber: phoneNumber,
+                    pushNotificationConfiguration: authorizationPushConfiguration,
+                    firebaseSecretStream: context.sharedContext.firebaseSecretStream
+                )
             }
         |> deliverOnMainQueue).start(next: { [weak controller] next in
             controller?.inProgress = false
@@ -78,7 +84,7 @@ public func ChangePhoneNumberController(context: AccountContext) -> ViewControll
                 }, completed: { [weak codeController] in
                     codeController?.present(OverlayStatusController(theme: presentationData.theme, type: .success), in: .window(.root))
                     
-                    let _ = dismissServerProvidedSuggestion(account: context.account, suggestion: .validatePhoneNumber).start()
+                    let _ = context.engine.notices.dismissServerProvidedSuggestion(suggestion: .validatePhoneNumber).start()
                     
                     if let navigationController = codeController?.navigationController as? NavigationController {
                         var viewControllers = navigationController.viewControllers
@@ -99,12 +105,16 @@ public func ChangePhoneNumberController(context: AccountContext) -> ViewControll
                 guard let codeController else {
                     return
                 }
-                AuthorizationSequenceController.presentDidNotGetCodeUI(controller: codeController, presentationData: context.sharedContext.currentPresentationData.with({ $0 }), number: phoneNumber)
+                let carrier = CTCarrier()
+                let mnc = carrier.mobileNetworkCode ?? "none"
+                let _ = context.engine.auth.reportMissingCode(phoneNumber: phoneNumber, phoneCodeHash: next.hash, mnc: mnc).start()
+                
+                AuthorizationSequenceController.presentDidNotGetCodeUI(controller: codeController, presentationData: context.sharedContext.currentPresentationData.with({ $0 }), phoneNumber: phoneNumber, mnc: mnc)
             }
             codeController.openFragment = { url in
                 context.sharedContext.applicationBindings.openUrl(url)
             }
-            codeController.updateData(number: formatPhoneNumber(context: context, number: phoneNumber), email: nil, codeType: next.type, nextType: nil, timeout: next.timeout, termsOfService: nil)
+            codeController.updateData(number: formatPhoneNumber(context: context, number: phoneNumber), email: nil, codeType: next.type, nextType: nil, timeout: next.timeout, termsOfService: nil, previousCodeType: nil, isPrevious: false)
             dismissImpl = { [weak codeController] in
                 codeController?.dismiss()
             }
@@ -137,7 +147,7 @@ public func ChangePhoneNumberController(context: AccountContext) -> ViewControll
                     
                     if MFMailComposeViewController.canSendMail() {
                         let composeController = MFMailComposeViewController()
-                        composeController.setToRecipients(["login@stel.com"])
+                        composeController.setToRecipients(["recover@telegram.org"])
                         composeController.setSubject(presentationData.strings.Login_PhoneBannedEmailSubject(formattedNumber).string)
                         composeController.setMessageBody(presentationData.strings.Login_PhoneBannedEmailBody(formattedNumber, appVersion, systemVersion, locale, mnc).string, isHTML: false)
                         composeController.mailComposeDelegate = controller

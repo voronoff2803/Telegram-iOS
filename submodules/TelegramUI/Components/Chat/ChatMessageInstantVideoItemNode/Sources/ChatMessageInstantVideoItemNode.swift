@@ -34,7 +34,7 @@ private let nameFont = Font.medium(14.0)
 private let inlineBotPrefixFont = Font.regular(14.0)
 private let inlineBotNameFont = nameFont
 
-public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureRecognizerDelegate {
+public class ChatMessageInstantVideoItemNode: ChatMessageItemView, ASGestureRecognizerDelegate {
     public let contextSourceNode: ContextExtractedContentContainingNode
     public let containerNode: ContextControllerSourceNode
     public let interactiveVideoNode: ChatMessageInteractiveInstantVideoNode
@@ -595,9 +595,9 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
             
             let reactions: ReactionsMessageAttribute
             if shouldDisplayInlineDateReactions(message: item.message, isPremium: item.associatedData.isPremium, forceInline: item.associatedData.forceInlineReactions) {
-                reactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [])
+                reactions = ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
             } else {
-                reactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [])
+                reactions = mergedMessageReactions(attributes: item.message.attributes, isTags: item.message.areReactionsTags(accountPeerId: item.context.account.peerId)) ?? ReactionsMessageAttribute(canViewList: false, isTags: false, reactions: [], recentPeers: [], topPeers: [])
             }
             
             var reactionButtonsFinalize: ((CGFloat) -> (CGSize, (_ animation: ListViewItemUpdateAnimation) -> ChatMessageReactionButtonsNode))?
@@ -690,7 +690,9 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
                                 }
                                 strongSelf.shareButtonNode = updatedShareButtonNode
                                 strongSelf.addSubnode(updatedShareButtonNode)
-                                updatedShareButtonNode.addTarget(strongSelf, action: #selector(strongSelf.shareButtonPressed), forControlEvents: .touchUpInside)
+                                updatedShareButtonNode.pressed = { [weak strongSelf] in
+                                    strongSelf?.shareButtonPressed()
+                                }
                             }
                             let buttonSize = updatedShareButtonNode.update(presentationData: item.presentationData, controllerInteraction: item.controllerInteraction, chatLocation: item.chatLocation, subject: item.associatedData.subject, message: item.message, account: item.context.account)
                             updatedShareButtonNode.frame = CGRect(origin: CGPoint(x: min(params.width - buttonSize.width - 8.0, videoFrame.maxX - 7.0), y: videoFrame.maxY - 24.0 - buttonSize.height), size: buttonSize)
@@ -891,14 +893,24 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
                                     }
                                 }
                                 strongSelf.addSubnode(actionButtonsNode)
+                                
+                                if animation.isAnimated {
+                                    actionButtonsNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                                }
                             } else {
                                 if case let .System(duration, _) = animation {
                                     actionButtonsNode.layer.animateFrame(from: previousFrame, to: actionButtonsFrame, duration: duration, timingFunction: kCAMediaTimingFunctionSpring)
                                 }
                             }
                         } else if let actionButtonsNode = strongSelf.actionButtonsNode {
-                            actionButtonsNode.removeFromSupernode()
                             strongSelf.actionButtonsNode = nil
+                            if animation.isAnimated {
+                                actionButtonsNode.layer.animateAlpha(from: actionButtonsNode.alpha, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                                    actionButtonsNode.removeFromSupernode()
+                                })
+                            } else {
+                                actionButtonsNode.removeFromSupernode()
+                            }
                         }
                     }
                     
@@ -949,7 +961,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
                         break
                     }
                 } else if case .tap = gesture {
-                    self.item?.controllerInteraction.clickThroughMessage()
+                    self.item?.controllerInteraction.clickThroughMessage(self.view, location)
                 }
             }
         default:
@@ -984,7 +996,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
                                 if case let .broadcast(info) = channel.info, info.flags.contains(.hasDiscussionGroup) {
                                 } else if case .member = channel.participationStatus {
                                 } else {
-                                    item.controllerInteraction.displayMessageTooltip(item.message.id, item.presentationData.strings.Conversation_PrivateChannelTooltip, forwardInfoNode, nil)
+                                    item.controllerInteraction.displayMessageTooltip(item.message.id, item.presentationData.strings.Conversation_PrivateChannelTooltip, false, forwardInfoNode, nil)
                                     return
                                 }
                             }
@@ -992,7 +1004,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
                         } else if let peer = forwardInfo.source ?? forwardInfo.author {
                             item.controllerInteraction.openPeer(EnginePeer(peer), peer is TelegramUser ? .info(nil) : .chat(textInputState: nil, subject: nil, peekData: nil), nil, .default)
                         } else if let _ = forwardInfo.authorSignature {
-                            item.controllerInteraction.displayMessageTooltip(item.message.id, item.presentationData.strings.Conversation_ForwardAuthorHiddenTooltip, forwardInfoNode, nil)
+                            item.controllerInteraction.displayMessageTooltip(item.message.id, item.presentationData.strings.Conversation_ForwardAuthorHiddenTooltip, false, forwardInfoNode, nil)
                         }
                     }
                     
@@ -1170,7 +1182,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
     
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         if let shareButtonNode = self.shareButtonNode, shareButtonNode.frame.contains(point) {
-            return shareButtonNode.view
+            return shareButtonNode.view.hitTest(self.view.convert(point, to: shareButtonNode.view), with: event)
         }
         if !self.bounds.contains(point) {
             return nil
@@ -1251,8 +1263,8 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
         self.layer.removeAllAnimations()
     }
     
-    override public func animateInsertion(_ currentTimestamp: Double, duration: Double, short: Bool) {
-        super.animateInsertion(currentTimestamp, duration: duration, short: short)
+    override public func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
+        super.animateInsertion(currentTimestamp, duration: duration, options: options)
         
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
     }
@@ -1478,7 +1490,7 @@ public class ChatMessageInstantVideoItemNode: ChatMessageItemView, UIGestureReco
             reactionButtonsNode.offset(value: value, animationCurve: animationCurve, duration: duration)
         }
     }
-    
+        
     override public func targetReactionView(value: MessageReaction.Reaction) -> UIView? {
         if let result = self.reactionButtonsNode?.reactionTargetView(value: value) {
             return result

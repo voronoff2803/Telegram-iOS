@@ -39,12 +39,14 @@ extension MediaEditorScreen {
                 return false
             } else if case .message = subject, !filteredValues.hasChanges && filteredEntities.isEmpty && caption.string.isEmpty {
                 return false
+            } else if case .empty = subject, !self.node.hasAnyChanges && !self.node.drawingView.internalState.canUndo {
+                return false
             }
         }
         return true
     }
     
-    func saveDraft(id: Int64?) {
+    func saveDraft(id: Int64?, edit: Bool = false) {
         guard let subject = self.node.subject, let actualSubject = self.node.actualSubject, let mediaEditor = self.node.mediaEditor else {
             return
         }
@@ -81,7 +83,9 @@ extension MediaEditorScreen {
         }
         
         if let resultImage = mediaEditor.resultImage {
-            mediaEditor.seek(0.0, andPlay: false)
+            if !edit {
+                mediaEditor.seek(0.0, andPlay: false)
+            }
             makeEditorImageComposition(context: self.node.ciContext, postbox: self.context.account.postbox, inputImage: resultImage, dimensions: storyDimensions, values: values, time: .zero, textScale: 2.0, completion: { resultImage in
                 guard let resultImage else {
                     return
@@ -163,6 +167,8 @@ extension MediaEditorScreen {
                 }
                 
                 switch subject {
+                case .empty:
+                    break
                 case let .image(image, dimensions, _, _):
                     innerSaveDraft(media: .image(image: image, dimensions: dimensions))
                 case let .video(path, _, _, _, _, dimensions, _, _, _):
@@ -193,6 +199,8 @@ extension MediaEditorScreen {
                     if let pixel = generateSingleColorImage(size: CGSize(width: 1, height: 1), color: .black) {
                         innerSaveDraft(media: .image(image: pixel, dimensions: PixelDimensions(width: 1080, height: 1920)))
                     }
+                case .sticker:
+                    break
                 }
                 
                 if case let .draft(draft, _) = actualSubject {

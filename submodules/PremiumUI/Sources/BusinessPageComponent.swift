@@ -10,6 +10,7 @@ import BlurredBackgroundComponent
 import Markdown
 import TelegramPresentationData
 import BundleIconComponent
+import ScrollComponent
 
 private final class HeaderComponent: Component {
     let context: AccountContext
@@ -47,7 +48,7 @@ private final class HeaderComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
         
-        func update(component: HeaderComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+        func update(component: HeaderComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
             
@@ -94,7 +95,7 @@ private final class HeaderComponent: Component {
         return View(frame: CGRect())
     }
 
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
@@ -301,14 +302,14 @@ private final class BusinessListComponent: CombinedComponent {
             let strings = context.component.context.sharedContext.currentPresentationData.with { $0 }.strings
             
             let colors = [
-                UIColor(rgb: 0x007aff),
-                UIColor(rgb: 0x798aff),
-                UIColor(rgb: 0xac64f3),
-                UIColor(rgb: 0xc456ae),
-                UIColor(rgb: 0xe95d44),
-                UIColor(rgb: 0xf2822a),
-                UIColor(rgb: 0xe79519),
-                UIColor(rgb: 0xe7ad19)
+                UIColor(rgb: 0xef6922),
+                UIColor(rgb: 0xe54937),
+                UIColor(rgb: 0xdb374b),
+                UIColor(rgb: 0xbc4395),
+                UIColor(rgb: 0x9b4fed),
+                UIColor(rgb: 0x8958ff),
+                UIColor(rgb: 0x676bff),
+                UIColor(rgb: 0x007aff)
             ]
             
             let titleColor = theme.list.itemPrimaryTextColor
@@ -399,6 +400,34 @@ private final class BusinessListComponent: CombinedComponent {
             
             items.append(
                 AnyComponentWithIdentity(
+                    id: "links",
+                    component: AnyComponent(ParagraphComponent(
+                        title: strings.Premium_Business_Links_Title,
+                        titleColor: titleColor,
+                        text: strings.Premium_Business_Links_Text,
+                        textColor: textColor,
+                        iconName: "Premium/Business/Links",
+                        iconColor: colors[5]
+                    ))
+                )
+            )
+            
+            items.append(
+                AnyComponentWithIdentity(
+                    id: "intro",
+                    component: AnyComponent(ParagraphComponent(
+                        title: strings.Premium_Business_Intro_Title,
+                        titleColor: titleColor,
+                        text: strings.Premium_Business_Intro_Text,
+                        textColor: textColor,
+                        iconName: "Premium/Business/Intro",
+                        iconColor: colors[6]
+                    ))
+                )
+            )
+            
+            items.append(
+                AnyComponentWithIdentity(
                     id: "chatbots",
                     component: AnyComponent(ParagraphComponent(
                         title: strings.Premium_Business_Chatbots_Title,
@@ -406,7 +435,7 @@ private final class BusinessListComponent: CombinedComponent {
                         text: strings.Premium_Business_Chatbots_Text,
                         textColor: textColor,
                         iconName: "Premium/Business/Chatbots",
-                        iconColor: colors[5]
+                        iconColor: colors[7]
                     ))
                 )
             )
@@ -469,7 +498,7 @@ final class BusinessPageComponent: CombinedComponent {
         let updateDismissOffset: (CGFloat) -> Void
         let updatedIsDisplaying: (Bool) -> Void
         
-        var resetScroll: ActionSlot<Void>?
+        var resetScroll: ActionSlot<CGPoint?>?
         
         var topContentOffset: CGFloat = 0.0
         var bottomContentOffset: CGFloat = 100.0 {
@@ -490,7 +519,7 @@ final class BusinessPageComponent: CombinedComponent {
                     self.updatedIsDisplaying(self.isDisplaying)
                     
                     if !self.isDisplaying {
-                        self.resetScroll?.invoke(Void())
+                        self.resetScroll?.invoke(nil)
                     }
                 }
             }
@@ -537,7 +566,7 @@ final class BusinessPageComponent: CombinedComponent {
         let topSeparator = Child(Rectangle.self)
         let title = Child(MultilineTextComponent.self)
         
-        let resetScroll = ActionSlot<Void>()
+        let resetScroll = ActionSlot<CGPoint?>()
         
         return { context in
             let state = context.state

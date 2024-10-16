@@ -100,13 +100,14 @@ class BazelCommandLine:
 
             # https://github.com/bazelbuild/rules_swift
             # Use -Osize instead of -O when building swift modules.
-            #'--features=swift.opt_uses_osize',
+            '--features=swift.opt_uses_osize',
 
             # --num-threads 0 forces swiftc to generate one object file per module; it:
             # 1. resolves issues with the linker caused by the swift-objc mixing.
             # 2. makes the resulting binaries significantly smaller (up to 9% for this project).
-            '--swiftcopt=-num-threads', '--swiftcopt=1',
+            #'--swiftcopt=-num-threads', '--swiftcopt=1',
             '--swiftcopt=-j1',
+            '--features=swift._num_threads_0_in_swiftcopts',
 
             # Strip unsused code.
             '--features=dead_strip',
@@ -608,7 +609,7 @@ def build(bazel, arguments):
     if arguments.outputBuildArtifactsPath is not None:
         artifacts_path = os.path.abspath(arguments.outputBuildArtifactsPath)
         if os.path.exists(artifacts_path + '/Telegram.ipa'):
-            os.remove(path)
+            os.remove(artifacts_path + '/Telegram.ipa')
         if os.path.exists(artifacts_path + '/DSYMs'):
             shutil.rmtree(artifacts_path + '/DSYMs')
         os.makedirs(artifacts_path, exist_ok=True)
@@ -624,7 +625,7 @@ def build(bazel, arguments):
             sys.exit(1)
         shutil.copyfile(ipa_paths[0], artifacts_path + '/Telegram.ipa')
 
-        dsym_paths = glob.glob('bazel-bin/Telegram/**/*.dSYM')
+        dsym_paths = glob.glob('bazel-bin/Telegram/*.dSYM')
         for dsym_path in dsym_paths:
             file_name = os.path.basename(dsym_path)
             shutil.copytree(dsym_path, artifacts_path + '/DSYMs/{}'.format(file_name))

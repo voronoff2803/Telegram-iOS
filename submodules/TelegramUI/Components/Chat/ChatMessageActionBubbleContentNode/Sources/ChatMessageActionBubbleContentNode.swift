@@ -27,6 +27,8 @@ private func attributedServiceMessageString(theme: ChatPresentationThemeData, st
 }
 
 public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
+    public var expandHighlightingNode: LinkHighlightingNode?
+    
     public let labelNode: TextNodeWithEntities
     private var dustNode: InvisibleInkDustNode?
     public var backgroundNode: WallpaperBubbleBackgroundNode?
@@ -270,11 +272,11 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
                             strongSelf.mediaBackgroundNode.image = backgroundImage
                             
                             if let image = image, let video = image.videoRepresentations.last, let id = image.id?.id {
-                                let videoFileReference = FileMediaReference.message(message: MessageReference(item.message), media: TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: 0), partialReference: nil, resource: video.resource, previewRepresentations: image.representations, videoThumbnails: [], immediateThumbnailData: image.immediateThumbnailData, mimeType: "video/mp4", size: nil, attributes: [.Animated, .Video(duration: 0, size: video.dimensions, flags: [], preloadSize: nil)]))
+                                let videoFileReference = FileMediaReference.message(message: MessageReference(item.message), media: TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: 0), partialReference: nil, resource: video.resource, previewRepresentations: image.representations, videoThumbnails: [], immediateThumbnailData: image.immediateThumbnailData, mimeType: "video/mp4", size: nil, attributes: [.Animated, .Video(duration: 0, size: video.dimensions, flags: [], preloadSize: nil, coverTime: nil, videoCodec: nil)], alternativeRepresentations: []))
                                 let videoContent = NativeVideoContent(id: .profileVideo(id, "action"), userLocation: .peer(item.message.id.peerId), fileReference: videoFileReference, streamVideo: isMediaStreamable(resource: video.resource) ? .conservative : .none, loopVideo: true, enableSound: false, fetchAutomatically: true, onlyFullSizeThumbnail: false, useLargeThumbnail: true, autoFetchFullSizeThumbnail: true, continuePlayingWithoutSoundOnLostAudioSession: false, placeholderColor: .clear, storeAfterDownload: nil)
                                 if videoContent.id != strongSelf.videoContent?.id {
                                     let mediaManager = item.context.sharedContext.mediaManager
-                                    let videoNode = UniversalVideoNode(postbox: item.context.account.postbox, audioSession: mediaManager.audioSession, manager: mediaManager.universalVideoManager, decoration: GalleryVideoDecoration(), content: videoContent, priority: .secondaryOverlay)
+                                    let videoNode = UniversalVideoNode(accountId: item.context.account.id, postbox: item.context.account.postbox, audioSession: mediaManager.audioSession, manager: mediaManager.universalVideoManager, decoration: GalleryVideoDecoration(), content: videoContent, priority: .secondaryOverlay)
                                     videoNode.isUserInteractionEnabled = false
                                     videoNode.ownsContentNodeUpdated = { [weak self] owns in
                                         if let strongSelf = self {
@@ -364,6 +366,24 @@ public class ChatMessageActionBubbleContentNode: ChatMessageBubbleContentNode {
                             
                             let baseBackgroundFrame = labelFrame.offsetBy(dx: 0.0, dy: -11.0)
 
+                            if var rect = strongSelf.labelNode.textNode.cachedLayout?.allAttributeRects(name: TelegramTextAttributes.Button).first?.1 {
+                                rect = rect.insetBy(dx: -2.0, dy: 2.0).offsetBy(dx: 0.0, dy: 1.0 - UIScreenPixel)
+                                let highlightNode: LinkHighlightingNode
+                                if let current = strongSelf.expandHighlightingNode {
+                                    highlightNode = current
+                                } else {
+                                    highlightNode = LinkHighlightingNode(color: UIColor(rgb: 0x000000, alpha: 0.1))
+                                    highlightNode.outerRadius = 7.5
+                                    strongSelf.insertSubnode(highlightNode, belowSubnode: strongSelf.labelNode.textNode)
+                                    strongSelf.expandHighlightingNode = highlightNode
+                                }
+                                highlightNode.frame = strongSelf.labelNode.textNode.frame
+                                highlightNode.updateRects([rect])
+                            } else {
+                                strongSelf.expandHighlightingNode?.removeFromSupernode()
+                                strongSelf.expandHighlightingNode = nil
+                            }
+                            
                             if let (offset, image) = backgroundMaskImage {
                                 if item.context.sharedContext.energyUsageSettings.fullTranslucency {
                                     if strongSelf.backgroundNode == nil {

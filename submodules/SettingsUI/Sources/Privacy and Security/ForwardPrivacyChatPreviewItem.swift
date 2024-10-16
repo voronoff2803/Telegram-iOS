@@ -145,7 +145,7 @@ class ForwardPrivacyChatPreviewItemNode: ListViewItemNode {
             var peers = SimpleDictionary<PeerId, Peer>()
             let messages = SimpleDictionary<MessageId, Message>()
             
-            peers[peerId] = TelegramUser(id: peerId, accessHash: nil, firstName: item.peerName, lastName: "", username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: .blue, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil)
+            peers[peerId] = TelegramUser(id: peerId, accessHash: nil, firstName: item.peerName, lastName: "", username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: .blue, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil)
             
             let forwardInfo = MessageForwardInfo(author: item.linkEnabled ? peers[peerId] : nil, source: nil, sourceMessageId: nil, date: 0, authorSignature: item.linkEnabled ? nil : item.peerName, psaType: nil, flags: [])
             
@@ -316,7 +316,7 @@ class ForwardPrivacyChatPreviewItemNode: ListViewItemNode {
         }
     }
     
-    override func animateInsertion(_ currentTimestamp: Double, duration: Double, short: Bool) {
+    override func animateInsertion(_ currentTimestamp: Double, duration: Double, options: ListViewItemAnimationOptions) {
         self.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.4)
     }
     

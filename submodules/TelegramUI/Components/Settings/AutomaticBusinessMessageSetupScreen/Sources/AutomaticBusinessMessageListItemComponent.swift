@@ -96,7 +96,7 @@ final class GreetingMessageListItemComponent: Component {
             self.component?.action?()
         }
         
-        func update(component: GreetingMessageListItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+        func update(component: GreetingMessageListItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             let previousComponent = self.component
             self.component = component
             self.componentState = state
@@ -186,9 +186,13 @@ final class GreetingMessageListItemComponent: Component {
                     },
                     openPremiumIntro: {
                     },
-                    openPremiumGift: {
+                    openPremiumGift: { _ in
+                    },
+                    openPremiumManagement: {
                     },
                     openActiveSessions: {
+                    },
+                    openBirthdaySetup: {
                     },
                     performActiveSessionAction: { _, _ in
                     },
@@ -197,6 +201,8 @@ final class GreetingMessageListItemComponent: Component {
                     hideChatFolderUpdates: {
                     },
                     openStories: { _, _ in
+                    },
+                    openStarsTopup: { _ in
                     },
                     dismissNotice: { _ in
                     },
@@ -239,7 +245,9 @@ final class GreetingMessageListItemComponent: Component {
                         commandPrefix: nil,
                         searchQuery: nil,
                         messageCount: component.count,
-                        hideSeparator: true
+                        hideSeparator: true,
+                        hideDate: true,
+                        hidePeerStatus: true
                     )
                 )),
                 editing: false,
@@ -312,7 +320,7 @@ final class GreetingMessageListItemComponent: Component {
         return View(frame: CGRect())
     }
 
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

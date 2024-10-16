@@ -3,6 +3,7 @@ import UIKit
 import Display
 import AsyncDisplayKit
 import SwiftSignalKit
+import Postbox
 import TelegramCore
 import TelegramPresentationData
 import TelegramUIPreferences
@@ -23,7 +24,8 @@ import UndoUI
 import QrCodeUI
 import PremiumUI
 import TextFormat
-import Postbox
+import PremiumUI
+import OldChannelsController
 
 private final class ChannelVisibilityControllerArguments {
     let context: AccountContext
@@ -1399,6 +1401,9 @@ public func channelVisibilityController(context: AccountContext, updatedPresenta
         adminedPublicChannels.set(.single(peers))
     } else {
         adminedPublicChannels.set(context.engine.peers.adminedPublicChannels(scope: .all)
+        |> map { result in
+            return result.map(\.peer)
+        }
         |> map(Optional.init))
     }
     
@@ -1406,6 +1411,9 @@ public func channelVisibilityController(context: AccountContext, updatedPresenta
     peersDisablingAddressNameAssignment.set(.single(nil) |> then(context.engine.peers.channelAddressNameAssignmentAvailability(peerId: peerId.namespace == Namespaces.Peer.CloudChannel ? peerId : nil) |> mapToSignal { result -> Signal<[EnginePeer]?, NoError> in
         if case .addressNameLimitReached = result {
             return context.engine.peers.adminedPublicChannels(scope: .all)
+            |> map { result in
+                return result.map(\.peer)
+            }
             |> map(Optional.init)
         } else {
             return .single([])
@@ -1478,7 +1486,11 @@ public func channelVisibilityController(context: AccountContext, updatedPresenta
                         let controller = channelVisibilityController(context: context, updatedPresentationData: updatedPresentationData, peerId: peerId, mode: .revokeNames(peers), upgradedToSupergroup: { _, _ in }, revokedPeerAddressName: { revokedPeerId in
                             let updatedPublicChannels = peers.filter { $0.id != revokedPeerId }
                             adminedPublicChannels.set(.single(updatedPublicChannels) |> then(
-                                context.engine.peers.adminedPublicChannels(scope: .all) |> map(Optional.init))
+                                context.engine.peers.adminedPublicChannels(scope: .all)
+                                |> map { result in
+                                    return result.map(\.peer)
+                                }
+                                |> map(Optional.init))
                             )
                         })
                         controller.navigationPresentation = .modal
@@ -2266,7 +2278,7 @@ public func channelVisibilityController(context: AccountContext, updatedPresenta
     nextImpl = { [weak controller] in
         if let controller = controller {
             if case .initialSetup = mode {
-                let selectionController = context.sharedContext.makeContactMultiselectionController(ContactMultiselectionControllerParams(context: context, updatedPresentationData: updatedPresentationData, mode: .channelCreation, options: [], onlyWriteable: true))
+                let selectionController = context.sharedContext.makeContactMultiselectionController(ContactMultiselectionControllerParams(context: context, updatedPresentationData: updatedPresentationData, mode: .channelCreation, onlyWriteable: true))
                 (controller.navigationController as? NavigationController)?.replaceAllButRootController(selectionController, animated: true)
                 let _ = (selectionController.result
                 |> deliverOnMainQueue).start(next: { [weak selectionController] result in
@@ -2327,7 +2339,7 @@ public func channelVisibilityController(context: AccountContext, updatedPresenta
                 })
             } else {
                 if let navigationController = controller.navigationController as? NavigationController {
-                    navigationController.replaceAllButRootController(context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: peerId), subject: nil, botStart: nil, mode: .standard(.default)), animated: true)
+                    navigationController.replaceAllButRootController(context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: peerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil), animated: true)
                 }
             }
         }

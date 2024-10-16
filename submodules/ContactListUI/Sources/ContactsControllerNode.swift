@@ -44,7 +44,7 @@ private final class ContextControllerContentSourceImpl: ContextControllerContent
     }
 }
 
-final class ContactsControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
+final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
     let contactListNode: ContactListNode
     
     private let context: AccountContext
@@ -93,28 +93,24 @@ final class ContactsControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         self.presentationData = context.sharedContext.currentPresentationData.with { $0 }
         self.stringsPromise.set(.single(self.presentationData.strings))
         
-        var addNearbyImpl: (() -> Void)?
         var inviteImpl: (() -> Void)?
         
         let presentation = combineLatest(sortOrder, self.stringsPromise.get())
         |> map { sortOrder, strings -> ContactListPresentation in
-            let options = [ContactListAdditionalOption(title: strings.Contacts_AddPeopleNearby, icon: .generic(UIImage(bundleImageName: "Contact List/PeopleNearbyIcon")!), action: {
-                addNearbyImpl?()
-            }), ContactListAdditionalOption(title: strings.Contacts_InviteFriends, icon: .generic(UIImage(bundleImageName: "Contact List/AddMemberIcon")!), action: {
+            let options = [ContactListAdditionalOption(title: strings.Contacts_InviteFriends, icon: .generic(UIImage(bundleImageName: "Contact List/AddMemberIcon")!), action: {
                 inviteImpl?()
             })]
-            
             switch sortOrder {
                 case .presence:
                     return .orderedByPresence(options: options)
                 case .natural:
-                    return .natural(options: options, includeChatList: false, topPeers: false)
+                    return .natural(options: options, includeChatList: false, topPeers: .none)
             }
         }
         
         var contextAction: ((EnginePeer, ASDisplayNode, ContextGesture?, CGPoint?, Bool) -> Void)?
         
-        self.contactListNode = ContactListNode(context: context, presentation: presentation, onlyWriteable: false, displaySortOptions: true, contextAction: { peer, node, gesture, location, isStories in
+        self.contactListNode = ContactListNode(context: context, presentation: presentation, onlyWriteable: false, isGroupInvitation: false, displaySortOptions: true, contextAction: { peer, node, gesture, location, isStories in
             contextAction?(peer, node, gesture, location, isStories)
         })
         
@@ -145,13 +141,7 @@ final class ContactsControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
                 }
             }
         }).strict()
-        
-        addNearbyImpl = { [weak self] in
-            if let strongSelf = self {
-                strongSelf.openPeopleNearby?()
-            }
-        }
-        
+                
         inviteImpl = { [weak self] in
             if let strongSelf = self {
                 strongSelf.openInvite?()
@@ -354,7 +344,7 @@ final class ContactsControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         )
         
         let navigationBarSize = self.navigationBarView.update(
-            transition: Transition(transition),
+            transition: ComponentTransition(transition),
             component: AnyComponent(ChatListNavigationBar(
                 context: self.context,
                 theme: self.presentationData.theme,
@@ -420,7 +410,7 @@ final class ContactsControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         }
         
         if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
-            navigationBarComponentView.applyScroll(offset: offset, allowAvatarsExpansion: false, transition: Transition(transition))
+            navigationBarComponentView.applyScroll(offset: offset, allowAvatarsExpansion: false, transition: ComponentTransition(transition))
         }
     }
     
@@ -450,7 +440,7 @@ final class ContactsControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
         
         if let navigationBarComponentView = self.navigationBarView.view as? ChatListNavigationBar.View {
             navigationBarComponentView.deferScrollApplication = false
-            navigationBarComponentView.applyCurrentScroll(transition: Transition(transition))
+            navigationBarComponentView.applyCurrentScroll(transition: ComponentTransition(transition))
         }
     }
     
@@ -465,7 +455,7 @@ final class ContactsControllerNode: ASDisplayNode, UIGestureRecognizerDelegate {
             let controller = ContextController(presentationData: self.presentationData, source: .extracted(ContactContextExtractedContentSource(sourceNode: node, shouldBeDismissed: .single(false))), items: items, recognizer: nil, gesture: gesture)
             contactsController.presentInGlobalOverlay(controller)
         } else {
-            let chatController = self.context.sharedContext.makeChatController(context: self.context, chatLocation: .peer(id: peer.id), subject: nil, botStart: nil, mode: .standard(.previewing))
+            let chatController = self.context.sharedContext.makeChatController(context: self.context, chatLocation: .peer(id: peer.id), subject: nil, botStart: nil, mode: .standard(.previewing), params: nil)
             chatController.canReadHistory.set(false)
             let contextController = ContextController(presentationData: self.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node)), items: items, gesture: gesture)
             contactsController.presentInGlobalOverlay(contextController)

@@ -57,7 +57,9 @@ func leftNavigationButtonForChatInterfaceState(_ presentationInterfaceState: Cha
     
     if case let .customChatContents(customChatContents) = presentationInterfaceState.subject {
         switch customChatContents.kind {
-        case .quickReplyMessageInput:
+        case .hashTagSearch:
+            break
+        case .quickReplyMessageInput, .businessLinkSetup:
             if let currentButton = currentButton, currentButton.action == .dismiss {
                 return currentButton
             } else {
@@ -124,6 +126,8 @@ func rightNavigationButtonForChatInterfaceState(context: AccountContext, present
     
     if case let .customChatContents(customChatContents) = presentationInterfaceState.subject {
         switch customChatContents.kind {
+        case .hashTagSearch:
+            return nil
         case let .quickReplyMessageInput(_, shortcutType):
             switch shortcutType {
             case .generic:
@@ -136,6 +140,14 @@ func rightNavigationButtonForChatInterfaceState(context: AccountContext, present
                 }
             case .greeting, .away:
                 return nil
+            }
+        case .businessLinkSetup:
+            if let currentButton = currentButton, currentButton.action == .edit {
+                return currentButton
+            } else {
+                let buttonItem = UIBarButtonItem(title: strings.Common_Edit, style: .plain, target: target, action: selector)
+                buttonItem.accessibilityLabel = strings.Common_Done
+                return ChatNavigationButton(action: .edit, buttonItem: buttonItem)
             }
         }
     }
@@ -159,7 +171,7 @@ func rightNavigationButtonForChatInterfaceState(context: AccountContext, present
         }
     }
     if case let .peer(peerId) = presentationInterfaceState.chatLocation {
-        if peerId.isReplies {
+        if peerId.isRepliesOrVerificationCodes {
             if hasMessages {
                 if case .search = currentButton?.action {
                     return currentButton

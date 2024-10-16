@@ -168,7 +168,7 @@ public protocol AnimatedStickerNode: ASDisplayNode {
     var visibility: Bool { get set }
     var overrideVisibility: Bool { get set }
     
-    var isPlayingChanged: (Bool) -> Void { get }
+    var isPlayingChanged: (Bool) -> Void { get set }
     
     func cloneCurrentFrame(from otherNode: AnimatedStickerNode?)
     func setup(source: AnimatedStickerNodeSource, width: Int, height: Int, playbackMode: AnimatedStickerPlaybackMode, mode: AnimatedStickerMode)
@@ -201,6 +201,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
     public var frameUpdated: (Int, Int) -> Void = { _, _ in }
     public private(set) var currentFrameIndex: Int = 0
     public private(set) var currentFrameCount: Int = 0
+    public private(set) var currentFrameRate: Int = 0
     private var playFromIndex: Int?
     
     public var frameColorUpdated: ((UIColor) -> Void)?
@@ -537,6 +538,7 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                             strongSelf.frameUpdated(frame.index, frame.totalFrames)
                             strongSelf.currentFrameIndex = frame.index
                             strongSelf.currentFrameCount = frame.totalFrames
+                            strongSelf.currentFrameRate = frameRate
                             
                             if frame.isLastFrame {
                                 var stopped = false
@@ -651,7 +653,8 @@ public final class DefaultAnimatedStickerNodeImpl: ASDisplayNode, AnimatedSticke
                             
                             strongSelf.frameUpdated(frame.index, frame.totalFrames)
                             strongSelf.currentFrameIndex = frame.index
-                            strongSelf.currentFrameCount = frame.totalFrames;
+                            strongSelf.currentFrameCount = frame.totalFrames
+                            strongSelf.currentFrameRate = frameRate
                             
                             if frame.isLastFrame {
                                 var stopped = false

@@ -10,7 +10,7 @@ import ShareController
 import OpenInExternalAppUI
 import TelegramUIPreferences
 
-class InstantPageReferenceControllerNode: ViewControllerTracingNode, UIScrollViewDelegate {
+class InstantPageReferenceControllerNode: ViewControllerTracingNode, ASScrollViewDelegate {
     private let context: AccountContext
     private let sourceLocation: InstantPageSourceLocation
     private let theme: InstantPageTheme
@@ -84,7 +84,7 @@ class InstantPageReferenceControllerNode: ViewControllerTracingNode, UIScrollVie
         self.dimNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.dimTapGesture(_:))))
         self.addSubnode(self.dimNode)
         
-        self.wrappingScrollNode.view.delegate = self
+        self.wrappingScrollNode.view.delegate = self.wrappedScrollViewDelegate
         self.addSubnode(self.wrappingScrollNode)
         
         self.wrappingScrollNode.addSubnode(self.contentBackgroundNode)
@@ -203,7 +203,7 @@ class InstantPageReferenceControllerNode: ViewControllerTracingNode, UIScrollVie
             
             let sideInset: CGFloat = 16.0
             let (_, items, contentSize) = layoutTextItemWithString(self.anchorText, boundingWidth: width - sideInset * 2.0, offset: CGPoint(x: sideInset, y: sideInset), media: media, webpage: self.webPage)
-            let contentNode = InstantPageContentNode(context: self.context, strings: self.presentationData.strings, nameDisplayOrder: self.presentationData.nameDisplayOrder, sourceLocation: self.sourceLocation, theme: self.theme, items: items, contentSize: CGSize(width: width, height: contentSize.height), inOverlayPanel: true, openMedia: { _ in }, longPressMedia: { _ in }, activatePinchPreview: nil, pinchPreviewFinished: nil, openPeer: { _ in }, openUrl: { _ in })
+            let contentNode = InstantPageContentNode(context: self.context, strings: self.presentationData.strings, nameDisplayOrder: self.presentationData.nameDisplayOrder, sourceLocation: self.sourceLocation, theme: self.theme, items: items, contentSize: CGSize(width: width, height: contentSize.height), inOverlayPanel: true, openMedia: { _ in }, longPressMedia: { _ in }, activatePinchPreview: nil, pinchPreviewFinished: nil, openPeer: { _ in }, openUrl: { _ in }, getPreloadedResource: { url in return nil})
             transition.updateFrame(node: contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: titleAreaHeight), size: CGSize(width: width, height: contentSize.height)))
             self.contentContainerNode.insertSubnode(contentNode, at: 0)
             self.contentNode = contentNode

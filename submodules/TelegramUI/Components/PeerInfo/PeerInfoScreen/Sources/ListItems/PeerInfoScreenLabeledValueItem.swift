@@ -2,11 +2,18 @@ import AsyncDisplayKit
 import Display
 import TelegramPresentationData
 import AccountContext
+import TelegramCore
 import TextFormat
 import UIKit
 import AppBundle
 import TelegramStringFormatting
 import ContextUI
+import SwiftSignalKit
+import TextLoadingEffect
+import EmojiTextAttachmentView
+import ComponentFlow
+import ButtonComponent
+import ComponentDisplayAdapters
 
 enum PeerInfoScreenLabeledValueTextColor {
     case primary
@@ -18,51 +25,92 @@ enum PeerInfoScreenLabeledValueTextBehavior: Equatable {
     case multiLine(maxLines: Int, enabledEntities: EnabledEntityTypes)
 }
 
+enum PeerInfoScreenLabeledValueLeftIcon {
+    case birthday
+}
+
 enum PeerInfoScreenLabeledValueIcon {
     case qrCode
+    case premiumGift
+}
+
+private struct TextLinkItemSource: Equatable {
+    enum Target {
+        case primary
+        case additional
+    }
+    
+    let item: TextLinkItem
+    let target: Target
+    let range: NSRange?
+    
+    init(item: TextLinkItem, target: Target, range: NSRange?) {
+        self.item = item
+        self.target = target
+        self.range = range
+    }
 }
 
 final class PeerInfoScreenLabeledValueItem: PeerInfoScreenItem {
+    final class Button {
+        let title: String
+        let action: () -> Void
+        
+        init(title: String, action: @escaping () -> Void) {
+            self.title = title
+            self.action = action
+        }
+    }
+    
     let id: AnyHashable
+    let context: AccountContext?
     let label: String
     let text: String
     let additionalText: String?
     let textColor: PeerInfoScreenLabeledValueTextColor
     let textBehavior: PeerInfoScreenLabeledValueTextBehavior
+    let leftIcon: PeerInfoScreenLabeledValueLeftIcon?
     let icon: PeerInfoScreenLabeledValueIcon?
-    let action: ((ASDisplayNode) -> Void)?
+    let action: ((ASDisplayNode, Promise<Bool>?) -> Void)?
     let longTapAction: ((ASDisplayNode) -> Void)?
-    let linkItemAction: ((TextLinkItemActionType, TextLinkItem, ASDisplayNode, CGRect?) -> Void)?
+    let linkItemAction: ((TextLinkItemActionType, TextLinkItem, ASDisplayNode, CGRect?, Promise<Bool>?) -> Void)?
     let iconAction: (() -> Void)?
+    let button: Button?
     let contextAction: ((ASDisplayNode, ContextGesture?, CGPoint?) -> Void)?
-    let requestLayout: () -> Void
+    let requestLayout: (Bool) -> Void
     
     init(
         id: AnyHashable,
+        context: AccountContext? = nil,
         label: String,
         text: String,
         additionalText: String? = nil,
         textColor: PeerInfoScreenLabeledValueTextColor = .primary,
         textBehavior: PeerInfoScreenLabeledValueTextBehavior = .singleLine,
+        leftIcon: PeerInfoScreenLabeledValueLeftIcon? = nil,
         icon: PeerInfoScreenLabeledValueIcon? = nil,
-        action: ((ASDisplayNode) -> Void)?,
+        action: ((ASDisplayNode, Promise<Bool>?) -> Void)?,
         longTapAction: ((ASDisplayNode) -> Void)? = nil,
-        linkItemAction: ((TextLinkItemActionType, TextLinkItem, ASDisplayNode, CGRect?) -> Void)? = nil,
+        linkItemAction: ((TextLinkItemActionType, TextLinkItem, ASDisplayNode, CGRect?, Promise<Bool>?) -> Void)? = nil,
         iconAction: (() -> Void)? = nil,
+        button: Button? = nil,
         contextAction: ((ASDisplayNode, ContextGesture?, CGPoint?) -> Void)? = nil,
-        requestLayout: @escaping () -> Void
+        requestLayout: @escaping (Bool) -> Void
     ) {
         self.id = id
+        self.context = context
         self.label = label
         self.text = text
         self.additionalText = additionalText
         self.textColor = textColor
         self.textBehavior = textBehavior
+        self.leftIcon = leftIcon
         self.icon = icon
         self.action = action
         self.longTapAction = longTapAction
         self.linkItemAction = linkItemAction
         self.iconAction = iconAction
+        self.button = button
         self.contextAction = contextAction
         self.requestLayout = requestLayout
     }
@@ -89,6 +137,8 @@ private func generateExpandBackground(size: CGSize, color: UIColor) -> UIImage? 
 }
 
 private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
+    private weak var context: AccountContext?
+    
     private let containerNode: ContextControllerSourceNode
     private let contextSourceNode: ContextExtractedContentContainingNode
     
@@ -112,12 +162,21 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
     private let iconNode: ASImageNode
     private let iconButtonNode: HighlightTrackingButtonNode
     
+    private var animatedEmojiLayer: InlineStickerItemLayer?
+    
     private var linkHighlightingNode: LinkHighlightingNode?
+    
+    private var actionButton: ComponentView<Empty>?
     
     private let activateArea: AccessibilityAreaNode
     
+    private var validLayout: (width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool)?
     private var item: PeerInfoScreenLabeledValueItem?
     private var theme: PresentationTheme?
+    
+    private var linkProgressView: TextLoadingEffectView?
+    private var linkItemWithProgress: TextLinkItemSource?
+    private var linkItemProgressDisposable: Disposable?
     
     private var isExpanded: Bool = false
     
@@ -229,6 +288,18 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
             }
         }
         
+        self.containerNode.shouldBegin = { [weak self] point in
+            guard let self else {
+                return false
+            }
+            
+            if self.linkItemAtPoint(point) != nil {
+                return false
+            }
+            
+            return true
+        }
+        
         self.containerNode.activated = { [weak self] gesture, _ in
             guard let strongSelf = self, let item = strongSelf.item, let contextAction = item.contextAction else {
                 gesture.cancel()
@@ -259,9 +330,13 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         }
     }
     
+    deinit {
+        self.linkItemProgressDisposable?.dispose()
+    }
+    
     @objc private func expandPressed() {
         self.isExpanded = true
-        self.item?.requestLayout()
+        self.item?.requestLayout(true)
     }
     
     @objc private func iconPressed() {
@@ -313,11 +388,57 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
                 case .tap, .longTap:
                     if let item = self.item {
                         if let linkItem = self.linkItemAtPoint(location) {
-                            item.linkItemAction?(gesture == .tap ? .tap : .longTap, linkItem, self.linkHighlightingNode ?? self, self.linkHighlightingNode?.rects.first)
+                            self.linkItemProgressDisposable?.dispose()
+                            let progressValue = Promise<Bool>(false)
+                            self.linkItemProgressDisposable = (progressValue.get()
+                            |> distinctUntilChanged
+                            |> deliverOnMainQueue).start(next: { [weak self] value in
+                                guard let self else {
+                                    return
+                                }
+                                var currentLinkItem: TextLinkItemSource?
+                                if value {
+                                    currentLinkItem = linkItem
+                                }
+                                if self.linkItemWithProgress != currentLinkItem {
+                                    self.linkItemWithProgress = currentLinkItem
+                                    
+                                    if let validLayout = self.validLayout, let context = self.context {
+                                        let _ = self.update(context: context, width: validLayout.width, safeInsets: validLayout.safeInsets, presentationData: validLayout.presentationData, item: validLayout.item, topItem: validLayout.topItem, bottomItem: validLayout.bottomItem, hasCorners: validLayout.hasCorners, transition: .immediate)
+                                    }
+                                }
+                            })
+                            
+                            item.linkItemAction?(gesture == .tap ? .tap : .longTap, linkItem.item, self.linkHighlightingNode ?? self, self.linkHighlightingNode?.rects.first, progressValue)
                         } else if case .longTap = gesture {
                             item.longTapAction?(self)
                         } else if case .tap = gesture {
-                            item.action?(self.contextSourceNode)
+                            var linkItem: TextLinkItemSource?
+                            if let attributedText = self.textNode.attributedText {
+                                linkItem = TextLinkItemSource(item: .url(url: "", concealed: false), target: .primary, range: NSRange(location: 0, length: attributedText.length))
+                            }
+                            self.linkItemProgressDisposable?.dispose()
+                            let progressValue = Promise<Bool>(false)
+                            self.linkItemProgressDisposable = (progressValue.get()
+                            |> distinctUntilChanged
+                            |> deliverOnMainQueue).start(next: { [weak self] value in
+                                guard let self else {
+                                    return
+                                }
+                                var currentLinkItem: TextLinkItemSource?
+                                if value {
+                                    currentLinkItem = linkItem
+                                }
+                                if self.linkItemWithProgress != currentLinkItem {
+                                    self.linkItemWithProgress = currentLinkItem
+                                    
+                                    if let validLayout = self.validLayout, let context = self.context {
+                                        let _ = self.update(context: context, width: validLayout.width, safeInsets: validLayout.safeInsets, presentationData: validLayout.presentationData, item: validLayout.item, topItem: validLayout.topItem, bottomItem: validLayout.bottomItem, hasCorners: validLayout.hasCorners, transition: .immediate)
+                                    }
+                                }
+                            })
+                            
+                            item.action?(self.contextSourceNode, progressValue)
                         }
                     }
                 default:
@@ -329,10 +450,13 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         }
     }
     
-    override func update(width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool, transition: ContainedViewLayoutTransition) -> CGFloat {
+    override func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool, transition: ContainedViewLayoutTransition) -> CGFloat {
         guard let item = item as? PeerInfoScreenLabeledValueItem else {
             return 10.0
         }
+        
+        self.context = context
+        self.validLayout = (width, safeInsets, presentationData, item, topItem, bottomItem, hasCorners)
         
         self.item = item
         self.theme = presentationData.theme
@@ -340,7 +464,7 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         if let action = item.action {
             self.selectionNode.pressed = { [weak self] in
                 if let strongSelf = self {
-                    action(strongSelf.contextSourceNode)
+                    action(strongSelf.contextSourceNode, nil)
                 }
             }
         } else {
@@ -369,6 +493,8 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
             switch icon {
             case .qrCode:
                 iconImage = UIImage(bundleImageName: "Settings/QrIcon")
+            case .premiumGift:
+                iconImage = UIImage(bundleImageName: "Premium/Gift")
             }
             self.iconNode.image = generateTintedImage(image: iconImage, color: presentationData.theme.list.itemAccentColor)
             self.iconNode.isHidden = false
@@ -479,12 +605,42 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
             topOffset += labelSize.height + 3.0
             height += labelSize.height + 3.0
         }
-        let textFrame = CGRect(origin: CGPoint(x: sideInset, y: topOffset), size: textSize)
+        var textFrame = CGRect(origin: CGPoint(x: sideInset, y: topOffset), size: textSize)
         if textSize.height > 0.0 {
             topOffset += textSize.height + 3.0
             height += textSize.height
         }
         let additionalTextFrame = CGRect(origin: CGPoint(x: sideInset, y: topOffset), size: additionalTextSize)
+        
+        if let context = item.context, let leftIcon = item.leftIcon {
+            var file: TelegramMediaFile?
+            switch leftIcon {
+            case .birthday:
+                file = context.animatedEmojiStickersValue["🎂"]?.first?.file
+            }
+            
+            if let file {
+                let itemSize = floorToScreenPixels(17.0)
+                var itemFrame = CGRect(origin: CGPoint(x: textFrame.minX + itemSize / 2.0, y: textFrame.midY), size: CGSize()).insetBy(dx: -itemSize / 2.0, dy: -itemSize / 2.0)
+                itemFrame.origin.x = floorToScreenPixels(itemFrame.origin.x)
+                itemFrame.origin.y = floorToScreenPixels(itemFrame.origin.y)
+                
+                let itemLayer: InlineStickerItemLayer
+                if let current = self.animatedEmojiLayer {
+                    itemLayer = current
+                } else {
+                    let pointSize = floor(itemSize * 1.3)
+                    itemLayer = InlineStickerItemLayer(context: context, userLocation: .other, attemptSynchronousLoad: true, emoji: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: file.fileId.id, file: file, custom: nil), file: file, cache: context.animationCache, renderer: context.animationRenderer, placeholderColor: presentationData.theme.list.mediaPlaceholderColor, pointSize: CGSize(width: pointSize, height: pointSize), dynamicColor: nil)
+                    self.animatedEmojiLayer = itemLayer
+                    self.layer.addSublayer(itemLayer)
+                    
+                    itemLayer.isVisibleForAnimations = true
+                }
+                itemLayer.frame = itemFrame
+                
+                textFrame.origin.x += 20.0
+            }
+        }
         
         let expandFrame = CGRect(origin: CGPoint(x: width - safeInsets.right - expandSize.width - 14.0 - UIScreenPixel, y: textFrame.maxY - expandSize.height), size: expandSize)
         self.expandNode.frame = expandFrame
@@ -514,6 +670,56 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         
         if additionalTextSize.height > 0.0 {
             height += additionalTextSize.height + 3.0
+        }
+        
+        if let button = item.button {
+            if textSize.height > 0.0 {
+                height += 3.0
+            } else {
+                height -= 7.0
+            }
+            
+            let actionButton: ComponentView<Empty>
+            if let current = self.actionButton {
+                actionButton = current
+            } else {
+                actionButton = ComponentView()
+                self.actionButton = actionButton
+            }
+            
+            let actionButtonSize = actionButton.update(
+                transition: ComponentTransition(transition),
+                component: AnyComponent(ButtonComponent(
+                    background: ButtonComponent.Background(
+                        color: presentationData.theme.list.itemCheckColors.fillColor,
+                        foreground: presentationData.theme.list.itemCheckColors.foregroundColor,
+                        pressedColor: presentationData.theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.8)
+                    ),
+                    content: AnyComponentWithIdentity(id: AnyHashable(0 as Int), component: AnyComponent(Text(text: button.title, font: Font.semibold(17.0), color: presentationData.theme.list.itemCheckColors.foregroundColor))),
+                    isEnabled: true,
+                    allowActionWhenDisabled: false,
+                    displaysProgress: false,
+                    action: {
+                        button.action()
+                    }
+                )),
+                environment: {},
+                containerSize: CGSize(width: width - sideInset * 2.0, height: 50.0)
+            )
+            let actionButtonFrame = CGRect(origin: CGPoint(x: sideInset, y: height), size: actionButtonSize)
+            if let actionButtonView = actionButton.view {
+                if actionButtonView.superview == nil {
+                    self.contextSourceNode.contentNode.view.addSubview(actionButtonView)
+                }
+                transition.updateFrame(view: actionButtonView, frame: actionButtonFrame)
+            }
+            height += actionButtonSize.height
+            height += 16.0
+        } else {
+            if let actionButton = self.actionButton {
+                self.actionButton = nil
+                actionButton.view?.removeFromSuperview()
+            }
         }
         
         let highlightNodeOffset: CGFloat = topItem == nil ? 0.0 : UIScreenPixel
@@ -553,30 +759,100 @@ private final class PeerInfoScreenLabeledValueItemNode: PeerInfoScreenItemNode {
         }
         self.contextSourceNode.contentRect = extractedRect
         
+        if let linkItemWithProgress = self.linkItemWithProgress, let range = linkItemWithProgress.range {
+            let linkProgressView: TextLoadingEffectView
+            if let current = self.linkProgressView {
+                linkProgressView = current
+            } else {
+                linkProgressView = TextLoadingEffectView(frame: CGRect())
+                self.linkProgressView = linkProgressView
+                self.contextSourceNode.contentNode.view.addSubview(linkProgressView)
+            }
+            
+            let progressColor: UIColor = presentationData.theme.list.itemAccentColor.withMultipliedAlpha(0.1)
+            
+            let targetTextNode: TextNode
+            switch linkItemWithProgress.target {
+            case .primary:
+                targetTextNode = self.textNode
+            case .additional:
+                targetTextNode = self.additionalTextNode
+            }
+            linkProgressView.frame = targetTextNode.frame
+            linkProgressView.update(color: progressColor, textNode: targetTextNode, range: range)
+        } else {
+            if let linkProgressView = self.linkProgressView {
+                self.linkProgressView = nil
+                linkProgressView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak linkProgressView] _ in
+                    linkProgressView?.removeFromSuperview()
+                })
+            }
+        }
+        
         return height
     }
     
-    private func linkItemAtPoint(_ point: CGPoint) -> TextLinkItem? {
+    private func linkItemAtPoint(_ point: CGPoint) -> TextLinkItemSource? {
         let textNodeFrame = self.textNode.frame
-        if let (_, attributes) = self.textNode.attributesAtPoint(CGPoint(x: point.x - textNodeFrame.minX, y: point.y - textNodeFrame.minY)) {
+        if let (index, attributes) = self.textNode.attributesAtPoint(CGPoint(x: point.x - textNodeFrame.minX, y: point.y - textNodeFrame.minY)) {
+            var item: TextLinkItem?
+            var urlRange: NSRange?
             if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
-                return .url(url: url, concealed: false)
+                item = .url(url: url, concealed: false)
+                
+                if let (_, _, urlRangeValue) = self.textNode.attributeSubstringWithRange(name: TelegramTextAttributes.URL, index: index) {
+                    urlRange = urlRangeValue
+                }
             } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
-                return .mention(peerName)
+                item = .mention(peerName)
+                
+                if let (_, _, urlRangeValue) = self.textNode.attributeSubstringWithRange(name: NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention).rawValue, index: index) {
+                    urlRange = urlRangeValue
+                }
             } else if let hashtag = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag)] as? TelegramHashtag {
-                return .hashtag(hashtag.peerName, hashtag.hashtag)
+                item = .hashtag(hashtag.peerName, hashtag.hashtag)
+                
+                if let (_, _, urlRangeValue) = self.textNode.attributeSubstringWithRange(name: NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag).rawValue, index: index) {
+                    urlRange = urlRangeValue
+                }
+            } else {
+                item = nil
+            }
+            if let item {
+                return TextLinkItemSource(item: item, target: .primary, range: urlRange)
             } else {
                 return nil
             }
         }
         let additionalTextNodeFrame = self.additionalTextNode.frame
-        if let (_, attributes) = self.additionalTextNode.attributesAtPoint(CGPoint(x: point.x - additionalTextNodeFrame.minX, y: point.y - additionalTextNodeFrame.minY)) {
+        if let (index, attributes) = self.additionalTextNode.attributesAtPoint(CGPoint(x: point.x - additionalTextNodeFrame.minX, y: point.y - additionalTextNodeFrame.minY)) {
+            var item: TextLinkItem?
+            var urlRange: NSRange?
+            
             if let url = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.URL)] as? String {
-                return .url(url: url, concealed: false)
+                item = .url(url: url, concealed: false)
+                
+                if let (_, _, urlRangeValue) = self.additionalTextNode.attributeSubstringWithRange(name: TelegramTextAttributes.URL, index: index) {
+                    urlRange = urlRangeValue
+                }
             } else if let peerName = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention)] as? String {
-                return .mention(peerName)
+                item = .mention(peerName)
+                
+                if let (_, _, urlRangeValue) = self.additionalTextNode.attributeSubstringWithRange(name: NSAttributedString.Key(rawValue: TelegramTextAttributes.PeerTextMention).rawValue, index: index) {
+                    urlRange = urlRangeValue
+                }
             } else if let hashtag = attributes[NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag)] as? TelegramHashtag {
-                return .hashtag(hashtag.peerName, hashtag.hashtag)
+                item = .hashtag(hashtag.peerName, hashtag.hashtag)
+                
+                if let (_, _, urlRangeValue) = self.additionalTextNode.attributeSubstringWithRange(name: NSAttributedString.Key(rawValue: TelegramTextAttributes.Hashtag).rawValue, index: index) {
+                    urlRange = urlRangeValue
+                }
+            } else {
+                item = nil
+            }
+            
+            if let item {
+                return TextLinkItemSource(item: item, target: .additional, range: urlRange)
             } else {
                 return nil
             }

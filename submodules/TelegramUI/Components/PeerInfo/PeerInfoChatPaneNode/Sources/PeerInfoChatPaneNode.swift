@@ -89,7 +89,7 @@ private final class SearchNavigationContentNode: ASDisplayNode, PeerInfoPanelNod
     }
 }
 
-public final class PeerInfoChatPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScrollViewDelegate, UIGestureRecognizerDelegate {
+public final class PeerInfoChatPaneNode: ASDisplayNode, PeerInfoPaneNode, ASScrollViewDelegate, ASGestureRecognizerDelegate {
     private let context: AccountContext
     private let peerId: EnginePeer.Id
     private let navigationController: () -> NavigationController?
@@ -149,7 +149,7 @@ public final class PeerInfoChatPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScro
         
         self.coveringView = UIView()
         
-        self.chatController = context.sharedContext.makeChatController(context: context, chatLocation: .replyThread(message: ChatReplyThreadMessage(peerId: context.account.peerId, threadId: peerId.toInt64(), channelMessageId: nil, isChannelPost: false, isForumPost: false, maxMessage: nil, maxReadIncomingMessageId: nil, maxReadOutgoingMessageId: nil, unreadCount: 0, initialFilledHoles: IndexSet(), initialAnchor: .automatic, isNotAvailable: false)), subject: nil, botStart: nil, mode: .standard(.embedded(invertDirection: true)))
+        self.chatController = context.sharedContext.makeChatController(context: context, chatLocation: .replyThread(message: ChatReplyThreadMessage(peerId: context.account.peerId, threadId: peerId.toInt64(), channelMessageId: nil, isChannelPost: false, isForumPost: false, maxMessage: nil, maxReadIncomingMessageId: nil, maxReadOutgoingMessageId: nil, unreadCount: 0, initialFilledHoles: IndexSet(), initialAnchor: .automatic, isNotAvailable: false)), subject: nil, botStart: nil, mode: .standard(.embedded(invertDirection: true)), params: nil)
         self.chatController.navigation_setNavigationController(navigationController())
         
         super.init()

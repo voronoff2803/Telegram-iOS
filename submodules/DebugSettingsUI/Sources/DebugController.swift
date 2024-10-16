@@ -93,15 +93,19 @@ private enum DebugControllerEntry: ItemListNodeEntry {
     case knockoutWallpaper(PresentationTheme, Bool)
     case experimentalCompatibility(Bool)
     case enableDebugDataDisplay(Bool)
-    case acceleratedStickers(Bool)
-    case inlineForums(Bool)
+    case rippleEffect(Bool)
+    case browserExperiment(Bool)
     case localTranscription(Bool)
     case enableReactionOverrides(Bool)
     case storiesExperiment(Bool)
     case storiesJpegExperiment(Bool)
     case playlistPlayback(Bool)
     case enableQuickReactionSwitch(Bool)
-    case voiceConference
+    case disableReloginTokens(Bool)
+    case disableCallV2(Bool)
+    case experimentalCallMute(Bool)
+    case liveStreamV2(Bool)
+    case dynamicStreaming(Bool)
     case preferredVideoCodec(Int, String, String?, Bool)
     case disableVideoAspectScaling(Bool)
     case enableNetworkFramework(Bool)
@@ -126,7 +130,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return DebugControllerSection.web.rawValue
         case .keepChatNavigationStack, .skipReadHistory, .dustEffect, .crashOnSlowQueries, .crashOnMemoryPressure:
             return DebugControllerSection.experiments.rawValue
-        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .storiesExperiment, .storiesJpegExperiment, .playlistPlayback, .enableQuickReactionSwitch, .voiceConference, .experimentalCompatibility, .enableDebugDataDisplay, .acceleratedStickers, .inlineForums, .localTranscription, .enableReactionOverrides, .restorePurchases:
+        case .clearTips, .resetNotifications, .crash, .fillLocalSavedMessageCache, .resetDatabase, .resetDatabaseAndCache, .resetHoles, .resetTagHoles, .reindexUnread, .resetCacheIndex, .reindexCache, .resetBiometricsData, .optimizeDatabase, .photoPreview, .knockoutWallpaper, .storiesExperiment, .storiesJpegExperiment, .playlistPlayback, .enableQuickReactionSwitch, .experimentalCompatibility, .enableDebugDataDisplay, .rippleEffect, .browserExperiment, .localTranscription, .enableReactionOverrides, .restorePurchases, .disableReloginTokens, .disableCallV2, .experimentalCallMute, .liveStreamV2, .dynamicStreaming:
             return DebugControllerSection.experiments.rawValue
         case .logTranslationRecognition, .resetTranslationStates:
             return DebugControllerSection.translation.rawValue
@@ -215,9 +219,9 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 37
         case .enableDebugDataDisplay:
             return 38
-        case .acceleratedStickers:
+        case .rippleEffect:
             return 39
-        case .inlineForums:
+        case .browserExperiment:
             return 40
         case .localTranscription:
             return 41
@@ -233,14 +237,22 @@ private enum DebugControllerEntry: ItemListNodeEntry {
             return 46
         case .storiesJpegExperiment:
             return 47
-        case .playlistPlayback:
+        case .disableReloginTokens:
             return 48
-        case .enableQuickReactionSwitch:
+        case .playlistPlayback:
             return 49
-        case .voiceConference:
+        case .enableQuickReactionSwitch:
             return 50
+        case .disableCallV2:
+            return 51
+        case .experimentalCallMute:
+            return 52
+        case .liveStreamV2:
+            return 53
+        case .dynamicStreaming:
+            return 54
         case let .preferredVideoCodec(index, _, _, _):
-            return 51 + index
+            return 55 + index
         case .disableVideoAspectScaling:
             return 100
         case .enableNetworkFramework:
@@ -273,7 +285,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     } else {
                         UIPasteboard.general.setData(data, forPasteboardType: dataType)
                     }
-                    context.sharedContext.openResolvedUrl(.importStickers, context: context, urlContext: .generic, navigationController: arguments.getNavigationController(), forceExternal: false, openPeer: { _, _ in }, sendFile: nil, sendSticker: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { c, a in arguments.presentController(c, a as? ViewControllerPresentationArguments) }, dismissInput: {}, contentContext: nil, progress: nil, completion: nil)
+                    context.sharedContext.openResolvedUrl(.importStickers, context: context, urlContext: .generic, navigationController: arguments.getNavigationController(), forceExternal: false, openPeer: { _, _ in }, sendFile: nil, sendSticker: nil, sendEmoji: nil, requestMessageActionUrlAuth: nil, joinVoiceChat: nil, present: { c, a in arguments.presentController(c, a as? ViewControllerPresentationArguments) }, dismissInput: {}, contentContext: nil, progress: nil, completion: nil)
                 }
             })
         case .sendLogs:
@@ -329,7 +341,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                     let fileResource = LocalFileMediaResource(fileId: id, size: Int64(gzippedData.count), isSecretRelated: false)
                                     context.account.postbox.mediaBox.storeResourceData(fileResource.id, data: gzippedData)
 
-                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")])
+                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")], alternativeRepresentations: [])
                                     let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 
                                     let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()
@@ -409,7 +421,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                         let fileResource = LocalFileMediaResource(fileId: id, size: Int64(logData.count), isSecretRelated: false)
                                         context.account.postbox.mediaBox.storeResourceData(fileResource.id, data: logData)
                                         
-                                        let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(logData.count), attributes: [.FileName(fileName: "Log-iOS-Short.txt")])
+                                        let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(logData.count), attributes: [.FileName(fileName: "Log-iOS-Short.txt")], alternativeRepresentations: [])
                                         let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
                                         
                                         let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()
@@ -495,7 +507,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                     let fileResource = LocalFileMediaResource(fileId: id, size: Int64(gzippedData.count), isSecretRelated: false)
                                     context.account.postbox.mediaBox.storeResourceData(fileResource.id, data: gzippedData)
 
-                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")])
+                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")], alternativeRepresentations: [])
                                     let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 
                                     let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()
@@ -579,7 +591,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                     let fileResource = LocalFileMediaResource(fileId: id, size: Int64(gzippedData.count), isSecretRelated: false)
                                     context.account.postbox.mediaBox.storeResourceData(fileResource.id, data: gzippedData)
 
-                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")])
+                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")], alternativeRepresentations: [])
                                     let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 
                                     let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()
@@ -664,7 +676,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                     let fileResource = LocalFileMediaResource(fileId: id, size: Int64(gzippedData.count), isSecretRelated: false)
                                     context.account.postbox.mediaBox.storeResourceData(fileResource.id, data: gzippedData)
 
-                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")])
+                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")], alternativeRepresentations: [])
                                     let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 
                                     let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()
@@ -717,7 +729,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                         
                                         let messages = logs.map { (name, path) -> EnqueueMessage in
                                             let id = Int64.random(in: Int64.min ... Int64.max)
-                                            let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: LocalFileReferenceMediaResource(localFilePath: path, randomId: id), previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: nil, attributes: [.FileName(fileName: name)])
+                                            let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: LocalFileReferenceMediaResource(localFilePath: path, randomId: id), previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: nil, attributes: [.FileName(fileName: name)], alternativeRepresentations: [])
                                             return .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
                                         }
                                         let _ = enqueueMessages(account: context.account, peerId: peerId, messages: messages).start()
@@ -826,7 +838,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                     let fileResource = LocalFileMediaResource(fileId: id, size: Int64(gzippedData.count), isSecretRelated: false)
                                     context.account.postbox.mediaBox.storeResourceData(fileResource.id, data: gzippedData)
 
-                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/zip", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-All.txt.zip")])
+                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/zip", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-All.txt.zip")], alternativeRepresentations: [])
                                     let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 
                                     let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()
@@ -881,7 +893,7 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                                     let fileResource = LocalFileMediaResource(fileId: id, size: Int64(allStatsData.count), isSecretRelated: false)
                                     context.account.postbox.mediaBox.storeResourceData(fileResource.id, data: allStatsData)
 
-                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/zip", size: Int64(allStatsData.count), attributes: [.FileName(fileName: "StorageReport.txt")])
+                                    let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/zip", size: Int64(allStatsData.count), attributes: [.FileName(fileName: "StorageReport.txt")], alternativeRepresentations: [])
                                     let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 
                                     let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()
@@ -1225,22 +1237,22 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     })
                 }).start()
             })
-        case let .acceleratedStickers(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Accelerated Stickers", value: value, sectionId: self.section, style: .blocks, updated: { value in
+        case let .rippleEffect(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Ripple", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
                     transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
                         var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
-                        settings.acceleratedStickers = value
+                        settings.rippleEffect = value
                         return PreferencesEntry(settings)
                     })
                 }).start()
             })
-        case let .inlineForums(value):
-            return ItemListSwitchItem(presentationData: presentationData, title: "Inline Forums", value: value, sectionId: self.section, style: .blocks, updated: { value in
+        case let .browserExperiment(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Inline UI", value: value, sectionId: self.section, style: .blocks, updated: { value in
                 let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
                     transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
                         var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
-                        settings.inlineForums = value
+                        settings.browserExperiment = value
                         return PreferencesEntry(settings)
                     })
                 }).start()
@@ -1309,11 +1321,45 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                     })
                 }).start()
             })
-        case .voiceConference:
-            return ItemListDisclosureItem(presentationData: presentationData, title: "Voice Conference (Test)", label: "", sectionId: self.section, style: .blocks, action: {
-                guard let _ = arguments.context else {
-                    return
-                }
+        case let .disableCallV2(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Disable Video Chat V2", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
+                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
+                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
+                        settings.disableCallV2 = value
+                        return PreferencesEntry(settings)
+                    })
+                }).start()
+            })
+        case let .experimentalCallMute(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "[WIP] OS mic mute", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
+                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
+                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
+                        settings.experimentalCallMute = value
+                        return PreferencesEntry(settings)
+                    })
+                }).start()
+            })
+        case let .liveStreamV2(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Live Stream V2", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
+                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
+                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
+                        settings.liveStreamV2 = value
+                        return PreferencesEntry(settings)
+                    })
+                }).start()
+            })
+        case let .dynamicStreaming(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Dynamic Streaming", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = arguments.sharedContext.accountManager.transaction ({ transaction in
+                    transaction.updateSharedData(ApplicationSpecificSharedDataKeys.experimentalUISettings, { settings in
+                        var settings = settings?.get(ExperimentalUISettings.self) ?? ExperimentalUISettings.defaultSettings
+                        settings.dynamicStreaming = value
+                        return PreferencesEntry(settings)
+                    })
+                }).start()
             })
         case let .preferredVideoCodec(_, title, value, isSelected):
             return ItemListCheckboxItem(presentationData: presentationData, title: title, style: .right, checked: isSelected, zeroSeparatorInsets: false, sectionId: self.section, action: {
@@ -1370,6 +1416,14 @@ private enum DebugControllerEntry: ItemListNodeEntry {
                         arguments.presentController(controller, nil)
                     }
                 })
+            })
+        case let .disableReloginTokens(value):
+            return ItemListSwitchItem(presentationData: presentationData, title: "Disable Relogin Tokens", value: value, sectionId: self.section, style: .blocks, updated: { value in
+                let _ = updateExperimentalUISettingsInteractively(accountManager: arguments.sharedContext.accountManager, { settings in
+                    var settings = settings
+                    settings.disableReloginTokens = value
+                    return settings
+                }).start()
             })
         case let .hostInfo(_, string):
             return ItemListTextItem(presentationData: presentationData, text: .plain(string), sectionId: self.section)
@@ -1437,8 +1491,14 @@ private func debugControllerEntries(sharedContext: SharedAccountContext, present
         entries.append(.knockoutWallpaper(presentationData.theme, experimentalSettings.knockoutWallpaper))
         entries.append(.experimentalCompatibility(experimentalSettings.experimentalCompatibility))
         entries.append(.enableDebugDataDisplay(experimentalSettings.enableDebugDataDisplay))
-        entries.append(.acceleratedStickers(experimentalSettings.acceleratedStickers))
-        entries.append(.inlineForums(experimentalSettings.inlineForums))
+        entries.append(.rippleEffect(experimentalSettings.rippleEffect))
+        #if DEBUG
+        entries.append(.browserExperiment(experimentalSettings.browserExperiment))
+        #else
+        if sharedContext.applicationBindings.appBuildType == .internal {
+            entries.append(.browserExperiment(experimentalSettings.browserExperiment))
+        }
+        #endif
         entries.append(.localTranscription(experimentalSettings.localTranscription))
         if case .internal = sharedContext.applicationBindings.appBuildType {
             entries.append(.enableReactionOverrides(experimentalSettings.enableReactionOverrides))
@@ -1447,16 +1507,21 @@ private func debugControllerEntries(sharedContext: SharedAccountContext, present
         
         entries.append(.logTranslationRecognition(experimentalSettings.logLanguageRecognition))
         entries.append(.resetTranslationStates)
-        
+                
         if case .internal = sharedContext.applicationBindings.appBuildType {
             entries.append(.storiesExperiment(experimentalSettings.storiesExperiment))
             entries.append(.storiesJpegExperiment(experimentalSettings.storiesJpegExperiment))
+            entries.append(.disableReloginTokens(experimentalSettings.disableReloginTokens))
         }
         entries.append(.playlistPlayback(experimentalSettings.playlistPlayback))
         entries.append(.enableQuickReactionSwitch(!experimentalSettings.disableQuickReaction))
+        entries.append(.disableCallV2(experimentalSettings.disableCallV2))
+        entries.append(.experimentalCallMute(experimentalSettings.experimentalCallMute))
+        entries.append(.liveStreamV2(experimentalSettings.liveStreamV2))
+        entries.append(.dynamicStreaming(experimentalSettings.dynamicStreaming))
     }
     
-    let codecs: [(String, String?)] = [
+    /*let codecs: [(String, String?)] = [
         ("No Preference", nil),
         ("H265", "H265"),
         ("H264", "H264"),
@@ -1466,12 +1531,12 @@ private func debugControllerEntries(sharedContext: SharedAccountContext, present
     
     for i in 0 ..< codecs.count {
         entries.append(.preferredVideoCodec(i, codecs[i].0, codecs[i].1, experimentalSettings.preferredVideoCodec == codecs[i].1))
-    }
+    }*/
 
     if isMainApp {
         entries.append(.disableVideoAspectScaling(experimentalSettings.disableVideoAspectScaling))
         entries.append(.enableNetworkFramework(networkSettings?.useNetworkFramework ?? useBetaFeatures))
-        entries.append(.enableNetworkExperiments(networkSettings?.useExperimentalDownload ?? false))
+        entries.append(.enableNetworkExperiments(networkSettings?.useExperimentalDownload ?? true))
     }
 
     if let backupHostOverride = networkSettings?.backupHostOverride {
@@ -1622,7 +1687,7 @@ public func triggerDebugSendLogsUI(context: AccountContext, additionalInfo: Stri
                 let fileResource = LocalFileMediaResource(fileId: id, size: Int64(gzippedData.count), isSecretRelated: false)
                 context.account.postbox.mediaBox.storeResourceData(fileResource.id, data: gzippedData)
 
-                let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")])
+                let file = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: id), partialReference: nil, resource: fileResource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "application/text", size: Int64(gzippedData.count), attributes: [.FileName(fileName: "Log-iOS-Full.txt.zip")], alternativeRepresentations: [])
                 let message: EnqueueMessage = .message(text: "", attributes: [], inlineStickers: [:], mediaReference: .standalone(media: file), threadId: nil, replyToMessageId: nil, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
 
                 let _ = enqueueMessages(account: context.account, peerId: peerId, messages: [message]).start()

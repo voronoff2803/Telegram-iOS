@@ -63,7 +63,7 @@ extension ReplyMarkupButton {
                 self.init(title: text, titleWhenForwarded: nil, action: .openWebView(url: url, simple: false))
             case let .keyboardButtonSimpleWebView(text, url):
                 self.init(title: text, titleWhenForwarded: nil, action: .openWebView(url: url, simple: true))
-            case let .keyboardButtonRequestPeer(text, buttonId, peerType, maxQuantity):
+            case let .keyboardButtonRequestPeer(text, buttonId, peerType, maxQuantity), let .inputKeyboardButtonRequestPeer(_, text, buttonId, peerType, maxQuantity):
                 let mappedPeerType: ReplyMarkupButtonRequestPeerType
                 switch peerType {
                 case let .requestPeerTypeUser(_, bot, premium):
@@ -89,6 +89,8 @@ extension ReplyMarkupButton {
                     ))
                 }
                 self.init(title: text, titleWhenForwarded: nil, action: .requestPeer(peerType: mappedPeerType, buttonId: buttonId, maxQuantity: maxQuantity))
+            case let .keyboardButtonCopy(text, payload):
+                self.init(title: text, titleWhenForwarded: nil, action: .copyText(payload: payload))
         }
     }
 }

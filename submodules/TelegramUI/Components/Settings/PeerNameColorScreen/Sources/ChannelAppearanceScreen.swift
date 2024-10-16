@@ -38,100 +38,7 @@ import BundleIconComponent
 import Markdown
 import GroupStickerPackSetupController
 import PeerNameColorItem
-
-private final class EmojiActionIconComponent: Component {
-    let context: AccountContext
-    let color: UIColor
-    let fileId: Int64?
-    let file: TelegramMediaFile?
-    
-    init(
-        context: AccountContext,
-        color: UIColor,
-        fileId: Int64?,
-        file: TelegramMediaFile?
-    ) {
-        self.context = context
-        self.color = color
-        self.fileId = fileId
-        self.file = file
-    }
-    
-    static func ==(lhs: EmojiActionIconComponent, rhs: EmojiActionIconComponent) -> Bool {
-        if lhs.context !== rhs.context {
-            return false
-        }
-        if lhs.color != rhs.color {
-            return false
-        }
-        if lhs.fileId != rhs.fileId {
-            return false
-        }
-        if lhs.file != rhs.file {
-            return false
-        }
-        return true
-    }
-    
-    final class View: UIView {
-        private var icon: ComponentView<Empty>?
-        
-        func update(component: EmojiActionIconComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
-            let size = CGSize(width: 24.0, height: 24.0)
-            
-            if let fileId = component.fileId {
-                let icon: ComponentView<Empty>
-                if let current = self.icon {
-                    icon = current
-                } else {
-                    icon = ComponentView()
-                    self.icon = icon
-                }
-                let _ = icon.update(
-                    transition: .immediate,
-                    component: AnyComponent(EmojiStatusComponent(
-                        context: component.context,
-                        animationCache: component.context.animationCache,
-                        animationRenderer: component.context.animationRenderer,
-                        content: .animation(
-                            content: .customEmoji(fileId: fileId),
-                            size: size,
-                            placeholderColor: .lightGray,
-                            themeColor: component.color,
-                            loopMode: .forever
-                        ),
-                        isVisibleForAnimations: false,
-                        action: nil
-                    )),
-                    environment: {},
-                    containerSize: size
-                )
-                let iconFrame = CGRect(origin: CGPoint(), size: size)
-                if let iconView = icon.view {
-                    if iconView.superview == nil {
-                        self.addSubview(iconView)
-                    }
-                    iconView.frame = iconFrame
-                }
-            } else {
-                if let icon = self.icon {
-                    self.icon = nil
-                    icon.view?.removeFromSuperview()
-                }
-            }
-            
-            return size
-        }
-    }
-    
-    func makeView() -> View {
-        return View(frame: CGRect())
-    }
-    
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: Transition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
-    }
-}
+import EmojiActionIconComponent
 
 final class ChannelAppearanceScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -165,13 +72,17 @@ final class ChannelAppearanceScreenComponent: Component {
         let peer: EnginePeer?
         let peerWallpaper: TelegramWallpaper?
         let peerEmojiPack: StickerPackCollectionInfo?
+        let canSetStickerPack: Bool
+        let peerStickerPack: StickerPackCollectionInfo?
         let subscriberCount: Int?
         let availableThemes: [TelegramTheme]
         
-        init(peer: EnginePeer?, peerWallpaper: TelegramWallpaper?, peerEmojiPack: StickerPackCollectionInfo?, subscriberCount: Int?, availableThemes: [TelegramTheme]) {
+        init(peer: EnginePeer?, peerWallpaper: TelegramWallpaper?, peerEmojiPack: StickerPackCollectionInfo?, canSetStickerPack: Bool, peerStickerPack: StickerPackCollectionInfo?, subscriberCount: Int?, availableThemes: [TelegramTheme]) {
             self.peer = peer
             self.peerWallpaper = peerWallpaper
             self.peerEmojiPack = peerEmojiPack
+            self.canSetStickerPack = canSetStickerPack
+            self.peerStickerPack = peerStickerPack
             self.subscriberCount = subscriberCount
             self.availableThemes = availableThemes
         }
@@ -182,16 +93,20 @@ final class ChannelAppearanceScreenComponent: Component {
                     TelegramEngine.EngineData.Item.Peer.Peer(id: peerId),
                     TelegramEngine.EngineData.Item.Peer.ParticipantCount(id: peerId),
                     TelegramEngine.EngineData.Item.Peer.EmojiPack(id: peerId),
+                    TelegramEngine.EngineData.Item.Peer.CanSetStickerPack(id: peerId),
+                    TelegramEngine.EngineData.Item.Peer.StickerPack(id: peerId),
                     TelegramEngine.EngineData.Item.Peer.Wallpaper(id: peerId)
                 ),
                 telegramThemes(postbox: context.account.postbox, network: context.account.network, accountManager: context.sharedContext.accountManager)
             )
             |> map { peerData, cloudThemes -> ContentsData in
-                let (peer, subscriberCount, emojiPack, wallpaper) = peerData
+                let (peer, subscriberCount, emojiPack, canSetStickerPack, stickerPack, wallpaper) = peerData
                 return ContentsData(
                     peer: peer,
                     peerWallpaper: wallpaper,
                     peerEmojiPack: emojiPack,
+                    canSetStickerPack: canSetStickerPack,
+                    peerStickerPack: stickerPack,
                     subscriberCount: subscriberCount,
                     availableThemes: cloudThemes
                 )
@@ -271,6 +186,7 @@ final class ChannelAppearanceScreenComponent: Component {
         private let resetColorSection = ComponentView<Empty>()
         private let emojiStatusSection = ComponentView<Empty>()
         private let emojiPackSection = ComponentView<Empty>()
+        private let stickerPackSection = ComponentView<Empty>()
         
         private var chatPreviewItemNode: PeerNameColorChatPreviewItemNode?
         
@@ -404,7 +320,7 @@ final class ChannelAppearanceScreenComponent: Component {
         }
         
         var scrolledUp = true
-        private func updateScrolling(transition: Transition) {
+        private func updateScrolling(transition: ComponentTransition) {
             let navigationAlphaDistance: CGFloat = 16.0
             let navigationAlpha: CGFloat = max(0.0, min(1.0, self.scrollView.contentOffset.y / navigationAlphaDistance))
             if let controller = self.environment?.controller(), let navigationBar = controller.navigationBar {
@@ -745,6 +661,15 @@ final class ChannelAppearanceScreenComponent: Component {
             self.environment?.controller()?.push(controller)
         }
         
+        private func openStickerPackSetup() {
+            guard let component = self.component, let environment = self.environment, let contentsData = self.contentsData else {
+                return
+            }
+            
+            let controller = groupStickerPackSetupController(context: component.context, peerId: component.peerId, currentPackInfo: contentsData.peerStickerPack)
+            environment.controller()?.push(controller)
+        }
+        
         private func openEmojiPackSetup() {
             guard let component = self.component, let environment = self.environment, let resolvedState = self.resolveState() else {
                 return
@@ -878,7 +803,7 @@ final class ChannelAppearanceScreenComponent: Component {
             return false
         }
         
-        func update(component: ChannelAppearanceScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: Transition) -> CGSize {
+        func update(component: ChannelAppearanceScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
                 self.isUpdating = false
@@ -1383,10 +1308,9 @@ final class ChannelAppearanceScreenComponent: Component {
                     ))))
                 }
                 
-                
                 var emojiPackFile: TelegramMediaFile?
                 if let thumbnail = emojiPack?.thumbnail {
-                    emojiPackFile = TelegramMediaFile(fileId: MediaId(namespace: 0, id: 0), partialReference: nil, resource: thumbnail.resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: thumbnail.immediateThumbnailData, mimeType: "", size: nil, attributes: [])
+                    emojiPackFile = TelegramMediaFile(fileId: MediaId(namespace: 0, id: 0), partialReference: nil, resource: thumbnail.resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: thumbnail.immediateThumbnailData, mimeType: "", size: nil, attributes: [], alternativeRepresentations: [])
                 }
                 
                 let emojiPackSectionSize = self.emojiPackSection.update(
@@ -1501,6 +1425,70 @@ final class ChannelAppearanceScreenComponent: Component {
             contentHeight += emojiStatusSectionSize.height
             contentHeight += sectionSpacing
     
+            if isGroup && contentsData.canSetStickerPack {
+                var stickerPackContents: [AnyComponentWithIdentity<Empty>] = []
+                stickerPackContents.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: environment.strings.Stickers_GroupStickers,
+                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                        textColor: environment.theme.list.itemPrimaryTextColor
+                    )),
+                    maximumNumberOfLines: 0
+                ))))
+                
+                var stickerPackFile: TelegramMediaFile?
+                if let peerStickerPack = contentsData.peerStickerPack, let thumbnail = peerStickerPack.thumbnail {
+                    stickerPackFile = TelegramMediaFile(fileId: MediaId(namespace: 0, id: peerStickerPack.id.id), partialReference: nil, resource: thumbnail.resource, previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: thumbnail.immediateThumbnailData, mimeType: "", size: nil, attributes: [], alternativeRepresentations: [])
+                }
+                
+                let stickerPackSectionSize = self.stickerPackSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: environment.theme,
+                        header: nil,
+                        footer: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: environment.strings.Stickers_GroupStickersHelp,
+                                font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                                textColor: environment.theme.list.freeTextColor
+                            )),
+                            maximumNumberOfLines: 0
+                        )),
+                        items: [
+                            AnyComponentWithIdentity(id: 0, component: AnyComponent(ListActionItemComponent(
+                                theme: environment.theme,
+                                title: AnyComponent(HStack(stickerPackContents, spacing: 6.0)),
+                                icon: ListActionItemComponent.Icon(component: AnyComponentWithIdentity(id: 0, component: AnyComponent(EmojiActionIconComponent(
+                                    context: component.context,
+                                    color: environment.theme.list.itemAccentColor,
+                                    fileId: nil,
+                                    file: stickerPackFile
+                                )))),
+                                action: { [weak self] view in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.openStickerPackSetup()
+                                }
+                            )))
+                        ],
+                        displaySeparators: false,
+                        extendsItemHighlightToSection: true
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                )
+                let stickerPackSectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: stickerPackSectionSize)
+                if let stickerPackSectionView = self.stickerPackSection.view {
+                    if stickerPackSectionView.superview == nil {
+                        self.scrollView.addSubview(stickerPackSectionView)
+                    }
+                    transition.setFrame(view: stickerPackSectionView, frame: stickerPackSectionFrame)
+                }
+                contentHeight += stickerPackSectionSize.height
+                contentHeight += sectionSpacing
+            }
+            
             var chatPreviewTheme: PresentationTheme = environment.theme
             var chatPreviewWallpaper: TelegramWallpaper = presentationData.chatWallpaper
             if let updatedWallpaper = self.updatedPeerWallpaper, case .remove = updatedWallpaper {
@@ -1705,7 +1693,7 @@ final class ChannelAppearanceScreenComponent: Component {
                             sectionId: 0,
                             themes: chatThemes,
                             hasNoTheme: true,
-                            animatedEmojiStickers: component.context.animatedEmojiStickers,
+                            animatedEmojiStickers: component.context.animatedEmojiStickersValue,
                             themeSpecificAccentColors: [:],
                             themeSpecificChatWallpapers: [:],
                             nightMode: environment.theme.overallDarkAppearance,
@@ -1874,7 +1862,7 @@ final class ChannelAppearanceScreenComponent: Component {
         return View()
     }
     
-    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: Transition) -> CGSize {
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

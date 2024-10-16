@@ -422,6 +422,11 @@ public final class Transaction {
         return self.postbox?.chatListTable.getAllPeerIds() ?? []
     }
     
+    public func chatListGetAllPeerIds(groupId: PeerGroupId) -> [PeerId] {
+        assert(!self.disposed)
+        return self.postbox?.chatListTable.getAllPeerIds(groupId: groupId) ?? []
+    }
+    
     public func updateCurrentPeerNotificationSettings(_ notificationSettings: [PeerId: PeerNotificationSettings]) {
         assert(!self.disposed)
         self.postbox?.updateCurrentPeerNotificationSettings(notificationSettings)
@@ -1072,7 +1077,7 @@ public final class Transaction {
         guard let postbox = self.postbox else {
             return []
         }
-        return postbox.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: nil, threadId: threadId, from: from, includeFrom: includeFrom, to: to, ignoreMessagesInTimestampRange: nil, limit: limit).map(postbox.renderIntermediateMessage(_:))
+        return postbox.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: nil, threadId: threadId, from: from, includeFrom: includeFrom, to: to, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), limit: limit).map(postbox.renderIntermediateMessage(_:))
     }
     
     public func getMessagesWithCustomTag(peerId: PeerId, namespace: MessageId.Namespace, threadId: Int64?, customTag: MemoryBuffer, from: MessageIndex, includeFrom: Bool, to: MessageIndex, limit: Int) -> [Message] {
@@ -1080,7 +1085,7 @@ public final class Transaction {
         guard let postbox = self.postbox else {
             return []
         }
-        return postbox.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: customTag, threadId: threadId, from: from, includeFrom: includeFrom, to: to, ignoreMessagesInTimestampRange: nil, limit: limit).map(postbox.renderIntermediateMessage(_:))
+        return postbox.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: customTag, threadId: threadId, from: from, includeFrom: includeFrom, to: to, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), limit: limit).map(postbox.renderIntermediateMessage(_:))
     }
     
     public func scanMessages(peerId: PeerId, namespace: MessageId.Namespace, tag: MessageTags, _ f: (Message) -> Bool) {
@@ -1102,7 +1107,7 @@ public final class Transaction {
         self.postbox?.scanMessageAttributes(peerId: peerId, namespace: namespace, limit: limit, f)
     }
     
-    public func getMessagesHistoryViewState(input: MessageHistoryViewInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>?, count: Int, clipHoles: Bool, anchor: HistoryViewInputAnchor, namespaces: MessageIdNamespaces) -> MessageHistoryView {
+    public func getMessagesHistoryViewState(input: MessageHistoryViewInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>?, ignoreMessageIds: Set<MessageId>, count: Int, clipHoles: Bool, anchor: HistoryViewInputAnchor, namespaces: MessageIdNamespaces) -> MessageHistoryView {
         precondition(!self.disposed)
         guard let postbox = self.postbox else {
             preconditionFailure()
@@ -1116,7 +1121,7 @@ public final class Transaction {
             view = next.0
         }, error: { _ in }, completed: {})
         
-        let disposable = postbox.syncAroundMessageHistoryViewForPeerId(subscriber: subscriber, peerIds: input, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, clipHoles: clipHoles, anchor: anchor, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: namespaces, orderStatistics: MessageHistoryViewOrderStatistics(), additionalData: [], useRootInterfaceStateForThread: false)
+        let disposable = postbox.syncAroundMessageHistoryViewForPeerId(subscriber: subscriber, peerIds: input, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, clipHoles: clipHoles, anchor: anchor, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: Set(), tag: nil, appendMessagesFromTheSameGroup: false, namespaces: namespaces, orderStatistics: MessageHistoryViewOrderStatistics(), additionalData: [], useRootInterfaceStateForThread: false)
         disposable.dispose()
         
         return view!
@@ -2264,7 +2269,7 @@ final class PostboxImpl {
         if let states = initialCombinedStates?.states {
             for (namespace, state) in states {
                 if namespace != messageIndex.id.namespace && state.count != 0 {
-                    if let item = self.messageHistoryTable.fetch(peerId: messageIndex.id.peerId, namespace: namespace, tag: nil, customTag: nil, threadId: nil, from: MessageIndex(id: MessageId(peerId: messageIndex.id.peerId, namespace: namespace, id: 1), timestamp: messageIndex.timestamp), includeFrom: true, to: MessageIndex.lowerBound(peerId: messageIndex.id.peerId, namespace: namespace), ignoreMessagesInTimestampRange: nil, limit: 1).first {
+                    if let item = self.messageHistoryTable.fetch(peerId: messageIndex.id.peerId, namespace: namespace, tag: nil, customTag: nil, threadId: nil, from: MessageIndex(id: MessageId(peerId: messageIndex.id.peerId, namespace: namespace, id: 1), timestamp: messageIndex.timestamp), includeFrom: true, to: MessageIndex.lowerBound(peerId: messageIndex.id.peerId, namespace: namespace), ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), limit: 1).first {
                         resultIds.append(contentsOf:  self.messageHistoryTable.applyInteractiveMaxReadIndex(postbox: self, messageIndex: item.index, operationsByPeerId: &self.currentOperationsByPeerId, updatedPeerReadStateOperations: &self.currentUpdatedSynchronizeReadStateOperations))
                     }
                 }
@@ -3118,7 +3123,7 @@ final class PostboxImpl {
         return peerIds
     }
     
-    public func aroundMessageOfInterestHistoryViewForChatLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>?, count: Int, clipHoles: Bool = true, topTaggedMessageIdNamespaces: Set<MessageId.Namespace>, tag: HistoryViewInputTag?, appendMessagesFromTheSameGroup: Bool, namespaces: MessageIdNamespaces, orderStatistics: MessageHistoryViewOrderStatistics, customUnreadMessageId: MessageId?, additionalData: [AdditionalMessageHistoryViewData], useRootInterfaceStateForThread: Bool) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func aroundMessageOfInterestHistoryViewForChatLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>?, ignoreMessageIds: Set<MessageId>, count: Int, clipHoles: Bool = true, topTaggedMessageIdNamespaces: Set<MessageId.Namespace>, tag: HistoryViewInputTag?, appendMessagesFromTheSameGroup: Bool, namespaces: MessageIdNamespaces, orderStatistics: MessageHistoryViewOrderStatistics, customUnreadMessageId: MessageId?, additionalData: [AdditionalMessageHistoryViewData], useRootInterfaceStateForThread: Bool) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         return self.resolvedChatLocationInput(chatLocation: chatLocation)
         |> mapToSignal { chatLocationData in
             let (chatLocation, isHoleFill) = chatLocationData
@@ -3176,7 +3181,7 @@ final class PostboxImpl {
                         anchor = .upperBound
                     }
                 }
-                return self.syncAroundMessageHistoryViewForPeerId(subscriber: subscriber, peerIds: peerIds, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, clipHoles: clipHoles, anchor: anchor, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: topTaggedMessageIdNamespaces, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: namespaces, orderStatistics: orderStatistics, additionalData: additionalData, useRootInterfaceStateForThread: useRootInterfaceStateForThread)
+                return self.syncAroundMessageHistoryViewForPeerId(subscriber: subscriber, peerIds: peerIds, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, clipHoles: clipHoles, anchor: anchor, fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: topTaggedMessageIdNamespaces, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: namespaces, orderStatistics: orderStatistics, additionalData: additionalData, useRootInterfaceStateForThread: useRootInterfaceStateForThread)
             })
                 
             return signal
@@ -3190,13 +3195,13 @@ final class PostboxImpl {
         }
     }
     
-    public func aroundIdMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>?, count: Int, clipHoles: Bool = true, ignoreRelatedChats: Bool = false, messageId: MessageId, topTaggedMessageIdNamespaces: Set<MessageId.Namespace>, tag: HistoryViewInputTag?, appendMessagesFromTheSameGroup: Bool, namespaces: MessageIdNamespaces, orderStatistics: MessageHistoryViewOrderStatistics, additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func aroundIdMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>?, ignoreMessageIds: Set<MessageId>, count: Int, clipHoles: Bool = true, ignoreRelatedChats: Bool = false, messageId: MessageId, topTaggedMessageIdNamespaces: Set<MessageId.Namespace>, tag: HistoryViewInputTag?, appendMessagesFromTheSameGroup: Bool, namespaces: MessageIdNamespaces, orderStatistics: MessageHistoryViewOrderStatistics, additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         return self.resolvedChatLocationInput(chatLocation: chatLocation)
         |> mapToSignal { chatLocationData in
             let (chatLocation, isHoleFill) = chatLocationData
             let signal: Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> = self.transactionSignal { subscriber, transaction in
                 let peerIds = self.peerIdsForLocation(chatLocation, ignoreRelatedChats: ignoreRelatedChats)
-                return self.syncAroundMessageHistoryViewForPeerId(subscriber: subscriber, peerIds: peerIds, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, clipHoles: clipHoles, anchor: .message(messageId), fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: topTaggedMessageIdNamespaces, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: namespaces, orderStatistics: orderStatistics, additionalData: additionalData, useRootInterfaceStateForThread: useRootInterfaceStateForThread)
+                return self.syncAroundMessageHistoryViewForPeerId(subscriber: subscriber, peerIds: peerIds, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, clipHoles: clipHoles, anchor: .message(messageId), fixedCombinedReadStates: nil, topTaggedMessageIdNamespaces: topTaggedMessageIdNamespaces, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: namespaces, orderStatistics: orderStatistics, additionalData: additionalData, useRootInterfaceStateForThread: useRootInterfaceStateForThread)
             }
                 
             return signal
@@ -3210,14 +3215,14 @@ final class PostboxImpl {
         }
     }
     
-    public func aroundMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>?, anchor: HistoryViewInputAnchor, count: Int, clipHoles: Bool = true, ignoreRelatedChats: Bool = false, fixedCombinedReadStates: MessageHistoryViewReadState?, topTaggedMessageIdNamespaces: Set<MessageId.Namespace>, tag: HistoryViewInputTag?, appendMessagesFromTheSameGroup: Bool, namespaces: MessageIdNamespaces, orderStatistics: MessageHistoryViewOrderStatistics, additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
+    public func aroundMessageHistoryViewForLocation(_ chatLocation: ChatLocationInput, ignoreMessagesInTimestampRange: ClosedRange<Int32>?, ignoreMessageIds: Set<MessageId>, anchor: HistoryViewInputAnchor, count: Int, clipHoles: Bool = true, ignoreRelatedChats: Bool = false, fixedCombinedReadStates: MessageHistoryViewReadState?, topTaggedMessageIdNamespaces: Set<MessageId.Namespace>, tag: HistoryViewInputTag?, appendMessagesFromTheSameGroup: Bool, namespaces: MessageIdNamespaces, orderStatistics: MessageHistoryViewOrderStatistics, additionalData: [AdditionalMessageHistoryViewData] = [], useRootInterfaceStateForThread: Bool = false) -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> {
         return self.resolvedChatLocationInput(chatLocation: chatLocation)
         |> mapToSignal { chatLocationData -> Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> in
             let (chatLocation, isHoleFill) = chatLocationData
             let signal: Signal<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError> = self.transactionSignal { subscriber, transaction in
                 let peerIds = self.peerIdsForLocation(chatLocation, ignoreRelatedChats: ignoreRelatedChats)
                 
-                return self.syncAroundMessageHistoryViewForPeerId(subscriber: subscriber, peerIds: peerIds, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, count: count, clipHoles: clipHoles, anchor: anchor, fixedCombinedReadStates: fixedCombinedReadStates, topTaggedMessageIdNamespaces: topTaggedMessageIdNamespaces, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: namespaces, orderStatistics: orderStatistics, additionalData: additionalData, useRootInterfaceStateForThread: useRootInterfaceStateForThread)
+                return self.syncAroundMessageHistoryViewForPeerId(subscriber: subscriber, peerIds: peerIds, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, count: count, clipHoles: clipHoles, anchor: anchor, fixedCombinedReadStates: fixedCombinedReadStates, topTaggedMessageIdNamespaces: topTaggedMessageIdNamespaces, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: namespaces, orderStatistics: orderStatistics, additionalData: additionalData, useRootInterfaceStateForThread: useRootInterfaceStateForThread)
             }
                 
             return signal
@@ -3236,6 +3241,7 @@ final class PostboxImpl {
         subscriber: Subscriber<(MessageHistoryView, ViewUpdateType, InitialMessageHistoryData?), NoError>,
         peerIds: MessageHistoryViewInput,
         ignoreMessagesInTimestampRange: ClosedRange<Int32>?,
+        ignoreMessageIds: Set<MessageId>,
         count: Int,
         clipHoles: Bool,
         anchor: HistoryViewInputAnchor,
@@ -3345,7 +3351,7 @@ final class PostboxImpl {
             readStates = transientReadStates
         }
         
-        let mutableView = MutableMessageHistoryView(postbox: self, orderStatistics: orderStatistics, clipHoles: clipHoles, trackHoles: true, peerIds: peerIds, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, anchor: anchor, combinedReadStates: readStates, transientReadStates: transientReadStates, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: namespaces, count: count, topTaggedMessages: topTaggedMessages, additionalDatas: additionalDataEntries)
+        let mutableView = MutableMessageHistoryView(postbox: self, orderStatistics: orderStatistics, clipHoles: clipHoles, trackHoles: true, peerIds: peerIds, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, anchor: anchor, combinedReadStates: readStates, transientReadStates: transientReadStates, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, namespaces: namespaces, count: count, topTaggedMessages: topTaggedMessages, additionalDatas: additionalDataEntries)
         
         let initialUpdateType: ViewUpdateType = .Initial
         
@@ -4086,7 +4092,7 @@ final class PostboxImpl {
         var index = MessageIndex.upperBound(peerId: peerId, namespace: namespace)
         var remainingLimit = limit
         while remainingLimit > 0 {
-            let messages = self.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: nil, threadId: nil, from: index, includeFrom: false, to: lowerBound, ignoreMessagesInTimestampRange: nil, limit: 10)
+            let messages = self.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: nil, threadId: nil, from: index, includeFrom: false, to: lowerBound, ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), limit: 10)
             remainingLimit -= 10
             for message in messages {
                 if !f(self.renderIntermediateMessage(message)) {
@@ -4105,7 +4111,7 @@ final class PostboxImpl {
         var remainingLimit = limit
         var index = MessageIndex.upperBound(peerId: peerId, namespace: namespace)
         while remainingLimit > 0 {
-            let messages = self.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: nil, threadId: nil, from: index, includeFrom: false, to: MessageIndex.lowerBound(peerId: peerId, namespace: namespace), ignoreMessagesInTimestampRange: nil, limit: 32)
+            let messages = self.messageHistoryTable.fetch(peerId: peerId, namespace: namespace, tag: nil, customTag: nil, threadId: nil, from: index, includeFrom: false, to: MessageIndex.lowerBound(peerId: peerId, namespace: namespace), ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), limit: 32)
             for message in messages {
                 let attributes = MessageHistoryTable.renderMessageAttributes(message)
                 if !f(message.id, attributes) {
@@ -4417,6 +4423,7 @@ public class Postbox {
     public func aroundMessageOfInterestHistoryViewForChatLocation(
         _ chatLocation: ChatLocationInput,
         ignoreMessagesInTimestampRange: ClosedRange<Int32>?,
+        ignoreMessageIds: Set<MessageId>,
         count: Int,
         clipHoles: Bool = true,
         topTaggedMessageIdNamespaces: Set<MessageId.Namespace>,
@@ -4435,6 +4442,7 @@ public class Postbox {
                 disposable.set(impl.aroundMessageOfInterestHistoryViewForChatLocation(
                     chatLocation,
                     ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange,
+                    ignoreMessageIds: ignoreMessageIds,
                     count: count,
                     clipHoles: clipHoles,
                     topTaggedMessageIdNamespaces: topTaggedMessageIdNamespaces,
@@ -4455,6 +4463,7 @@ public class Postbox {
     public func aroundIdMessageHistoryViewForLocation(
         _ chatLocation: ChatLocationInput,
         ignoreMessagesInTimestampRange: ClosedRange<Int32>?,
+        ignoreMessageIds: Set<MessageId>,
         count: Int,
         clipHoles: Bool = true,
         ignoreRelatedChats: Bool = false,
@@ -4474,6 +4483,7 @@ public class Postbox {
                 disposable.set(impl.aroundIdMessageHistoryViewForLocation(
                     chatLocation,
                     ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange,
+                    ignoreMessageIds: ignoreMessageIds,
                     count: count,
                     clipHoles: clipHoles,
                     ignoreRelatedChats: ignoreRelatedChats,
@@ -4496,6 +4506,7 @@ public class Postbox {
         _ chatLocation: ChatLocationInput,
         anchor: HistoryViewInputAnchor,
         ignoreMessagesInTimestampRange: ClosedRange<Int32>?,
+        ignoreMessageIds: Set<MessageId>,
         count: Int,
         clipHoles: Bool = true,
         ignoreRelatedChats: Bool = false,
@@ -4515,6 +4526,7 @@ public class Postbox {
                 disposable.set(impl.aroundMessageHistoryViewForLocation(
                     chatLocation,
                     ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange,
+                    ignoreMessageIds: ignoreMessageIds,
                     anchor: anchor,
                     count: count,
                     clipHoles: clipHoles,

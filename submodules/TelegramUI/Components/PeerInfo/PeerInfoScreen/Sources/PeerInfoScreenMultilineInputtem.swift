@@ -2,6 +2,7 @@ import AsyncDisplayKit
 import Display
 import TelegramPresentationData
 import ItemListUI
+import AccountContext
 
 final class PeerInfoScreenMultilineInputItem: PeerInfoScreenItem {
     let id: AnyHashable
@@ -36,7 +37,7 @@ final class PeerInfoScreenMultilineInputItemNode: PeerInfoScreenItemNode {
     private let bottomSeparatorNode: ASDisplayNode
     private let maskNode: ASImageNode
     
-    private var item: PeerInfoScreenMultilineInputItem?
+    private(set) var item: PeerInfoScreenMultilineInputItem?
     private var itemNode: ItemListMultilineInputItemNode?
     
     override init() {
@@ -53,7 +54,7 @@ final class PeerInfoScreenMultilineInputItemNode: PeerInfoScreenItemNode {
         self.addSubnode(self.bottomSeparatorNode)
     }
     
-    override func update(width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool, transition: ContainedViewLayoutTransition) -> CGFloat {
+    override func update(context: AccountContext, width: CGFloat, safeInsets: UIEdgeInsets, presentationData: PresentationData, item: PeerInfoScreenItem, topItem: PeerInfoScreenItem?, bottomItem: PeerInfoScreenItem?, hasCorners: Bool, transition: ContainedViewLayoutTransition) -> CGFloat {
         guard let item = item as? PeerInfoScreenMultilineInputItem else {
             return 10.0
         }
@@ -126,5 +127,9 @@ final class PeerInfoScreenMultilineInputItemNode: PeerInfoScreenItemNode {
     
     func animateErrorIfNeeded() {
         self.itemNode?.animateErrorIfNeeded()
+    }
+    
+    func focus() {
+        self.itemNode?.focus()
     }
 }

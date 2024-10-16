@@ -5,7 +5,7 @@ import Display
 private func generateHistogram(cgImage: CGImage) -> ([[vImagePixelCount]], Int)? {
     var sourceBuffer = vImage_Buffer()
     defer {
-        free(sourceBuffer.data)
+        sourceBuffer.data?.deallocate()
     }
     
     var cgImageFormat = vImage_CGImageFormat(
@@ -56,8 +56,23 @@ private func generateHistogram(cgImage: CGImage) -> ([[vImagePixelCount]], Int)?
     return ([histogramBinZero, histogramBinOne, histogramBinTwo, histogramBinThree], alphaBinIndex)
 }
 
-public func imageHasTransparency(_ cgImage: CGImage) -> Bool {
-    guard cgImage.bitsPerComponent == 8, cgImage.bitsPerPixel == 32 else {
+public func imageHasSubject(_ image: UIImage) -> Bool {
+    guard let cgImage = image.cgImage, cgImage.bitsPerComponent == 8, cgImage.bitsPerPixel == 32 else {
+        return false
+    }
+    if let (histogramBins, _) = generateHistogram(cgImage: cgImage) {
+        var totalCount: vImagePixelCount = 0
+        for i in 0 ..< 255 {
+            totalCount += histogramBins[1][i]
+        }
+        let opaqueCount: vImagePixelCount = histogramBins[1][255]
+        return Double(opaqueCount) / Double(totalCount) > 0.05
+    }
+    return false
+}
+
+public func imageHasTransparency(_ image: UIImage) -> Bool {
+    guard let cgImage = image.cgImage, cgImage.bitsPerComponent == 8, cgImage.bitsPerPixel == 32 else {
         return false
     }
     guard [.first, .last, .premultipliedFirst, .premultipliedLast].contains(cgImage.alphaInfo) else {

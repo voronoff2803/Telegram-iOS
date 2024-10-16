@@ -62,21 +62,30 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
     public let content: AnyComponent<ChildEnvironmentType>
     public let backgroundColor: BackgroundColor
     public let followContentSizeChanges: Bool
+    public let clipsContent: Bool
+    public let isScrollEnabled: Bool
     public let externalState: ExternalState?
     public let animateOut: ActionSlot<Action<()>>
+    public let onPan: () -> Void
     
     public init(
         content: AnyComponent<ChildEnvironmentType>,
         backgroundColor: BackgroundColor,
         followContentSizeChanges: Bool = false,
+        clipsContent: Bool = false,
+        isScrollEnabled: Bool = true,
         externalState: ExternalState? = nil,
-        animateOut: ActionSlot<Action<()>>
+        animateOut: ActionSlot<Action<()>>,
+        onPan: @escaping () -> Void = {}
     ) {
         self.content = content
         self.backgroundColor = backgroundColor
         self.followContentSizeChanges = followContentSizeChanges
+        self.clipsContent = clipsContent
+        self.isScrollEnabled = isScrollEnabled
         self.externalState = externalState
         self.animateOut = animateOut
+        self.onPan = onPan
     }
     
     public static func ==(lhs: SheetComponent, rhs: SheetComponent) -> Bool {
@@ -106,6 +115,10 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
             }
             super.setContentOffset(contentOffset, animated: animated)
         }
+        
+        override func touchesShouldCancel(in view: UIView) -> Bool {
+            return true
+        }
     }
         
     public final class View: UIView, UIScrollViewDelegate, ComponentTaggedView {
@@ -120,6 +133,8 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
             }
             return false
         }
+        
+        private var component: SheetComponent<ChildEnvironmentType>?
         
         private let dimView: UIView
         private let scrollView: ScrollView
@@ -190,6 +205,10 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
         
         public func dismissAnimated() {
             self.dismiss?(true)
+        }
+        
+        public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            self.component?.onPan()
         }
         
         private var scrollingOut = false
@@ -283,7 +302,7 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
         
         private var currentHasInputHeight = false
         private var currentAvailableSize: CGSize?
-        func update(component: SheetComponent<ChildEnvironmentType>, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: Transition) -> CGSize {
+        func update(component: SheetComponent<ChildEnvironmentType>, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             let previousHasInputHeight = self.currentHasInputHeight
             let sheetEnvironment = environment[SheetComponentEnvironment.self].value
             component.animateOut.connect { [weak self] completion in
@@ -295,6 +314,7 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
                 }
             }
             
+            self.component = component
             self.currentHasInputHeight = sheetEnvironment.hasInputHeight
             
             switch component.backgroundColor {
@@ -345,6 +365,7 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
                 if contentView.superview == nil {
                     self.scrollView.addSubview(contentView)
                 }
+                contentView.clipsToBounds = component.clipsContent
                 if sheetEnvironment.isCentered {
                     let y: CGFloat = floorToScreenPixels((availableSize.height - contentSize.height) / 2.0)
                     transition.setFrame(view: contentView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - contentSize.width) / 2.0), y: -y), size: contentSize), completion: nil)
@@ -353,7 +374,7 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
                         transition.setFrame(view: effectView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - contentSize.width) / 2.0), y: -y), size: contentSize), completion: nil)
                     }
                 } else {
-                    transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: contentSize), completion: nil)
+                    transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 100.0)), completion: nil)
                     transition.setFrame(view: self.backgroundView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 1000.0)), completion: nil)
                     if let effectView = self.effectView {
                         transition.setFrame(view: effectView, frame: CGRect(origin: .zero, size: CGSize(width: contentSize.width, height: contentSize.height + 1000.0)), completion: nil)
@@ -363,14 +384,23 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
             transition.setFrame(view: self.scrollView, frame: CGRect(origin: CGPoint(), size: availableSize), completion: nil)
             
             let previousContentSize = self.scrollView.contentSize
-            self.scrollView.contentSize = contentSize
-            self.scrollView.contentInset = UIEdgeInsets(top: max(0.0, availableSize.height - contentSize.height) + contentSize.height, left: 0.0, bottom: 0.0, right: 0.0)
-            self.ignoreScrolling = false
+            let updateContentSize = {
+                self.scrollView.contentSize = contentSize
+                self.scrollView.contentInset = UIEdgeInsets(top: max(0.0, availableSize.height - contentSize.height) + contentSize.height, left: 0.0, bottom: 0.0, right: 0.0)
+            }
+            if previousContentSize.height.isZero {
+                updateContentSize()
+            }
             
+            self.scrollView.isScrollEnabled = component.isScrollEnabled
+            
+            self.ignoreScrolling = false
             if let currentAvailableSize = self.currentAvailableSize, currentAvailableSize.height != availableSize.height {
                 self.scrollView.contentOffset = CGPoint(x: 0.0, y: -(availableSize.height - contentSize.height))
             } else if component.followContentSizeChanges, !previousContentSize.height.isZero, previousContentSize != contentSize {
-                transition.setBounds(view: self.scrollView, bounds: CGRect(origin: CGPoint(x: 0.0, y: -(availableSize.height - contentSize.height)), size: availableSize))
+                transition.setBounds(view: self.scrollView, bounds: CGRect(origin: CGPoint(x: 0.0, y: -(availableSize.height - contentSize.height)), size: availableSize), completion: { _ in
+                    updateContentSize()
+                })
             }
             if self.currentHasInputHeight != previousHasInputHeight {
                 transition.setBounds(view: self.scrollView, bounds: CGRect(origin: CGPoint(x: 0.0, y: -(availableSize.height - contentSize.height)), size: self.scrollView.bounds.size))
@@ -394,7 +424,7 @@ public final class SheetComponent<ChildEnvironmentType: Equatable>: Component {
         return View(frame: CGRect())
     }
     
-    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: Transition) -> CGSize {
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

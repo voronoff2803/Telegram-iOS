@@ -55,7 +55,7 @@ enum PeerInfoMember: Equatable {
             switch participant.participant {
             case .creator:
                 return .creator
-            case let .member(_, _, adminInfo, _, _):
+            case let .member(_, _, adminInfo, _, _, _):
                 if adminInfo != nil {
                     return .admin
                 } else {
@@ -75,7 +75,7 @@ enum PeerInfoMember: Equatable {
                 switch participant.participant {
                 case let .creator(_, _, rank):
                     return rank
-                case let .member(_, _, _, _, rank):
+                case let .member(_, _, _, _, rank, _):
                     return rank
                 }
             case .legacyGroupMember:
@@ -274,6 +274,9 @@ private final class PeerInfoMembersContextImpl {
     deinit {
         self.disposable.dispose()
         self.peerDisposable.dispose()
+        for (_, disposable) in self.removingMemberIds {
+            disposable.dispose()
+        }
     }
     
     private func pushState() {
@@ -293,7 +296,7 @@ private final class PeerInfoMembersContextImpl {
     }
     
     func removeMember(memberId: PeerId) {
-        if removingMemberIds[memberId] == nil {
+        if self.removingMemberIds[memberId] == nil {
             let signal: Signal<Never, NoError>
             if self.peerId.namespace == Namespaces.Peer.CloudChannel {
                 signal = context.peerChannelMemberCategoriesContextsManager.updateMemberBannedRights(engine: self.context.engine, peerId: self.peerId, memberId: memberId, bannedRights: TelegramChatBannedRights(flags: [.banReadMessages], untilDate: Int32.max))
@@ -306,7 +309,8 @@ private final class PeerInfoMembersContextImpl {
                 guard let strongSelf = self else {
                     return
                 }
-                if let _ = strongSelf.removingMemberIds.removeValue(forKey: memberId) {
+                if let disposable = strongSelf.removingMemberIds.removeValue(forKey: memberId) {
+                    disposable.dispose()
                     strongSelf.pushState()
                 }
             }
